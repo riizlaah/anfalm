@@ -18,7 +18,7 @@ class KompetensiDasarFactory extends Factory
 
         return [
             'mapel_id' => Mapel::factory(),
-            'kode_kompetensi' => '3.' . static::$counter,
+            'kode_kompetensi' => '3.'.static::$counter,
             'deskripsi' => fake()->sentence(),
             'materi_pokok' => fake()->words(3, true),
             'level_kognitif' => 'pemahaman',

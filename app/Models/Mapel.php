@@ -14,13 +14,19 @@ class Mapel extends Model
     protected $table = 'mapel';
 
     public const TINGKAT_SD = 'SD';
+
     public const TINGKAT_SMP = 'SMP';
+
     public const TINGKAT_SMA = 'SMA';
+
     public const TINGKAT_SMK = 'SMK';
+
     public const TINGKAT_ALL = 'all';
 
     public const JENIS_WAJIB = 'wajib';
+
     public const JENIS_PILIHAN_UMUM = 'pilihan_umum';
+
     public const JENIS_PILIHAN_KEJURUAN = 'pilihan_kejuruan';
 
     protected $fillable = [

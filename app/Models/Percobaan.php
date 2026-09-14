@@ -14,10 +14,13 @@ class Percobaan extends Model
     protected $table = 'percobaan';
 
     public const JENIS_TRYOUT = 'tryout';
+
     public const JENIS_LATIHAN = 'latihan';
 
     public const STATUS_BERJALAN = 'berjalan';
+
     public const STATUS_SELESAI = 'selesai';
+
     public const STATUS_DIBATALKAN = 'dibatalkan';
 
     protected $fillable = [

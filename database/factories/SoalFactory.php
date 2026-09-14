@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\KompetensiDasar;
 use App\Models\Soal;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class SoalFactory extends Factory
@@ -20,9 +19,9 @@ class SoalFactory extends Factory
         return [
             'kompetensi_dasar_id' => KompetensiDasar::factory(),
             'tipe_soal' => Soal::TIPE_PG,
-            'pertanyaan' => 'Pertanyaan nomor ' . static::$counter . ' adalah ...',
+            'pertanyaan' => 'Pertanyaan nomor '.static::$counter.' adalah ...',
             'gambar_url' => null,
-            'pembahasan' => 'Pembahasan soal nomor ' . static::$counter,
+            'pembahasan' => 'Pembahasan soal nomor '.static::$counter,
             'daftar_kategori' => null,
             'a_diskriminasi' => 1.0,
             'b_kesulitan' => 0.0,
@@ -36,7 +35,7 @@ class SoalFactory extends Factory
         return $this->state(['tipe_soal' => Soal::TIPE_PG_KOMPLEKS]);
     }
 
-    public function pgKategori(array $kategoriList = null): static
+    public function pgKategori(?array $kategoriList = null): static
     {
         return $this->state([
             'tipe_soal' => Soal::TIPE_PG_KATEGORI,

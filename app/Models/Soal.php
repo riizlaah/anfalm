@@ -15,7 +15,9 @@ class Soal extends Model
     protected $table = 'soal';
 
     public const TIPE_PG = 'pg';
+
     public const TIPE_PG_KOMPLEKS = 'pg_kompleks';
+
     public const TIPE_PG_KATEGORI = 'pg_kategori';
 
     protected $fillable = [

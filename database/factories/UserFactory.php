@@ -20,7 +20,7 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
-            'sekolah' => fake()->word() . ' SMK',
+            'sekolah' => fake()->word().' SMK',
             'tingkat' => 'SMK',
             'jurusan' => 'Rekayasa Perangkat Lunak',
             'role' => User::ROLE_PESERTA,

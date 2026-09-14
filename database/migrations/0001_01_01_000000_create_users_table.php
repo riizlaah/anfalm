@@ -21,6 +21,7 @@ return new class extends Migration
             $table->enum('tingkat', ['SD', 'SMP', 'SMA', 'SMK'])->nullable();
             $table->string('jurusan', 50)->nullable();
             $table->enum('role', ['admin', 'peserta'])->default('peserta');
+            $table->string('session_token', 64)->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

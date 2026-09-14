@@ -36,17 +36,55 @@ class PaketTryout extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function wajib1(): BelongsTo { return $this->belongsTo(Mapel::class, 'mapel_wajib_1'); }
-    public function wajib2(): BelongsTo { return $this->belongsTo(Mapel::class, 'mapel_wajib_2'); }
-    public function wajib3(): BelongsTo { return $this->belongsTo(Mapel::class, 'mapel_wajib_3'); }
-    public function pilihan1(): BelongsTo { return $this->belongsTo(Mapel::class, 'mapel_pilihan_1'); }
-    public function pilihan2(): BelongsTo { return $this->belongsTo(Mapel::class, 'mapel_pilihan_2'); }
+    public function wajib1(): BelongsTo
+    {
+        return $this->belongsTo(Mapel::class, 'mapel_wajib_1');
+    }
 
-    public function soalWajib1(): BelongsTo { return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_1_id'); }
-    public function soalWajib2(): BelongsTo { return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_2_id'); }
-    public function soalWajib3(): BelongsTo { return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_3_id'); }
-    public function soalPilihan1(): BelongsTo { return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_1_id'); }
-    public function soalPilihan2(): BelongsTo { return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_2_id'); }
+    public function wajib2(): BelongsTo
+    {
+        return $this->belongsTo(Mapel::class, 'mapel_wajib_2');
+    }
+
+    public function wajib3(): BelongsTo
+    {
+        return $this->belongsTo(Mapel::class, 'mapel_wajib_3');
+    }
+
+    public function pilihan1(): BelongsTo
+    {
+        return $this->belongsTo(Mapel::class, 'mapel_pilihan_1');
+    }
+
+    public function pilihan2(): BelongsTo
+    {
+        return $this->belongsTo(Mapel::class, 'mapel_pilihan_2');
+    }
+
+    public function soalWajib1(): BelongsTo
+    {
+        return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_1_id');
+    }
+
+    public function soalWajib2(): BelongsTo
+    {
+        return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_2_id');
+    }
+
+    public function soalWajib3(): BelongsTo
+    {
+        return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_3_id');
+    }
+
+    public function soalPilihan1(): BelongsTo
+    {
+        return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_1_id');
+    }
+
+    public function soalPilihan2(): BelongsTo
+    {
+        return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_2_id');
+    }
 
     public function getSemuaMapelIdsAttribute(): array
     {

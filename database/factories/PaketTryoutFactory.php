@@ -5,7 +5,6 @@ namespace Database\Factories;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class PaketTryoutFactory extends Factory
@@ -16,11 +15,11 @@ class PaketTryoutFactory extends Factory
 
     public function definition(): array
     {
-        $nama = 'Tryout ' . static::$namaCounter;
+        $nama = 'Tryout '.static::$namaCounter;
         static::$namaCounter++;
 
         return [
-            'nama_paket' => $nama . ' - TKA SMK',
+            'nama_paket' => $nama.' - TKA SMK',
             'deskripsi' => fake()->sentence(),
             'tingkat' => 'SMK',
             'batas_waktu_menit' => 120,

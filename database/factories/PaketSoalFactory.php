@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Mapel;
 use App\Models\PaketSoal;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class PaketSoalFactory extends Factory
@@ -14,7 +13,7 @@ class PaketSoalFactory extends Factory
     public function definition(): array
     {
         return [
-            'nama_paket' => fake()->words(4, true) . ' Paket',
+            'nama_paket' => fake()->words(4, true).' Paket',
             'deskripsi' => fake()->sentence(),
             'mapel_id' => Mapel::factory(),
             'created_by' => null,

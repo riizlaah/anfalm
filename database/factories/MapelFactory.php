@@ -16,7 +16,7 @@ class MapelFactory extends Factory
         static::$counter++;
 
         return [
-            'kode' => 'MAP' . str_pad(static::$counter, 3, '0', STR_PAD_LEFT),
+            'kode' => 'MAP'.str_pad(static::$counter, 3, '0', STR_PAD_LEFT),
             'nama' => fake()->unique()->words(2, true),
             'tingkat' => 'SMK',
             'jenis' => Mapel::JENIS_WAJIB,

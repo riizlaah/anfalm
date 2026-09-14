@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -13,6 +12,7 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     public const ROLE_ADMIN = 'admin';
+
     public const ROLE_PESERTA = 'peserta';
 
     protected $fillable = [
@@ -23,6 +23,7 @@ class User extends Authenticatable
         'tingkat',
         'jurusan',
         'role',
+        'session_token',
     ];
 
     protected $hidden = [
