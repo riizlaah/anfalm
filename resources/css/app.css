@@ -6,4 +6,64 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-ink: #0e1b33;
+    --color-ink-soft: #1b2f55;
+    --color-gold: #f6b63c;
+    --color-paper: #f4f7fb;
+}
+
+@layer base {
+    body {
+        @apply bg-paper text-slate-800 antialiased;
+        font-feature-settings: 'calt' 1;
+    }
+}
+
+@layer components {
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus:ring-2 focus:ring-ink/25 focus:outline-none;
+    }
+    .btn-primary {
+        @apply bg-ink text-white hover:bg-ink-soft;
+    }
+    .btn-ghost {
+        @apply border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50;
+    }
+    .btn-danger {
+        @apply border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50;
+    }
+    .input,
+    .select,
+    .textarea {
+        @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-ink focus:ring-2 focus:ring-ink/15 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400;
+    }
+    .label {
+        @apply mb-1 block text-sm font-medium text-slate-700;
+    }
+    .card {
+        @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    }
+    .link {
+        @apply font-semibold text-ink underline underline-offset-2;
+    }
+    .page-title {
+        @apply text-2xl font-bold tracking-tight text-ink;
+    }
+    .check {
+        @apply flex shrink-0 items-center gap-1.5 text-sm whitespace-nowrap;
+    }
+    .hint {
+        @apply mt-2 text-xs text-slate-500;
+    }
+    .opsi-row,
+    .pernyataan-row,
+    .kategori-row {
+        @apply mb-2 flex items-center gap-2;
+    }
+    .opsi-row > input[type='text'],
+    .pernyataan-row > input[type='text'],
+    .kategori-row > input[type='text'] {
+        @apply min-w-0 flex-1;
+    }
 }

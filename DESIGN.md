@@ -24,19 +24,20 @@ P(θ) = c + (1 - c) / (1 + e^(-a(θ - b)))
 - **b (Tingkat Kesulitan):** -3 sampai +3
 - **c (Tebakan/Guessing):** 0 - 0.35
 
-**Skala Pelaporan:**
-- **SD/Sederajat:** 0 - 100 (T-Score)
-- **SMA/SMK/Sederajat:** 200 - 700 (T-Score yang discale)
+**Skala Pelaporan (dihitung berdasarkan `tingkat` akun user):**
+- **SD/SMP/Sederajat:** 0 – 100
+- **SMA/SMK/Sederajat:** 200 – 700
 
-**Cara Konversi Theta ke Skala:**
+**Rumus Konversi Theta ke Skala:**
 ```
-Skala 0-100: 50 + 10 × θ (di-clamp ke 0-100)
-Skala 200-700: 450 + 100 × θ (di-clamp ke 200-700)
+SD/SMP:   50 + 10 × θ   (di-clamp 0–100)
+SMA/SMK:  450 + 100 × θ (di-clamp 200–700)
 ```
+> Rumus ini bersifat final dan konsisten di seluruh dokumen (§7.4 juga menggunakan rumus ini; ada inkonsistensi pada §7.4 versi lama yang telah dikoreksi di bawah).
 
 ### 1.3 Target Pengguna
 - **Admin:** Guru/pembuat soal
-- **Peserta:** Siswa (SMK/MAK, SMA/MA, SMP/MTs, SD/MI)
+- **Peserta:** Siswa (SMK/MAK, SMA/MA, SMP/MTs, SD/MI). Pendaftaran baru otomatis ber-role **peserta**; data profil (sekolah, tingkat, jurusan) dapat diisi/diubah dari halaman profil.
 
 ---
 
@@ -63,14 +64,18 @@ Skala 200-700: 450 + 100 × θ (di-clamp ke 200-700)
 2. Pilih menu "Mapel".
 3. Lihat daftar mapel yang sudah ada (dengan filter berdasarkan tingkat).
 4. **Tambah mapel baru:**
-   - Isi kode (unik), nama, tingkat (SD/SMP/SMA/SMK), dan jenis (wajib/pilihan_umum/pilihan_kejuruan).
+   - Isi kode (unik), nama, tingkat (`SD|SMP|SMA|SMK|all`), jenis (`wajib|pilihan_umum|pilihan_kejuruan`).
+   - Centang **Proyek Kreatif & Kewirausahaan (PKK)** jika mapel adalah pilihan kejuruan berbasis proyek kewirausahaan.
    - Klik "Simpan".
 5. **Edit mapel:** Klik ikon edit → Ubah data → Simpan.
-6. **Hapus mapel:** Konfirmasi → Hapus (cascade ke data terkait).
+6. **Hapus mapel:** Konfirmasi hapus.
+   - Jika mapel **belum dipakai** (tidak ada soal/paket/tryout) → **soft delete** (`deleted_at`) dan tersembunyi dari daftar normal.
+   - Jika mapel **sudah dipakai** (punya soal, paket soal, atau percobaan tryout) → **diblokir**; sistem menampilkan peringatan: *"Mapel masih digunakan oleh X soal / Y paket tryout — hapus permanen tidak diperbolehkan."* Hanya soft delete yang diperbolehkan; data terus tersimpan namun tidak tampil di antarmuka normal.
 
 **Validasi:**
-- Kode mapel harus unik.
-- Jika mapel sudah memiliki soal, muncul peringatan sebelum dihapus.
+- Kode mapel harus unik (saat create & edit).
+- Jenis & tingkat wajib diisi; `is_pkk` hanya relevan untuk jenis `pilihan_umum|pilihan_kejuruan` (diabaikan jika `wajib`).
+- Hapus permanen diblokir jika mapel sudah dipakai; hanya soft delete yang diperbolehkan.
 
 ---
 
@@ -92,6 +97,7 @@ Skala 200-700: 450 + 100 × θ (di-clamp ke 200-700)
 - KD adalah **sumber kebenaran (single source of truth)** untuk pembuatan soal.
 - Setiap soal harus terikat ke satu KD.
 - Batasan digunakan untuk mempersempit cakupan materi dalam KD (contoh: "KD 3.1 tentang bilangan berpangkat, batasan: hanya pangkat bulat positif").
+- **Soft delete + blokir hapus permanen** juga berlaku untuk KD: jika KD sudah dipakai soal atau data tracking, hapus permanen diblokir; hanya soft delete yang diperbolehkan.
 
 ---
 
@@ -109,11 +115,11 @@ Skala 200-700: 450 + 100 × θ (di-clamp ke 200-700)
    - Mendukung **ekspresi matematika** dengan KaTeX (contoh: `\frac{2}{3}`, `\sqrt{x^2 + y^2}`).
    - Admin menuliskan kode KaTeX di dalam editor, dan akan dirender di preview.
 5. **Upload gambar** (opsional): gambar pendukung untuk soal (diagram, grafik, ilustrasi).
-   - Gambar akan dikompres otomatis ke WebP (maks 500 KB) dan disimpan di Supabase Storage.
+   - Gambar akan dikompres otomatis ke WebP (maks 500 KB) di browser (Canvas API) dan disimpan di storage lokal aplikasi (`public` disk Laravel).
 6. **Isi opsi jawaban** (minimal 2, maksimal 5) dengan WYSIWYG Editor yang sama.
-   - Untuk PG: tentukan 1 jawaban benar.
-   - Untuk PG Kompleks: tentukan lebih dari 1 jawaban benar.
-   - Untuk PG Kategori: tidak menggunakan opsi jawaban, tetapi menggunakan pernyataan-kategori.
+   - Untuk **PG**: tentukan tepat **1** opsi `is_benar: true`.
+   - Untuk **PG Kompleks**: tentukan **minimal 2** opsi `is_benar: true` (soal dengan jumlah benar ≤ 1 ditolak — lihat edge 6.15).
+   - Untuk **PG Kategori**: tidak menggunakan opsi jawaban, tetapi pernyataan-kategori; admin mendefinisikan daftar kategori (`daftar_kategori` JSON) di tingkat soal, lalu per-pernyataan dikelompokkan ke salah satu kategori tersebut.
 7. **Isi pembahasan** dengan WYSIWYG Editor (support teks, gambar, KaTeX).
 8. **Isi parameter IRT (a, b, c):**
    - Admin bisa input manual (berdasarkan pengalaman).
@@ -178,20 +184,22 @@ Skala 200-700: 450 + 100 × θ (di-clamp ke 200-700)
 
 **Alur:**
 1. Admin → "Paket Tryout" → "Buat Tryout Baru".
-2. Isi metadata: Nama paket, tingkat (SMK/SMA/dll).
+2. Isi metadata: Nama paket, tingkat (`SMK|SMA|SMP|SD`), **batas waktu pengerjaan (menit)** — wajib diisi; default 120 menit jika dikosongkan.
 3. Pilih 3 mapel wajib (dari dropdown mapel yang berjenis `wajib`).
 4. Pilih 2 mapel pilihan:
-   - **Untuk SMK:** Salah satu harus **Proyek Kreatif dan Kewirausahaan (PKK)** , satunya lagi bebas (bisa pilih mapel kejuruan atau lainnya).
-   - **Untuk SMA/Sederajat:** Bebas memilih 2 mapel pilihan apa saja.
+   - **Untuk SMK:** Minimal **salah satu** dari kedua mapel pilihan harus berjenis `pilihan_kejuruan` **atau** bertanda `is_pkk = true`. Keduanya boleh kejuruan sekaligus (jarang, tapi sah). Berlaku saat **create** maupun **edit**.
+   - **Untuk SMA/Sederajat:** Bebas memilih 2 mapel pilihan apa saja (tidak wajib kejuruan/PKK).
 5. Untuk setiap mapel:
    - Pilih paket soal yang sudah ada (dari fitur 3.4 atau 3.5).
    - Atau buat paket soal baru langsung dari halaman ini (manual atau generate AI).
 6. Klik "Simpan".
 
 **Validasi:**
-- Mapel pilihan tidak boleh sama dengan mapel wajib.
+- `batas_waktu_menit` wajib diisi (positif, default 120 jika dikosongkan).
+- Mapel pilihan tidak boleh sama dengan mapel wajib, dan tidak boleh sama satu sama lain.
 - Minimal 1 soal per mapel.
-- Untuk tingkat SMK, mapel_pilihan_1 harus PKK.
+- **Untuk tingkat SMK:** minimal satu mapel pilihan ber-`jenis = pilihan_kejuruan` **atau** ber-`is_pkk = true`; keduanya tidak dipaksa berbeda (boleh sama-sama kejuruan).
+- **Retake:** Satu peserta hanya boleh **satu percobaan** per paket tryout (`UNIQUE(user_id, paket_tryout_id)` pada tabel `hasil_tryout`). Admin dapat mereset percobaan pada kasus khusus (edge 6.16).
 
 ---
 
@@ -208,15 +216,22 @@ Skala 200-700: 450 + 100 × θ (di-clamp ke 200-700)
    - **Navigasi:** Peserta bisa pindah ke soal sebelumnya/berikutnya menggunakan tombol navigasi.
    - **Status:** Soal yang sudah dijawab ditandai (misal: hijau = sudah, merah = belum).
    - **Konten Soal:** Pertanyaan, opsi jawaban, dan gambar dirender dengan WYSIWYG + KaTeX.
-5. Setelah selesai semua soal di satu mapel → Lanjut ke mapel berikutnya.
-6. Setelah semua mapel selesai → Klik "Selesai".
-7. Sistem menghitung:
-   - Estimasi theta (MLE) dari semua jawaban.
-   - Skor IRT (dikonversi ke skala 0-100 atau 200-700 sesuai tingkat).
-   - Simpan ke `hasil_tryout`.
-8. Peserta melihat hasil: Skor IRT, jumlah benar/salah, **pembahasan per soal** (dirender dengan WYSIWYG + KaTeX).
+5. Peserta menavigasi soal di dalam mapel (bisa bolak-balik antar soal, tidak wajib berurutan). Soal yang sudah dijawab ditandai (hijau), belum (merah).
+6. Setelah selesai semua soal di satu mapel → Lanjut ke mapel berikutnya. **Tidak bisa kembali** ke mapel sebelumnya.
+7. Saat mencapai mapel terakhir atau tombol "Selesai", sistem menghitung skor dan menyimpan ke `hasil_tryout`.
+8. Jika waktu pengerjaan habis (`batas_waktu_menit`), tryout **otomatis dikumpulkan** (auto-submit) — skor dihitung dari jawaban yang sudah ada; sisa soal tidak dijawab diabaikan dari estimasi.
+9. Sistem menghitung per-item:
+   - **PG** → 1 item (opsi yang dipilih; `is_benar` dijadikan response 1/0).
+   - **PG Kompleks** → 1 item per opsi; hanya opsi yang dipilih dihitung; opsi lain diabaikan (edge 6.2).
+   - **PG Kategori** → 1 item per pernyataan; jawaban kosong pada pernyataan tertentu diabaikan (edge 6.2).
+10. Estimasi theta dihitung dari seluruh item dengan jawaban (`response != NULL`) menggunakan MLE (atau MLE + prior lemah bila item sedikit per KD).
+11. Theta dikonversi ke skala pelaporan sesuai tingkat akun (§1.2) dan disimpan bersama jumlah benar/salah/total_soal, serta `standard_error`.
+12. Peserta melihat hasil: Skor IRT (angka), jumlah benar/salah, **pembahasan per soal** (dirender dengan WYSIWYG + KaTeX), dan rekomendasi level kompetensi per KD (§7.5).
 
-**Catatan:** Peserta tidak bisa kembali ke mapel sebelumnya setelah selesai.
+**Catatan:**
+- Peserta tidak bisa kembali ke mapel sebelumnya setelah selesai.
+- Semua paket tryout memiliki batas waktu wajib; tryout yang kehabisan waktu dikumpulkan secara otomatis.
+- **Retake:** Percobaan ulang hanya dimungkinkan dengan reset oleh admin (§6.16).
 
 ---
 
@@ -319,7 +334,9 @@ Untuk mendukung konten yang kaya (teks format, gambar, dan ekspresi matematika),
 
 ---
 
-## 5. SCRIPT SQL (FULL DATABASE SCHEMA)
+## 5. SKEMA DATABASE (KONSEPTUAL — SUPABASE)
+
+> **Catatan:** Skrip SQL di bawah merupakan desain konseptual dengan Supabase/PostgreSQL. Implementasi aktual menggunakan **Laravel + MySQL** (lihat bagian 5.1 dan `database/migrations/`).
 
 ```sql
 -- ============================================
@@ -568,6 +585,24 @@ CREATE INDEX idx_tracking_kompetensi_user ON public.tracking_kompetensi(user_id)
 CREATE INDEX idx_tracking_mapel_user ON public.tracking_mapel(user_id);
 ```
 
+### 5.1 Catatan Implementasi (Laravel + MySQL)
+Implementasi aktual menggunakan **Laravel 13 + MySQL/MariaDB** dengan pendekatan TDD (Pest). Berikut ringkasan perbedaan dari skema konseptual Supabase di atas:
+
+- **Primary Key:** BIGINT auto-increment (bukan UUID) pada seluruh tabel domain.
+- **Autentikasi:** Menggunakan Laravel auth (`auth:web`); tidak ada Supabase Auth. Tabel `users` memuat langsung profil dasar (`nama_lengkap`, `sekolah`, `tingkat`, `jurusan`, `role`, `session_token`).
+- **Soft Delete + Blokir Hapus Permanen:** Kolom `deleted_at` pada `mapel`, `kompetensi_dasar`, `soal`, `paket_soal`, dan `paket_tryout`. Hapus permanen diblokir jika data sudah memiliki dependensi.
+- **Mapel:** Menambahkan kolom `is_pkk` (boolean, default `false`) untuk identifikasi Proyek Kreatif & Kewirausahaan (digunakan dalam validasi aturan SMK §3.6).
+- **Soal:** Kolom `daftar_kategori` (JSON) menyimpan daftar kategori yang tersedia untuk tipe `pg_kategori` di tingkat soal (bukan per-paket).
+- **Parameter IRT per-opsi/pernyataan:** Kolom `a_diskriminasi`, `b_kesulitan`, `c_tebakan` pada `opsi_jawaban` dan `pernyataan_kategori` bersifat **nullable** — jika NULL, fallback ke parameter default (a=1.0, b=0.0, c=0.25) di tingkat soal (edge 6.1).
+- **Paket Tryout:** Menambahkan `batas_waktu_menit` (wajib, default 120) dan `created_by` (admin yang membuat).
+- **Sesi Pengerjaan:** Tabel `percobaan` mencatat status (berjalan/selesai/dibatalkan), posisi soal, dan urutan mapel untuk mendukung fitur resume (§6.4).
+- **Riwayat Pengerjaan:** `jawaban_user` (JSON) menyimpan jawaban mentah; `is_benar` (boolean) menyimpan snapshot hasil skoring per-soal saat pengerjaan selesai — edit soal tidak mempengaruhi riwayat yang sudah ada.
+- **Hasil Tryout:** `UNIQUE(user_id, paket_tryout_id)` menjamin **satu percobaan per user per paket tryout**; reset percobaan oleh admin = menghapus baris hasil lama (+ riwayat/percobaan terkait).
+- **Tracking Kompetensi & Mapel:** Kolom `theta_estimasi` bersifat **nullable** — `NULL` berarti "belum teridentifikasi" (§7.5), bukan 0.
+- **Session:** Menggunakan `SESSION_DRIVER=database` (tabel `sessions`); satu-sesi-per-akun diimplementasikan via kolom `users.session_token` + middleware kustom.
+
+> Seluruh migrasi Laravel tersedia di `database/migrations/`. Jalankan `php artisan migrate:fresh` untuk membangun ulang skema dari awal.
+
 ---
 
 ## 6. PENANGANAN EDGE CASES
@@ -596,14 +631,14 @@ CREATE INDEX idx_tracking_mapel_user ON public.tracking_mapel(user_id);
 ### 6.5 Dua Peserta Menggunakan Akun yang Sama
 - **Kasus:** Satu akun digunakan oleh lebih dari satu orang (berbagi login).
 - **Penanganan:** 
-  - Batasi sesi aktif: hanya 1 sesi login per akun.
-  - Jika login dari perangkat lain, sesi sebelumnya otomatis logout.
+  - Batasi sesi aktif: hanya 1 sesi login per akun, diimplementasikan via kolom `users.session_token` + middleware `EnsureSingleSession` (bandingkan nilai token di session dengan nilai token di database; jika tidak cocok, paksa logout dan alihkan ke halaman login).
+  - Jika login dari perangkat lain, sesi sebelumnya otomatis logout pada request berikutnya.
 
 ### 6.6 Upload Gambar Gagal atau Terlalu Besar
 - **Kasus:** Admin upload gambar > 5 MB atau format tidak didukung.
 - **Penanganan:**
-  - Kompres otomatis ke WebP (maks 500 KB) di browser pakai Canvas API (`toBlob('image/webp')`). Sharp tidak bisa dijalankan di Cloudflare edge runtime.
-  - Validasi ekstensi: hanya JPG, PNG, WebP yang diizinkan.
+  - Kompres otomatis ke WebP (maks 500 KB) di browser pakai Canvas API (`toBlob('image/webp')`).
+  - Validasi ekstensi di sisi server: hanya JPG, PNG, WebP yang diizinkan.
   - Jika masih gagal, tampilkan pesan error dan minta upload ulang.
 
 ### 6.7 AI Generate Paket Soal Gagal (API Error/Timeout)
@@ -633,7 +668,7 @@ CREATE INDEX idx_tracking_mapel_user ON public.tracking_mapel(user_id);
 
 ### 6.12 Konten HTML Berbahaya dari WYSIWYG Editor (XSS)
 - **Kasus:** Admin (atau peretas) memasukkan script berbahaya melalui WYSIWYG editor.
-- **Penanganan:** Semua input dari WYSIWYG editor **disanitasi** menggunakan library DOMPurify di sisi server sebelum disimpan ke database. Hanya tag HTML yang diizinkan (dari TipTap) yang dipertahankan.
+- **Penanganan:** Semua input dari WYSIWYG editor **disanitasi** di sisi server (misal menggunakan HTML Purifier atau DOMPurify via headless browser) sebelum disimpan. Hanya tag HTML yang diizinkan yang dipertahankan.
 
 ### 6.13 KaTeX Expression Gagal Dirender
 - **Kasus:** Admin mengetikkan ekspresi KaTeX yang salah sintaks.
@@ -651,11 +686,15 @@ CREATE INDEX idx_tracking_mapel_user ON public.tracking_mapel(user_id);
   - Admin bisa langsung klik "Generate Ulang" tanpa harus mengisi ulang form.
 
 ### 6.15 PG Kompleks dengan Jumlah Benar Kurang dari 2
-- **Kasus:** AI menghasilkan soal PG Kompleks yang hanya memiliki 1 (atau 0) jawaban benar.
+- **Kasus:** Soal PG Kompleks yang hanya memiliki 1 (atau 0) jawaban benar.
 - **Penanganan:**
-  - Saat kurasi, sistem menampilkan peringatan: "Soal PG Kompleks harus memiliki minimal 2 jawaban benar."
-  - Admin harus mengoreksi (menambah jawaban benar atau mengubah tipe soal menjadi PG biasa) sebelum menyimpan.
-  - Sistem menolak menyimpan paket yang berisi PG Kompleks dengan jumlah benar < 2.
+  - Saat validasi, sistem menolak menyimpan soal PG Kompleks dengan jumlah benar < 2 dengan pesan: *"PG Kompleks harus memiliki minimal 2 jawaban benar."*
+  - Admin harus mengoreksi (menambah jawaban benar atau mengubah tipe menjadi PG biasa) sebelum menyimpan.
+  - Sistem juga menolak menyimpan paket soal yang berisi PG Kompleks dengan jumlah benar < 2.
+
+### 6.16 Retake / Percobaan Ulang Tryout (Satu Percobaan)
+- **Kasus:** Peserta ingin mengerjakan ulang paket tryout yang sama (misal karena gangguan teknis atau merasa tidak adil).
+- **Penanganan:** Setiap paket tryout hanya mengizinkan **satu percobaan per akun** (`UNIQUE(user_id, paket_tryout_id)` pada `hasil_tryout`). Saat peserta mencoba memulai ulang paket yang sama, sistem menolak dengan pesan: *"Anda sudah menyelesaikan tryout ini. Silakan hubungi admin jika ada masalah teknis."* Admin dapat **menghapus hasil lama** (serta `percobaan` dan `riwayat_pengerjaan` terkait) untuk mengizinkan ulang sekali. Tidak ada retake otomatis.
 
 ---
 
@@ -917,10 +956,16 @@ Aturan pembuatan soal:
 Karena dalam soal PG Kompleks atau Kategori, setiap opsi/pernyataan memiliki tingkat kesulitan dan daya beda yang berbeda. Misal, dalam satu soal PG Kompleks, opsi A mungkin sangat mudah diidentifikasi sebagai salah, sementara opsi C sulit dibedakan. Dengan memberikan parameter IRT per opsi, penilaian menjadi lebih akurat.
 
 ### 7.4 Bagaimana Cara Menghitung Skor IRT Total dari Banyak Mapel?
-Skor IRT total adalah **rata-rata theta dari semua mapel**, lalu dikonversi ke skala pelaporan. Misal:
+Skor IRT total adalah **rata-rata theta dari seluruh mapel yang dikerjakan**, lalu dikonversi ke skala pelaporan. **Mapel yang tidak dijawab sama sekali diabaikan** dari perhitungan rata-rata theta.
+
+**Rumus konversi (konsisten dengan §1.2):**
+- SD/SMP: `50 + 10 × θ` → clamp 0–100
+- SMA/SMK: `450 + 100 × θ` → clamp 200–700
+
+**Contoh (SMA):**
 - Theta per mapel: [1.2, 0.8, 0.5, 1.0, 0.3]
 - Rata-rata theta: 0.76
-- Skor untuk SMA (200-700): `(0.76 + 3) / 6 * 500 + 200 = (3.76/6)*500 + 200 = 313.33 + 200 = 513`
+- Skor: `450 + 100 × 0.76 = 526`
 
 ### 7.5 Bagaimana Cara Menentukan KD yang "Perlu Bimbingan"?
 Berdasarkan tabel level kompetensi:

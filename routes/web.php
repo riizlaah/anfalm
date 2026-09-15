@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\KompetensiDasarController;
+use App\Http\Controllers\Admin\MapelController;
+use App\Http\Controllers\Admin\SoalController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\DashboardController;
@@ -25,4 +28,13 @@ Route::middleware(['auth', 'single.session'])->group(function () {
 
 Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {
     Route::get('admin', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
+    Route::resource('admin/mapel', MapelController::class)
+        ->except(['show'])
+        ->names('admin.mapel');
+    Route::resource('admin/kompetensi-dasar', KompetensiDasarController::class)
+        ->except(['show'])
+        ->names('admin.kompetensi-dasar');
+    Route::resource('admin/soal', SoalController::class)
+        ->except(['show'])
+        ->names('admin.soal');
 });
