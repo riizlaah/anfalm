@@ -1,8 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\GeneratePaketController;
 use App\Http\Controllers\Admin\KompetensiDasarController;
 use App\Http\Controllers\Admin\MapelController;
+use App\Http\Controllers\Admin\PaketSoalController;
+use App\Http\Controllers\Admin\PaketTryoutController;
 use App\Http\Controllers\Admin\SoalController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -37,4 +40,14 @@ Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {
     Route::resource('admin/soal', SoalController::class)
         ->except(['show'])
         ->names('admin.soal');
+    Route::get('admin/paket-soal/generate', [GeneratePaketController::class, 'create'])->name('admin.paket-soal.generate');
+    Route::post('admin/paket-soal/generate', [GeneratePaketController::class, 'storePart'])->name('admin.paket-soal.generate.store');
+    Route::get('admin/paket-soal/kurasi', [GeneratePaketController::class, 'kurasi'])->name('admin.paket-soal.kurasi');
+    Route::post('admin/paket-soal/simpan', [GeneratePaketController::class, 'simpan'])->name('admin.paket-soal.simpan');
+    Route::resource('admin/paket-soal', PaketSoalController::class)
+        ->except(['show'])
+        ->names('admin.paket-soal');
+    Route::resource('admin/paket-tryout', PaketTryoutController::class)
+        ->except(['show'])
+        ->names('admin.paket-tryout');
 });

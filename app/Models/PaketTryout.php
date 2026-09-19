@@ -13,6 +13,14 @@ class PaketTryout extends Model
 
     protected $table = 'paket_tryout';
 
+    public const TINGKAT_SD = 'SD';
+
+    public const TINGKAT_SMP = 'SMP';
+
+    public const TINGKAT_SMA = 'SMA';
+
+    public const TINGKAT_SMK = 'SMK';
+
     protected $fillable = [
         'nama_paket',
         'deskripsi',

@@ -76,16 +76,24 @@
                     <input type="hidden" name="opsi_jawaban[{{ $idx }}][urutan]" value="{{ $opsi['urutan'] ?? ($idx + 1) }}">
                     <input type="text" name="opsi_jawaban[{{ $idx }}][teks_opsi]" placeholder="Teks opsi"
                         value="{{ $opsi['teks_opsi'] ?? '' }}" class="input" required>
-                    <label class="check">
-                        <input type="checkbox" name="opsi_jawaban[{{ $idx }}][is_benar]" value="1" @checked(! empty($opsi['is_benar']))>
+                    <input type="hidden" name="opsi_jawaban[{{ $idx }}][is_benar]"
+                        value="{{ ! empty($opsi['is_benar']) ? '1' : '0' }}" class="is-benar-hidden">
+
+                    <label class="check benar-control" data-opsi-for="pg">
+                        <input type="radio" name="benar_pilih" value="{{ $idx }}" @checked(! empty($opsi['is_benar']))>
                         Benar
                     </label>
+                    <label class="check benar-control" data-opsi-for="pg_kompleks">
+                        <input type="checkbox" class="benar-check" @checked(! empty($opsi['is_benar']))>
+                        Benar
+                    </label>
+
                     <button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>
                 </div>
             @endforeach
         </div>
         <button type="button" class="btn btn-ghost" id="add-opsi">+ Tambah Opsi</button>
-        <p class="hint">Minimal 5 opsi. PG: tepat 1 benar. PG Kompleks: minimal 2 benar.</p>
+        <p class="hint">Minimal 5 opsi. PG: tepat 1 benar (pilih dengan radio). PG Kompleks: minimal 2 benar (centang dengan checkbox).</p>
     </section>
 
     <section data-for-tipe="pg_kategori" class="mt-6 border-t border-slate-200 pt-5">
@@ -119,7 +127,7 @@
             @endforeach
         </div>
         <button type="button" class="btn btn-ghost" id="add-pernyataan">+ Tambah Pernyataan</button>
-        <p class="hint">Minimal 2 pernyataan; kategori benar harus sesuai daftar kategori di atas.</p>
+        <p class="hint">Minimal 2 pernyataan; kategori benar dipilih dari daftar kategori di atas.</p>
     </section>
 </div>
 
@@ -128,6 +136,20 @@
         const tipeInput = document.getElementById('tipe_soal');
         const form = document.getElementById('soal-form');
         const sections = form.querySelectorAll('section[data-for-tipe]');
+
+        function refreshBenarControls() {
+            const tipe = tipeInput.value;
+            document.querySelectorAll('.opsi-row').forEach(function (row) {
+                const hidden = row.querySelector('.is-benar-hidden');
+                const isBenar = hidden !== null && hidden.value === '1';
+                row.querySelectorAll('.benar-control input').forEach(function (input) {
+                    const show = input.closest('.benar-control').dataset.opsiFor === tipe;
+                    input.closest('.benar-control').style.display = show ? '' : 'none';
+                    input.disabled = !show;
+                    input.checked = show && isBenar && (tipe === 'pg' && input.type === 'radio' || tipe === 'pg_kompleks' && input.type === 'checkbox');
+                });
+            });
+        }
 
         function syncForm() {
             const tipe = tipeInput.value;
@@ -138,6 +160,7 @@
                     input.disabled = !allowed;
                 });
             });
+            refreshBenarControls();
         }
         tipeInput.addEventListener('change', syncForm);
         syncForm();
@@ -159,22 +182,58 @@
         kdPicker.addEventListener('input', syncKd);
         kdPicker.addEventListener('change', syncKd);
 
+        // --- Kategori benar hot reload ---
+        function getDaftarKategori() {
+            var daftar = [];
+            document.getElementById('kategori-list').querySelectorAll('input[name="daftar_kategori[]"]').forEach(function (input) {
+                var value = input.value.trim();
+                if (value) daftar.push(value);
+            });
+            return daftar;
+        }
+
+        function syncKategoriSelects() {
+            var daftar = getDaftarKategori();
+            document.querySelectorAll('.pernyataan-row select').forEach(function (select) {
+                var current = select.value;
+                select.innerHTML = '<option value="">— pilih —</option>';
+                for (var i = 0; i < daftar.length; i++) {
+                    var option = document.createElement('option');
+                    option.value = daftar[i];
+                    option.textContent = daftar[i];
+                    if (daftar[i] === current) option.selected = true;
+                    select.appendChild(option);
+                }
+            });
+        }
+        document.getElementById('kategori-list').addEventListener('input', syncKategoriSelects);
+
         // --- Row helpers ---
         function addRow(template, container, prefix, buildHtml) {
-            var index = container.querySelectorAll('.opsi-row, .pernyataan-row, .kategori-row').length;
+            var index = container.querySelectorAll('.' + template + '-row').length;
             var row = document.createElement('div');
             row.className = template + '-row';
-            row.innerHTML = buildHtml(prefix + '[' + index + ']');
+            row.innerHTML = buildHtml(prefix + '[' + index + ']', index);
             container.appendChild(row);
+            return index;
+        }
+
+        function buildBenarControls(index) {
+            return '<label class="check benar-control" data-opsi-for="pg">' +
+                    '<input type="radio" name="benar_pilih" value="' + index + '"> Benar</label>' +
+                    '<label class="check benar-control" data-opsi-for="pg_kompleks">' +
+                    '<input type="checkbox" class="benar-check"> Benar</label>';
         }
 
         document.getElementById('add-opsi').addEventListener('click', function () {
-            addRow('opsi', document.getElementById('opsi-list'), 'opsi_jawaban', function (name) {
+            addRow('opsi', document.getElementById('opsi-list'), 'opsi_jawaban', function (name, index) {
                 return '<input type="hidden" name="' + name + '][urutan]">' +
                     '<input type="text" name="' + name + '][teks_opsi]" placeholder="Teks opsi" class="input" required>' +
-                    '<label class="check"><input type="checkbox" name="' + name + '][is_benar]" value="1"> Benar</label>' +
+                    '<input type="hidden" name="' + name + '][is_benar]" value="0" class="is-benar-hidden">' +
+                    buildBenarControls(index) +
                     '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>';
             });
+            refreshBenarControls();
         });
 
         function buildKategoriSelect(name, daftarKategori) {
@@ -188,11 +247,7 @@
         }
 
         document.getElementById('add-pernyataan').addEventListener('click', function () {
-            var kategoriList = document.getElementById('kategori-list');
-            var daftar = [];
-            kategoriList.querySelectorAll('input[name="daftar_kategori[]"]').forEach(function (input) {
-                if (input.value.trim()) daftar.push(input.value.trim());
-            });
+            var daftar = getDaftarKategori();
             addRow('pernyataan', document.getElementById('pernyataan-list'), 'pernyataan_kategori', function (name) {
                 return '<input type="hidden" name="' + name + '][urutan]">' +
                     '<input type="text" name="' + name + '][teks_pernyataan]" placeholder="Teks pernyataan" class="input" required>' +
@@ -210,10 +265,32 @@
             container.appendChild(row);
         });
 
-        form.addEventListener('click', function (event) {
-            if (event.target.classList.contains('remove-row')) {
-                event.target.closest('.opsi-row, .pernyataan-row, .kategori-row').remove();
+        // --- Benar (radio/checkbox) sync ---
+        form.addEventListener('change', function (event) {
+            var target = event.target;
+            var row = target.closest('.opsi-row');
+            if (!row) return;
+
+            if (target.type === 'radio' && target.name === 'benar_pilih') {
+                document.querySelectorAll('.is-benar-hidden').forEach(function (hidden) {
+                    hidden.value = '0';
+                });
+                row.querySelector('.is-benar-hidden').value = '1';
+            } else if (target.classList.contains('benar-check')) {
+                row.querySelector('.is-benar-hidden').value = target.checked ? '1' : '0';
             }
         });
+
+        // --- Remove row ---
+        form.addEventListener('click', function (event) {
+            if (event.target.classList.contains('remove-row')) {
+                var row = event.target.closest('.opsi-row, .pernyataan-row, .kategori-row');
+                var wasKategori = row !== null && row.classList.contains('kategori-row');
+                if (row) row.remove();
+                if (wasKategori) syncKategoriSelects();
+            }
+        });
+
+        syncKategoriSelects();
     });
 </script>

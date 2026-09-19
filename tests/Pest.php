@@ -1,5 +1,10 @@
 <?php
 
+use App\Models\DetailPaketSoal;
+use App\Models\KompetensiDasar;
+use App\Models\Mapel;
+use App\Models\PaketSoal;
+use App\Models\Soal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,6 +22,9 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+pest()->extend(TestCase::class)
+    ->in('Unit');
 
 /*
 |--------------------------------------------------------------------------
@@ -47,4 +55,25 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+function mapelSoalF4(Mapel $mapel): Soal
+{
+    return Soal::factory()->create([
+        'kompetensi_dasar_id' => KompetensiDasar::factory()->create(['mapel_id' => $mapel->id])->id,
+    ]);
+}
+
+function paketSoalF4(Mapel $mapel, int $jumlahSoal = 1): PaketSoal
+{
+    $paket = PaketSoal::factory()->create(['mapel_id' => $mapel->id]);
+
+    for ($i = 0; $i < $jumlahSoal; $i++) {
+        DetailPaketSoal::create([
+            'paket_soal_id' => $paket->id,
+            'soal_id' => mapelSoalF4($mapel)->id,
+        ]);
+    }
+
+    return $paket;
 }
