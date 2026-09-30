@@ -34,6 +34,9 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->seedMapelDefault();
+
+        // Membutuhkan mapel yang sudah ada, karena itu dipanggil paling akhir.
+        $this->call(TryoutSeeder::class);
     }
 
     private function seedMapelDefault(): void
