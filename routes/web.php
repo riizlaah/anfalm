@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\SoalController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TryoutController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -27,6 +28,12 @@ Route::middleware('guest')->group(function () {
 Route::middleware(['auth', 'single.session'])->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('tryout', [TryoutController::class, 'index'])->name('tryout.index');
+    Route::post('tryout/{paketTryout}/mulai', [TryoutController::class, 'mulai'])->name('tryout.mulai');
+    Route::get('tryout/{paketTryout}/kerja', [TryoutController::class, 'kerja'])->name('tryout.kerja');
+    Route::post('tryout/{paketTryout}/jawab', [TryoutController::class, 'jawab'])->name('tryout.jawab');
+    Route::get('tryout/{paketTryout}/hasil', [TryoutController::class, 'hasil'])->name('tryout.hasil');
 });
 
 Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {

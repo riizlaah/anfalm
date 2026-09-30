@@ -24,22 +24,6 @@ use RuntimeException;
  */
 class TryoutSeeder extends Seeder
 {
-    private const SLOT_MAPEL = [
-        'mapel_wajib_1',
-        'mapel_wajib_2',
-        'mapel_wajib_3',
-        'mapel_pilihan_1',
-        'mapel_pilihan_2',
-    ];
-
-    private const SLOT_PAKET = [
-        'paket_soal_wajib_1_id',
-        'paket_soal_wajib_2_id',
-        'paket_soal_wajib_3_id',
-        'paket_soal_pilihan_1_id',
-        'paket_soal_pilihan_2_id',
-    ];
-
     private const NAMA_TRYOUT = 'Tryout Fase 6 (uji coba)';
 
     private const TINGKAT = PaketTryout::TINGKAT_SMK;
@@ -70,12 +54,9 @@ class TryoutSeeder extends Seeder
             'created_by' => $this->adminId(),
         ];
 
-        foreach (self::SLOT_MAPEL as $index => $field) {
-            $atribut[$field] = $mapels[$index]->getKey();
-        }
-
-        foreach (self::SLOT_PAKET as $index => $field) {
-            $atribut[$field] = $slotPaket[$index];
+        foreach (PaketTryout::SLOT as $index => $slot) {
+            $atribut[$slot['mapel']] = $mapels[$index]->getKey();
+            $atribut[$slot['paket']] = $slotPaket[$index];
         }
 
         PaketTryout::updateOrCreate(['nama_paket' => self::NAMA_TRYOUT], $atribut);

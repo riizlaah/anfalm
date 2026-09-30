@@ -18,22 +18,6 @@ use Illuminate\View\View;
 
 class PaketTryoutController extends Controller
 {
-    private const SLOT_MAPEL = [
-        'mapel_wajib_1',
-        'mapel_wajib_2',
-        'mapel_wajib_3',
-        'mapel_pilihan_1',
-        'mapel_pilihan_2',
-    ];
-
-    private const SLOT_PAKET = [
-        'paket_soal_wajib_1_id',
-        'paket_soal_wajib_2_id',
-        'paket_soal_wajib_3_id',
-        'paket_soal_pilihan_1_id',
-        'paket_soal_pilihan_2_id',
-    ];
-
     public function index(): View
     {
         $paketTryouts = PaketTryout::with(['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'])
@@ -120,11 +104,9 @@ class PaketTryoutController extends Controller
             'batas_waktu_menit' => ['nullable', 'integer', 'min:1'],
         ];
 
-        foreach (self::SLOT_MAPEL as $field) {
-            $rules[$field] = ['required', 'integer', Rule::exists('mapel', 'id')->whereNull('deleted_at')];
-        }
-        foreach (self::SLOT_PAKET as $field) {
-            $rules[$field] = ['required', 'integer', Rule::exists('paket_soal', 'id')->whereNull('deleted_at')];
+        foreach (PaketTryout::SLOT as $slot) {
+            $rules[$slot['mapel']] = ['required', 'integer', Rule::exists('mapel', 'id')->whereNull('deleted_at')];
+            $rules[$slot['paket']] = ['required', 'integer', Rule::exists('paket_soal', 'id')->whereNull('deleted_at')];
         }
 
         $tingkat = $request->filled('tingkat') ? (string) $request->input('tingkat') : null;
@@ -141,21 +123,23 @@ class PaketTryoutController extends Controller
     private function validateSlots(Validator $validator, Request $request, ?string $tingkat): void
     {
         $mapelIds = [];
-        foreach (self::SLOT_MAPEL as $field) {
-            $mapelId = (int) $request->input($field);
+        foreach (PaketTryout::SLOT as $slot) {
+            $mapelField = $slot['mapel'];
+            $mapelId = (int) $request->input($mapelField);
             if ($mapelId === 0) {
                 continue;
             }
             if (isset($mapelIds[$mapelId])) {
-                $validator->errors()->add($field, 'Mapel wajib dan pilihan tidak boleh sama satu sama lain.');
+                $validator->errors()->add($mapelField, 'Mapel wajib dan pilihan tidak boleh sama satu sama lain.');
             }
             $mapelIds[$mapelId] = true;
         }
 
         $this->validateAturanSmk($validator, $request, $tingkat);
 
-        foreach (self::SLOT_PAKET as $index => $paketField) {
-            $mapelField = self::SLOT_MAPEL[$index];
+        foreach (PaketTryout::SLOT as $slot) {
+            $mapelField = $slot['mapel'];
+            $paketField = $slot['paket'];
             $mapelId = (int) $request->input($mapelField);
             $paketId = (int) $request->input($paketField);
 

@@ -43,6 +43,11 @@ class Percobaan extends Model
     {
         return [
             'daftar_soal' => 'array',
+            'urutan_mapel' => 'integer',
+            'posisi_soal' => 'integer',
+            'jumlah_soal' => 'integer',
+            'batas_waktu_menit' => 'integer',
+            'durasi_detik' => 'integer',
             'waktu_mulai' => 'datetime',
             'waktu_selesai' => 'datetime',
         ];

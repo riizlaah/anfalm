@@ -39,6 +39,22 @@ class PaketTryout extends Model
         'created_by',
     ];
 
+    /**
+     * Slot mapel dan paket soal yang berpasangan, menurut urutan mapel
+     * dikerjakan oleh peserta. Semua tempat yang membaca slot (validasi,
+     * seeder, dan penyusunan soal percobaan) memakai daftar ini agar tidak
+     * ada yang tertinggal ketika urutan slot berubah.
+     *
+     * @var array<int, array{mapel: string, paket: string}>
+     */
+    public const SLOT = [
+        ['mapel' => 'mapel_wajib_1', 'paket' => 'paket_soal_wajib_1_id'],
+        ['mapel' => 'mapel_wajib_2', 'paket' => 'paket_soal_wajib_2_id'],
+        ['mapel' => 'mapel_wajib_3', 'paket' => 'paket_soal_wajib_3_id'],
+        ['mapel' => 'mapel_pilihan_1', 'paket' => 'paket_soal_pilihan_1_id'],
+        ['mapel' => 'mapel_pilihan_2', 'paket' => 'paket_soal_pilihan_2_id'],
+    ];
+
     public function created_by_user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

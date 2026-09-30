@@ -1,7 +1,10 @@
 @props(['title' => 'Dashboard'])
 
 @php
-    $nav = [['label' => 'Dashboard', 'route' => 'dashboard']];
+    $nav = [
+        ['label' => 'Dashboard', 'route' => 'dashboard'],
+        ['label' => 'Tryout', 'route' => 'tryout.index'],
+    ];
 
     if (auth()->check() && auth()->user()->isAdmin()) {
         $nav = array_merge($nav, [
