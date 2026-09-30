@@ -3,15 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Percobaan\PercobaanService;
-use App\Domain\Scoring\KompetensiLevel;
 use App\Models\Mapel;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
-use App\Models\TrackingKompetensi;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -33,10 +30,7 @@ class LatihanController extends Controller
     /** Opsi jumlah soal yang ditawarkan; nilai lain di luar rentang tetap sah. */
     public const JUMLAH_PRESET = [5, 10, 15, 20, 30];
 
-    public function __construct(
-        private readonly PercobaanService $percobaan,
-        private readonly KompetensiLevel $level,
-    ) {}
+    public function __construct(private readonly PercobaanService $percobaan) {}
 
     public function index(Request $request): View
     {
@@ -218,38 +212,11 @@ class LatihanController extends Controller
             ))
             ->values();
 
-        $kdIds = $riwayat->pluck('soal.kompetensi_dasar_id')->filter()->unique()->values();
-
-        $tracking = TrackingKompetensi::query()
-            ->where('user_id', $percobaan->user_id)
-            ->whereIn('kompetensi_dasar_id', $kdIds)
-            ->get()
-            ->keyBy('kompetensi_dasar_id');
-
-        $perKd = $riwayat
-            ->filter(fn (RiwayatPengerjaan $baris) => $baris->soal !== null)
-            ->groupBy(fn (RiwayatPengerjaan $baris) => (int) $baris->soal->kompetensi_dasar_id)
-            ->map(function (Collection $baris, int $kdId) use ($tracking): array {
-                $kd = $baris->first()->soal->kompetensiDasar;
-                $theta = $tracking->get($kdId)?->theta_estimasi;
-                $level = $this->level->levelFor($theta);
-
-                return [
-                    'kd' => $kd,
-                    'jumlah' => $baris->count(),
-                    'benar' => $baris->filter(fn (RiwayatPengerjaan $b) => $b->is_benar)->count(),
-                    'theta' => $theta,
-                    'level' => $level,
-                    'label' => $this->level->label($level),
-                ];
-            })
-            ->values();
-
         return view('latihan.hasil', [
             'percobaan' => $percobaan,
             'mapel' => Mapel::find($percobaan->mapel_id),
             'riwayat' => $riwayat,
-            'perKd' => $perKd,
+            'perKd' => $this->percobaan->ringkasanKompetensi($percobaan),
             'jumlahBenar' => $riwayat->filter(fn (RiwayatPengerjaan $b) => $b->is_benar)->count(),
             'jumlahKosong' => $riwayat->filter(fn (RiwayatPengerjaan $b) => $b->skor_irt === null)->count(),
         ]);

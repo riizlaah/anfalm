@@ -34,51 +34,7 @@
         </dl>
     </section>
 
-    <section class="card mt-5 p-6">
-        <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-            Perkembangan per kompetensi dasar
-        </h2>
-
-        <p class="mt-1 text-xs text-slate-500">
-            Angka theta diambil dari seluruh latihan dan tryout Anda pada kompetensi dasar ini,
-            bukan hanya dari latihan kali ini.
-        </p>
-
-        <div class="mt-4 overflow-x-auto">
-            <table class="w-full text-left text-sm">
-                <thead class="text-xs tracking-wide text-slate-500 uppercase">
-                    <tr class="border-b border-slate-200">
-                        <th class="py-2 pr-4 font-medium">Kompetensi dasar</th>
-                        <th class="py-2 pr-4 font-medium">Dikerjakan</th>
-                        <th class="py-2 pr-4 font-medium">Benar</th>
-                        <th class="py-2 pr-4 font-medium">Theta</th>
-                        <th class="py-2 font-medium">Level</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @forelse ($perKd as $baris)
-                        <tr>
-                            <td class="py-2 pr-4 text-slate-700">
-                                {{ $baris['kd']->kode_kompetensi }} — {{ $baris['kd']->deskripsi }}
-                            </td>
-                            <td class="py-2 pr-4 text-slate-700">{{ $baris['jumlah'] }}</td>
-                            <td class="py-2 pr-4 text-slate-700">{{ $baris['benar'] }}</td>
-                            <td class="py-2 pr-4 text-slate-700">
-                                {{ $baris['theta'] !== null ? number_format((float) $baris['theta'], 3) : '—' }}
-                            </td>
-                            <td class="py-2 font-medium text-ink">{{ $baris['label'] }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="py-4 text-center text-slate-400">
-                                Belum ada data kompetensi dasar.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
+    <x-perkembangan-kd :baris="$perKd" />
 
     <section class="mt-5">
         <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pembahasan</h2>

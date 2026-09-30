@@ -172,6 +172,18 @@ class TryoutController extends Controller
             return redirect()->route('tryout.index');
         }
 
+        // Percobaan terakhir jadi sumber soal yang dikerjakan peserta pada
+        // paket ini; jumlah soal paket sendiri tetap dihitung dari paketnya.
+        $percobaan = Percobaan::query()
+            ->where('user_id', $user->getKey())
+            ->where('paket_tryout_id', $paketTryout->getKey())
+            ->latest('id')
+            ->first();
+
+        $perKd = $percobaan !== null
+            ? $this->percobaan->ringkasanKompetensi($percobaan)
+            : [];
+
         $jumlahSoal = (int) DB::table('detail_paket_soal')
             ->whereIn('paket_soal_id', [
                 $paketTryout->paket_soal_wajib_1_id,
@@ -182,7 +194,7 @@ class TryoutController extends Controller
             ])
             ->count();
 
-        return view('tryout.hasil', compact('paketTryout', 'hasil', 'jumlahSoal'));
+        return view('tryout.hasil', compact('paketTryout', 'hasil', 'jumlahSoal', 'perKd'));
     }
 
     /**

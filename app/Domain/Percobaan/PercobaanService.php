@@ -3,8 +3,10 @@
 namespace App\Domain\Percobaan;
 
 use App\Domain\Scoring\IrtService;
+use App\Domain\Scoring\KompetensiLevel;
 use App\Domain\Scoring\ScoringService;
 use App\Models\HasilTryout;
+use App\Models\KompetensiDasar;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
 use App\Models\Percobaan;
@@ -36,6 +38,7 @@ class PercobaanService
     public function __construct(
         private readonly ScoringService $scoring,
         private readonly IrtService $irt,
+        private readonly KompetensiLevel $level,
     ) {}
 
     /**
@@ -608,6 +611,66 @@ class PercobaanService
             ['user_id', 'kompetensi_dasar_id'],
             ['total_soal_dikerjakan', 'total_benar', 'persentase_benar', 'theta_estimasi', 'theta_se', 'last_updated'],
         );
+    }
+
+    /**
+     * Ringkasan per kompetensi dasar untuk satu percobaan, dipakai halaman hasil.
+     *
+     * Jumlah dan benar diambil dari percobaan ini saja, sedangkan theta dan
+     * level dari `tracking_kompetensi` yang mengakumulasikan seluruh percobaan
+     * peserta — supaya level tidak melompat-lompat antar tryout. KD yang belum
+     * pernah dijawab tetap tampil dengan level "belum teridentifikasi" (7.5).
+     *
+     * @return array<int, array{kd: KompetensiDasar, jumlah: int, benar: int, theta: ?float, level: string, label: string}>
+     */
+    public function ringkasanKompetensi(Percobaan $percobaan): array
+    {
+        $soalIds = collect($percobaan->daftar_soal ?? [])
+            ->flatMap(fn (array $grup): array => $grup['soal_ids'])
+            ->values();
+
+        $kdIds = Soal::query()
+            ->whereIn('id', $soalIds)
+            ->whereNotNull('kompetensi_dasar_id')
+            ->distinct()
+            ->pluck('kompetensi_dasar_id');
+
+        if ($kdIds->isEmpty()) {
+            return [];
+        }
+
+        $tracking = TrackingKompetensi::query()
+            ->where('user_id', $percobaan->user_id)
+            ->whereIn('kompetensi_dasar_id', $kdIds)
+            ->get()
+            ->keyBy('kompetensi_dasar_id');
+
+        $perRiwayat = RiwayatPengerjaan::query()
+            ->with('soal')
+            ->where('percobaan_id', $percobaan->getKey())
+            ->get()
+            ->filter(fn (RiwayatPengerjaan $baris): bool => $baris->soal !== null)
+            ->groupBy(fn (RiwayatPengerjaan $baris): int => (int) $baris->soal->kompetensi_dasar_id);
+
+        return KompetensiDasar::query()
+            ->whereIn('id', $kdIds)
+            ->orderBy('kode_kompetensi')
+            ->get()
+            ->map(function (KompetensiDasar $kd) use ($perRiwayat, $tracking): array {
+                $baris = $perRiwayat->get($kd->getKey());
+                $theta = $tracking->get($kd->getKey())?->theta_estimasi;
+                $level = $this->level->levelFor($theta);
+
+                return [
+                    'kd' => $kd,
+                    'jumlah' => $baris?->count() ?? 0,
+                    'benar' => $baris?->filter(fn (RiwayatPengerjaan $b): bool => $b->is_benar)->count() ?? 0,
+                    'theta' => $theta,
+                    'level' => $level,
+                    'label' => $this->level->label($level),
+                ];
+            })
+            ->all();
     }
 
     /**

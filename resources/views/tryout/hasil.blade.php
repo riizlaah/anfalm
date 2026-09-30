@@ -47,6 +47,8 @@
         </dl>
     </section>
 
+    <x-perkembangan-kd :baris="$perKd" />
+
     <div class="mt-6 flex justify-end">
         <a href="{{ route('tryout.index') }}" class="btn btn-ghost">Kembali ke daftar tryout</a>
     </div>

@@ -244,6 +244,48 @@ it('menampilkan halaman hasil setelah percobaan ditutup', function () {
         ->assertSee((string) $hasil->skor_konversi);
 });
 
+it('menampilkan level kompetensi per KD di halaman hasil tryout', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+
+    $percobaan->update(['urutan_mapel' => 4]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']));
+
+    // Mapel terakhir dijawab seluruh benar, jadi KD-nya naik ke Mahir;
+    // empat mapel yang dilewati tetap belum teridentifikasi.
+    $this->actingAs($peserta)
+        ->get(route('tryout.hasil', $paket))
+        ->assertOk()
+        ->assertSee('Level kompetensi per KD')
+        ->assertSee('Mahir')
+        ->assertSee('Belum Teridentifikasi');
+});
+
+it('menandai kompetensi dasar yang belum pernah dijawab sebagai belum teridentifikasi', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $percobaan->update(['urutan_mapel' => 4]);
+
+    // Seluruh mapel dilewati tanpa satu pun jawaban.
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), ['aksi' => 'selesai'])
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.hasil', $paket))
+        ->assertOk()
+        ->assertDontSee('Mahir')
+        ->assertSee('Belum Teridentifikasi');
+});
+
 it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
