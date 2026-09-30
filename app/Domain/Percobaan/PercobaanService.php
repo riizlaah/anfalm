@@ -10,6 +10,7 @@ use App\Models\PaketTryout;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
+use App\Models\TrackingKompetensi;
 use App\Models\User;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -148,6 +149,61 @@ class PercobaanService
     }
 
     /**
+     * Mulai sesi latihan: soal diambil acak dari satu mapel, opsional hanya
+     * dari satu kompetensi dasar, lalu dipotong sesuai jumlah yang diminta.
+     *
+     * `jumlah_soal` disimpan sebagai jumlah yang benar-benar terpakai, jadi
+     * permintaan melebihi soal yang tersedia tetap sah.
+     *
+     * Mengembalikan `null` bila filter itu tidak menemukan soal apa pun.
+     *
+     * @param  array<string, mixed>  $pilihan  hasil validasi form latihan
+     */
+    public function mulaiLatihan(array $pilihan, User $user): ?Percobaan
+    {
+        $mapelId = (int) ($pilihan['mapel_id'] ?? 0);
+        $jumlahSoal = (int) ($pilihan['jumlah_soal'] ?? 0);
+        $kdId = isset($pilihan['kompetensi_dasar_id']) && $pilihan['kompetensi_dasar_id'] !== null
+            ? (int) $pilihan['kompetensi_dasar_id']
+            : null;
+
+        $query = Soal::query()
+            ->whereNotNull('kompetensi_dasar_id')
+            ->whereHas('kompetensiDasar', fn ($q) => $q->where('mapel_id', $mapelId));
+
+        if ($kdId !== null) {
+            $query->where('kompetensi_dasar_id', $kdId);
+        }
+
+        $soalIds = $query->pluck('id')->all();
+
+        if ($soalIds === []) {
+            return null;
+        }
+
+        shuffle($soalIds);
+        $soalIds = array_slice($soalIds, 0, max(1, $jumlahSoal));
+
+        $batas = ($pilihan['timer'] ?? 'stopwatch') === 'countdown'
+            ? (int) ($pilihan['batas_waktu_menit'] ?? 0)
+            : null;
+
+        return Percobaan::create([
+            'user_id' => $user->getKey(),
+            'jenis' => Percobaan::JENIS_LATIHAN,
+            'paket_tryout_id' => null,
+            'mapel_id' => $mapelId,
+            'jumlah_soal' => count($soalIds),
+            'batas_waktu_menit' => $batas,
+            'status' => Percobaan::STATUS_BERJALAN,
+            'daftar_soal' => [['mapel_id' => $mapelId, 'soal_ids' => $soalIds]],
+            'urutan_mapel' => 0,
+            'posisi_soal' => 0,
+            'waktu_mulai' => now(),
+        ]);
+    }
+
+    /**
      * Percobaan milik peserta untuk paket ini yang masih berjalan, bila ada.
      */
     public function cariAktif(PaketTryout $paket, User $user, bool $kunci = false): ?Percobaan
@@ -279,12 +335,18 @@ class PercobaanService
 
     /**
      * Menutup percobaan: menilai tiap jawaban, mengestimasi theta per mapel,
-     * merata-ratanya (mapel yang tidak dijawab ditinggalkan, 7.4), lalu
-     * menyimpan ke `hasil_tryout`. Panggil berulang pun hasilnya tetap sama.
+     * merata-ratanya (mapel yang tidak dijawab ditinggalkan, 7.4), menulis
+     * ulang `tracking_kompetensi` per KD, lalu menyimpan ke `hasil_tryout`.
+     *
+     * Panggil berulang pun hasilnya tetap sama.
+     *
+     * Latihan tidak punya `hasil_tryout` (paketnya kosong), jadi yang kembali
+     * dari metode ini `null`; penutupan tetap tercatat di `percobaan`,
+     * `riwayat_pengerjaan`, dan `tracking_kompetensi`.
      */
-    public function akhirkan(Percobaan $percobaan): HasilTryout
+    public function akhirkan(Percobaan $percobaan): ?HasilTryout
     {
-        return DB::transaction(function () use ($percobaan): HasilTryout {
+        return DB::transaction(function () use ($percobaan): ?HasilTryout {
             $percobaan = Percobaan::query()
                 ->whereKey($percobaan->getKey())
                 ->lockForUpdate()
@@ -297,6 +359,13 @@ class PercobaanService
 
             if ($sudahAda !== null) {
                 return $sudahAda;
+            }
+
+            // Latihan sudah ditutup tidak boleh dihitung ulang: penjumlahannya
+            // memang idempoten, tetapi `waktu_selesai` dan durasinya harus
+            // tetap milik percobaan pertama.
+            if ($percobaan->status === Percobaan::STATUS_SELESAI && $percobaan->paket_tryout_id === null) {
+                return null;
             }
 
             $percobaan->loadMissing('user');
@@ -374,6 +443,12 @@ class PercobaanService
                 'durasi_detik' => $durasi,
             ]);
 
+            $this->perbaruiTrackingKompetensi($percobaan->user, array_keys($indeksMapel));
+
+            if ($percobaan->paket_tryout_id === null) {
+                return null;
+            }
+
             return HasilTryout::create([
                 'user_id' => $percobaan->user_id,
                 'paket_tryout_id' => $percobaan->paket_tryout_id,
@@ -446,6 +521,93 @@ class PercobaanService
         }
 
         return $theta;
+    }
+
+    /**
+     * Menulis ulang `tracking_kompetensi` untuk tiap KD yang tersentuh
+     * percobaan ini, dihitung dari seluruh riwayat peserta pada KD itu.
+     *
+     * Dipanggil ulang, bukan ditambah, supaya idempoten: menutup percobaan dua
+     * kali tidak menggandakan jumlah, dan theta selalu mencerminkan seluruh
+     * jawaban yang pernah dikirim peserta pada KD tersebut (3.8, 3.9).
+     *
+     * @param  array<int, int>  $soalTerlibat
+     */
+    private function perbaruiTrackingKompetensi(User $user, array $soalTerlibat): void
+    {
+        if ($soalTerlibat === []) {
+            return;
+        }
+
+        $kdIds = Soal::query()
+            ->whereIn('id', $soalTerlibat)
+            ->whereNotNull('kompetensi_dasar_id')
+            ->distinct()
+            ->pluck('kompetensi_dasar_id');
+
+        $baris = [];
+
+        foreach ($kdIds as $kdId) {
+            $riwayat = RiwayatPengerjaan::query()
+                ->with(['soal.opsiJawaban', 'soal.pernyataanKategori'])
+                ->where('user_id', $user->getKey())
+                ->whereHas('soal', fn ($q) => $q->where('kompetensi_dasar_id', $kdId))
+                ->get();
+
+            $dikerjakan = 0;
+            $benar = 0;
+            $items = [];
+
+            foreach ($riwayat as $barisRiwayat) {
+                if ($barisRiwayat->soal === null) {
+                    continue;
+                }
+
+                $skor = $this->scoring->score($barisRiwayat->soal, $barisRiwayat->jawaban_user);
+
+                if (($skor['jumlah_benar'] + $skor['jumlah_salah']) === 0) {
+                    continue;
+                }
+
+                $dikerjakan++;
+
+                if ($skor['jumlah_salah'] === 0 && $skor['jumlah_benar'] > 0) {
+                    $benar++;
+                }
+
+                $items = [...$items, ...$this->keItemIrt(array_values(array_filter(
+                    $skor['items'],
+                    fn (array $item): bool => $item['resp'] !== null
+                )))];
+            }
+
+            $theta = $items === []
+                ? null
+                : (count($items) < self::MIN_ITEM_MLE
+                    ? $this->irt->estimateWithPrior($items)
+                    : $this->irt->estimateMle($items));
+
+            $baris[] = [
+                'user_id' => $user->getKey(),
+                'kompetensi_dasar_id' => (int) $kdId,
+                'total_soal_dikerjakan' => $dikerjakan,
+                'total_benar' => $benar,
+                'persentase_benar' => $dikerjakan > 0 ? round($benar / $dikerjakan * 100, 2) : 0.0,
+                'theta_estimasi' => $theta,
+                'theta_se' => $theta === null ? null : $this->irt->standardError($theta, $items),
+                'last_updated' => now(),
+            ];
+        }
+
+        if ($baris === []) {
+            return;
+        }
+
+        TrackingKompetensi::upsert(
+            $baris,
+            ['user_id', 'kompetensi_dasar_id'],
+            ['total_soal_dikerjakan', 'total_benar', 'persentase_benar', 'theta_estimasi', 'theta_se', 'last_updated'],
+        );
     }
 
     /**

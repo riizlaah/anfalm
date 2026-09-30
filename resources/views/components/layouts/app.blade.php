@@ -4,6 +4,7 @@
     $nav = [
         ['label' => 'Dashboard', 'route' => 'dashboard'],
         ['label' => 'Tryout', 'route' => 'tryout.index'],
+        ['label' => 'Latihan', 'route' => 'latihan.index'],
     ];
 
     if (auth()->check() && auth()->user()->isAdmin()) {

@@ -99,15 +99,29 @@ class TryoutController extends Controller
             ->get()
             ->keyBy('soal_id');
 
-        return view('tryout.kerja', [
-            'paketTryout' => $paketTryout,
+        $mapel = Mapel::find($grup['mapel_id']);
+        $posisiMapel = ((int) $percobaan->urutan_mapel) + 1;
+        $totalMapel = count($percobaan->daftar_soal ?? []);
+        $terakhirMapel = $posisiMapel === $totalMapel;
+
+        return view('percobaan.kerja', [
+            'title' => $paketTryout->nama_paket,
+            'judul' => $mapel->nama,
+            'subjudul' => "{$paketTryout->nama_paket} · Mapel {$posisiMapel} dari {$totalMapel}",
+            'action' => route('tryout.jawab', $paketTryout),
+            'aksiDefault' => 'lanjut',
+            'labelKirim' => $terakhirMapel ? 'Selesai & Lihat Hasil' : 'Lanjut ke Mapel Berikutnya',
+            'konfirmasi' => [
+                'judul' => $terakhirMapel ? 'Selesaikan mapel terakhir?' : 'Pindah ke mapel berikutnya?',
+                'isi' => $terakhirMapel
+                    ? 'Semua jawaban tryout akan disimpan dan hasilnya langsung dihitung.'
+                    : "Jawaban di mapel {$mapel->nama} akan disimpan dan mapel ini dikunci — peserta tidak bisa kembali lagi. Pastikan semua soal sudah dijawab.",
+                'tombol' => $terakhirMapel ? 'Ya, selesaikan' : 'Ya, lanjut',
+            ],
+            'simpan' => null,
             'percobaan' => $percobaan,
-            'grup' => $grup,
-            'mapel' => Mapel::find($grup['mapel_id']),
             'soals' => $soals,
             'jawabanTersimpan' => $jawabanTersimpan,
-            'posisiMapel' => ((int) $percobaan->urutan_mapel) + 1,
-            'totalMapel' => count($percobaan->daftar_soal ?? []),
         ]);
     }
 

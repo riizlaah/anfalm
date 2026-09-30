@@ -4,8 +4,10 @@ use App\Models\DetailPaketSoal;
 use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
+use App\Models\Percobaan;
 use App\Models\Soal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Tests\TestCase;
 
 /*
@@ -76,4 +78,64 @@ function paketSoalF4(Mapel $mapel, int $jumlahSoal = 1): PaketSoal
     }
 
     return $paket;
+}
+
+/**
+ * Daftar soal pada posisi mapel yang sedang dikerjakan, terurut sesuai
+ * acakan percobaan. Berlaku untuk tryout maupun latihan (satu kelompok).
+ *
+ * @return array{soal: Collection<int, Soal>, urut: int}
+ */
+function soalMapelAktif(Percobaan $percobaan): array
+{
+    $grup = $percobaan->daftar_soal[$percobaan->urutan_mapel];
+
+    return [
+        'soal' => Soal::with(['opsiJawaban', 'pernyataanKategori'])
+            ->whereIn('id', $grup['soal_ids'])
+            ->get()
+            ->sortBy(fn (Soal $soal) => array_search($soal->id, $grup['soal_ids']))
+            ->values(),
+        'urut' => $grup['mapel_id'],
+    ];
+}
+
+/**
+ * Jawaban paling benar untuk satu soal, dalam bentuk yang dipakai form.
+ *
+ * @return array<int, mixed>|int
+ */
+function jawabanBenarSoal(Soal $soal): mixed
+{
+    return match ($soal->tipe_soal) {
+        Soal::TIPE_PG => $soal->opsiJawaban->firstWhere('is_benar', true)->id,
+        Soal::TIPE_PG_KOMPLEKS => $soal->opsiJawaban->filter->is_benar->pluck('id')->all(),
+        Soal::TIPE_PG_KATEGORI => $soal->pernyataanKategori
+            ->mapWithKeys(fn ($p) => [$p->id => $p->kategori_benar])
+            ->all(),
+    };
+}
+
+/**
+ * Payload `jawaban[...]` untuk sekumpulan soal, memilih semua jawaban benar.
+ *
+ * @param  Collection<int, Soal>|array<int, Soal>  $soals
+ * @return array<string, mixed>
+ */
+function payloadSemuaBenar($soals): array
+{
+    $opsi = [];
+    $kategori = [];
+
+    foreach ($soals as $soal) {
+        if ($soal->tipe_soal === Soal::TIPE_PG_KATEGORI) {
+            $kategori[$soal->id] = jawabanBenarSoal($soal);
+
+            continue;
+        }
+
+        $opsi[$soal->id] = jawabanBenarSoal($soal);
+    }
+
+    return ['jawaban' => ['opsi' => $opsi, 'kategori' => $kategori]];
 }

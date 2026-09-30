@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\SoalController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LatihanController;
 use App\Http\Controllers\TryoutController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,12 @@ Route::middleware(['auth', 'single.session'])->group(function () {
     Route::get('tryout/{paketTryout}/kerja', [TryoutController::class, 'kerja'])->name('tryout.kerja');
     Route::post('tryout/{paketTryout}/jawab', [TryoutController::class, 'jawab'])->name('tryout.jawab');
     Route::get('tryout/{paketTryout}/hasil', [TryoutController::class, 'hasil'])->name('tryout.hasil');
+
+    Route::get('latihan', [LatihanController::class, 'index'])->name('latihan.index');
+    Route::post('latihan/mulai', [LatihanController::class, 'mulai'])->name('latihan.mulai');
+    Route::get('latihan/{percobaan}/kerja', [LatihanController::class, 'kerja'])->name('latihan.kerja');
+    Route::post('latihan/{percobaan}/jawab', [LatihanController::class, 'jawab'])->name('latihan.jawab');
+    Route::get('latihan/{percobaan}/hasil', [LatihanController::class, 'hasil'])->name('latihan.hasil');
 });
 
 Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {

@@ -14,65 +14,6 @@ beforeEach(function () {
     $this->seed();
 });
 
-/**
- * Daftar soal tiap mapel pada posisi yang sedang dikerjakan.
- *
- * @return array{soal: Collection<int, Soal>, urut: int}
- */
-function soalMapelAktif(Percobaan $percobaan): array
-{
-    $grup = $percobaan->daftar_soal[$percobaan->urutan_mapel];
-
-    return [
-        'soal' => Soal::with(['opsiJawaban', 'pernyataanKategori'])
-            ->whereIn('id', $grup['soal_ids'])
-            ->get()
-            ->sortBy(fn (Soal $soal) => array_search($soal->id, $grup['soal_ids']))
-            ->values(),
-        'urut' => $grup['mapel_id'],
-    ];
-}
-
-/**
- * Jawaban paling benar untuk satu soal, dalam bentuk yang dipakai form.
- *
- * @return array<int, mixed>
- */
-function jawabanBenarSoal(Soal $soal): mixed
-{
-    return match ($soal->tipe_soal) {
-        Soal::TIPE_PG => $soal->opsiJawaban->firstWhere('is_benar', true)->id,
-        Soal::TIPE_PG_KOMPLEKS => $soal->opsiJawaban->filter->is_benar->pluck('id')->all(),
-        Soal::TIPE_PG_KATEGORI => $soal->pernyataanKategori
-            ->mapWithKeys(fn ($p) => [$p->id => $p->kategori_benar])
-            ->all(),
-    };
-}
-
-/**
- * Payload `jawaban[...]` untuk sekumpulan soal, memilih semua jawaban benar.
- *
- * @param  Collection<int, Soal>|array<int, Soal>  $soals
- * @return array<string, mixed>
- */
-function payloadSemuaBenar($soals): array
-{
-    $opsi = [];
-    $kategori = [];
-
-    foreach ($soals as $soal) {
-        if ($soal->tipe_soal === Soal::TIPE_PG_KATEGORI) {
-            $kategori[$soal->id] = jawabanBenarSoal($soal);
-
-            continue;
-        }
-
-        $opsi[$soal->id] = jawabanBenarSoal($soal);
-    }
-
-    return ['jawaban' => ['opsi' => $opsi, 'kategori' => $kategori]];
-}
-
 it('mengalihkan tamu ke halaman login', function () {
     $this->get(route('tryout.index'))->assertRedirect(route('login'));
 });
@@ -336,8 +277,8 @@ it('menampilkan dialog konfirmasi sebelum pindah mapel', function () {
     $this->actingAs($peserta)
         ->get(route('tryout.kerja', $paket))
         ->assertOk()
-        ->assertSee('id="konfirmasi-mapel"', false)
-        ->assertSee('data-dialog-open="konfirmasi-mapel"', false);
+        ->assertSee('id="konfirmasi-pengerjaan"', false)
+        ->assertSee('data-dialog-open="konfirmasi-pengerjaan"', false);
 });
 
 it('mengunci mapel yang sudah ditinggalkan', function () {
