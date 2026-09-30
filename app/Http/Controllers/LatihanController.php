@@ -185,7 +185,13 @@ class LatihanController extends Controller
 
         $this->percobaan->simpanJawaban($percobaan, (array) $request->input('jawaban', []));
 
-        if ($request->input('aksi', 'selesai') === 'simpan') {
+        // Simpan boleh menahan penutupan, tapi tidak untuk percobaan yang sudah
+        // lewat batas — jawaban yang telat tetap masuk lalu latihan ditutup,
+        // sama seperti perilaku tryout.
+        $akhiri = $request->input('aksi', 'selesai') !== 'simpan'
+            || $this->percobaan->kadaluarsa($percobaan);
+
+        if (! $akhiri) {
             return redirect()->route('latihan.index');
         }
 

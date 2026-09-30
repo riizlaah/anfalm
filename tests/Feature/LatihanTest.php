@@ -237,6 +237,54 @@ it('menolak percobaan tryout lewat jalur latihan', function () {
     $this->actingAs($peserta)->post(route('latihan.jawab', $percobaan))->assertNotFound();
 });
 
+it('menutup latihan sendiri saat batas waktu sudah terlampaui', function () {
+    $peserta = User::factory()->peserta()->create();
+    ['mapel' => $mapel] = mapelLatihan();
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 3,
+        'timer' => 'countdown',
+        'batas_waktu_menit' => 10,
+    ]);
+
+    $percobaan = Percobaan::sole();
+    $percobaan->update(['waktu_mulai' => now()->subMinutes(15)]);
+
+    // Peserta kembali setelah tutup: halaman tidak menampilkan soal lagi.
+    $this->actingAs($peserta)
+        ->get(route('latihan.kerja', $percobaan))
+        ->assertRedirect(route('latihan.hasil', $percobaan));
+
+    expect($percobaan->refresh()->status)->toBe(Percobaan::STATUS_SELESAI)
+        ->and($percobaan->durasi_detik)->toBe(600);
+});
+
+it('menyimpan jawaban yang telat lalu tetap menutup latihan', function () {
+    $peserta = User::factory()->peserta()->create();
+    ['mapel' => $mapel] = mapelLatihan();
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 6,
+        'timer' => 'countdown',
+        'batas_waktu_menit' => 10,
+    ]);
+
+    $percobaan = Percobaan::sole();
+    $percobaan->update(['waktu_mulai' => now()->subMinutes(15)]);
+
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)
+        ->post(route('latihan.jawab', $percobaan), [...payloadSemuaBenar($aktif['soal']), 'aksi' => 'simpan'])
+        ->assertRedirect(route('latihan.hasil', $percobaan));
+
+    expect($percobaan->refresh()->status)->toBe(Percobaan::STATUS_SELESAI)
+        ->and(RiwayatPengerjaan::count())->toBe($aktif['soal']->count())
+        ->and(TrackingKompetensi::count())->toBeGreaterThan(0);
+});
+
 it('menyimpan latihan tanpa menutupnya sehingga bisa dilanjutkan', function () {
     $peserta = User::factory()->peserta()->create();
     ['mapel' => $mapel] = mapelLatihan();
