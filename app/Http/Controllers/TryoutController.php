@@ -61,6 +61,13 @@ class TryoutController extends Controller
             return $this->alihkanSetelahTidakAktif($request, $paketTryout);
         }
 
+        // Waktu habis: tutup dulu sebelum halaman sempat menampilkan soal lagi.
+        if ($this->percobaan->kadaluarsa($percobaan)) {
+            $this->percobaan->akhirkan($percobaan);
+
+            return redirect()->route('tryout.hasil', $paketTryout);
+        }
+
         $grup = $this->percobaan->grupAktif($percobaan);
 
         if ($grup === null) {
@@ -110,7 +117,10 @@ class TryoutController extends Controller
 
         $this->percobaan->simpanJawaban($percobaan, (array) $request->input('jawaban', []));
 
-        $adaMapelBerikut = $request->input('aksi', 'lanjut') === 'lanjut'
+        // Jawaban yang masuk tetap tersimpan walau terlambat, lalu percobaan
+        // ditutup; penilaian memakai jawaban yang sudah ada saja.
+        $adaMapelBerikut = ! $this->percobaan->kadaluarsa($percobaan)
+            && $request->input('aksi', 'lanjut') === 'lanjut'
             && $this->percobaan->lanjut($percobaan);
 
         if ($adaMapelBerikut) {

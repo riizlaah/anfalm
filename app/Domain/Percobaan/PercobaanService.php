@@ -233,6 +233,25 @@ class PercobaanService
     }
 
     /**
+     * Batas waktu sudah terlampaui.
+     *
+     * Aplikasi tidak punya scheduler, jadi penutupan percobaan bergantung pada
+     * request. Tiap masuk ke halaman pengerjaan atau mengirim jawaban,
+     * kondisi ini dicek lebih dulu sehingga tryout tetap terkumpul walau
+     * peserta menutup browser di tengah jalan.
+     */
+    public function kadaluarsa(Percobaan $percobaan): bool
+    {
+        if ($percobaan->batas_waktu_menit === null || $percobaan->waktu_mulai === null) {
+            return false;
+        }
+
+        return now()->greaterThanOrEqualTo(
+            $percobaan->waktu_mulai->copy()->addMinutes($percobaan->batas_waktu_menit)
+        );
+    }
+
+    /**
      * Menutup percobaan: menilai tiap jawaban, mengestimasi theta per mapel,
      * merata-ratanya (mapel yang tidak dijawab ditinggalkan, 7.4), lalu
      * menyimpan ke `hasil_tryout`. Panggil berulang pun hasilnya tetap sama.

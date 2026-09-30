@@ -301,3 +301,114 @@ it('menampilkan halaman hasil setelah percobaan ditutup', function () {
         ->assertOk()
         ->assertSee((string) $hasil->skor_konversi);
 });
+
+it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $waktuMulai = $percobaan->waktu_mulai->toIso8601String();
+
+    $batasAkhir = $percobaan->waktu_mulai
+        ->copy()
+        ->addMinutes((int) $percobaan->batas_waktu_menit)
+        ->toIso8601String();
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertOk()
+        ->assertSee($batasAkhir);
+
+    // Memulai ulang tidak boleh mengulang hitung mundur dari nol.
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+
+    expect($percobaan->refresh()->waktu_mulai->toIso8601String())->toBe($waktuMulai);
+});
+
+it('menampilkan dialog konfirmasi sebelum pindah mapel', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertOk()
+        ->assertSee('id="konfirmasi-mapel"', false)
+        ->assertSee('data-dialog-open="konfirmasi-mapel"', false);
+});
+
+it('mengunci mapel yang sudah ditinggalkan', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+
+    $pertanyaanMapelPertama = soalMapelAktif($percobaan)['soal']->first()->pertanyaan;
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket));
+
+    $pertanyaanMapelKedua = soalMapelAktif($percobaan->refresh())['soal']->first()->pertanyaan;
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertOk()
+        ->assertSee($pertanyaanMapelKedua)
+        ->assertDontSee($pertanyaanMapelPertama);
+});
+
+it('menutup percobaan otomatis ketika batas waktu sudah lewat', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $percobaan->update(['waktu_mulai' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    expect($percobaan->refresh()->status)->toBe(Percobaan::STATUS_SELESAI)
+        ->and(HasilTryout::count())->toBe(1);
+});
+
+it('tetap menyimpan jawaban yang terkirim setelah batas waktu lewat', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $percobaan->update(['waktu_mulai' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']))
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    expect(RiwayatPengerjaan::count())->toBe($aktif['soal']->count())
+        ->and($percobaan->refresh()->status)->toBe(Percobaan::STATUS_SELESAI)
+        ->and($percobaan->durasi_detik)->toBe((int) $percobaan->batas_waktu_menit * 60);
+});
+
+it('menutup percobaan ketika peserta memilih selesai di tengah mapel', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), [...payloadSemuaBenar($aktif['soal']), 'aksi' => 'selesai'])
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    $percobaan->refresh();
+
+    expect($percobaan->status)->toBe(Percobaan::STATUS_SELESAI)
+        ->and($percobaan->urutan_mapel)->toBe(0)
+        ->and(RiwayatPengerjaan::count())->toBe($aktif['soal']->count());
+});

@@ -75,4 +75,16 @@
     .dialog::backdrop {
         background-color: rgb(15 23 42 / 0.55);
     }
+    .rail-soal {
+        @apply inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold transition focus:ring-2 focus:ring-ink/40 focus:outline-none;
+    }
+    .rail-soal[data-terjawab='1'] {
+        @apply bg-emerald-600 text-white;
+    }
+    .rail-soal[data-terjawab='0'] {
+        @apply bg-red-100 text-red-700;
+    }
+    .rail-soal[data-aktif='1'] {
+        @apply ring-2 ring-ink ring-offset-1;
+    }
 }
