@@ -38,7 +38,14 @@
                         @if ($adaHasil)
                             <a href="{{ route('tryout.hasil', $paketTryout) }}" class="btn btn-ghost">Lihat Hasil</a>
                         @elseif ($masihBerjalan)
-                            <a href="{{ route('tryout.kerja', $paketTryout) }}" class="btn btn-primary">Lanjutkan Tryout</a>
+                            <div class="flex flex-wrap justify-end gap-2">
+                                <form method="POST" action="{{ route('tryout.ulang', $paketTryout) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-ghost">Mulai Ulang</button>
+                                </form>
+
+                                <a href="{{ route('tryout.kerja', $paketTryout) }}" class="btn btn-primary">Lanjutkan Tryout</a>
+                            </div>
                         @else
                             <form method="POST" action="{{ route('tryout.mulai', $paketTryout) }}">
                                 @csrf

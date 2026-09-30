@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Percobaan\PercobaanService;
+use App\Http\Controllers\TryoutController;
 use App\Models\HasilTryout;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
@@ -392,6 +393,65 @@ it('tetap menyimpan jawaban yang terkirim setelah batas waktu lewat', function (
     expect(RiwayatPengerjaan::count())->toBe($aktif['soal']->count())
         ->and($percobaan->refresh()->status)->toBe(Percobaan::STATUS_SELESAI)
         ->and($percobaan->durasi_detik)->toBe((int) $percobaan->batas_waktu_menit * 60);
+});
+
+it('menawarkan mulai ulang saat percobaan masih berjalan', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.index'))
+        ->assertOk()
+        ->assertSee(route('tryout.kerja', $paket))
+        ->assertSee(route('tryout.ulang', $paket));
+});
+
+it('mengosongkan jawaban ketika peserta memilih mulai ulang', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']));
+
+    expect(RiwayatPengerjaan::count())->toBeGreaterThan(0);
+    expect($percobaan->refresh()->urutan_mapel)->toBe(1);
+
+    // Majukan waktu mulai supaya jelas terlihat bahwa hitung mundur diulang.
+    $waktuMulaiLama = now()->subMinutes(30);
+    $percobaan->update(['waktu_mulai' => $waktuMulaiLama]);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.ulang', $paket))
+        ->assertRedirect(route('tryout.kerja', $paket));
+
+    expect(RiwayatPengerjaan::count())->toBe(0)
+        ->and(Percobaan::count())->toBe(1)
+        ->and($percobaan->refresh()->urutan_mapel)->toBe(0);
+
+    // Hitung mundur ikut diulang bersama jawabannya.
+    expect($percobaan->waktu_mulai->greaterThan($waktuMulaiLama))->toBeTrue();
+});
+
+it('tetap menolak mulai ulang pada paket yang sudah menghasilkan nilai', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    HasilTryout::factory()->create([
+        'user_id' => $peserta->id,
+        'paket_tryout_id' => $paket->id,
+    ]);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.ulang', $paket))
+        ->assertRedirect(route('tryout.index'))
+        ->assertSessionHas('error', TryoutController::PESAN_SUDAH_SELESAI);
+
+    expect(Percobaan::count())->toBe(0);
 });
 
 it('menutup percobaan ketika peserta memilih selesai di tengah mapel', function () {

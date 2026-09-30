@@ -74,14 +74,18 @@ class PercobaanService
      * Memulai percobaan tryout milik peserta, atau mengembalikan percobaan yang
      * masih berjalan bila sudah ada (6.4).
      *
+     * `$ulang` mengosongkan jawaban percobaan yang sedang berjalan dan
+     * mengulang hitung mundur dari awal (6.4), tetapi tidak mengacak ulang
+     * `daftar_soal` — urutan soal hanya ditentukan sekali per percobaan.
+     *
      * Mengembalikan `null` bila paket itu sudah pernah menghasilkan nilai,
      * karena tiap peserta hanya boleh satu percobaan per paket (6.16).
      *
      * @throws RuntimeException bila paket tryout tidak berisi soal apa pun
      */
-    public function mulai(PaketTryout $paket, User $user): ?Percobaan
+    public function mulai(PaketTryout $paket, User $user, bool $ulang = false): ?Percobaan
     {
-        return DB::transaction(function () use ($paket, $user): ?Percobaan {
+        return DB::transaction(function () use ($paket, $user, $ulang): ?Percobaan {
             // percobaan tidak punya unique index pada (user, paket), jadi
             // kuncinya di sini agar klik ganda tidak membuat dua baris berjalan.
             $sudahDinilai = HasilTryout::query()
@@ -97,7 +101,7 @@ class PercobaanService
             $berjalan = $this->cariAktif($paket, $user, true);
 
             if ($berjalan !== null) {
-                return $berjalan;
+                return $ulang ? $this->kosongkan($berjalan) : $berjalan;
             }
 
             $daftarSoal = $this->susunDaftarSoal($paket);
@@ -119,6 +123,28 @@ class PercobaanService
                 'waktu_mulai' => now(),
             ]);
         });
+    }
+
+    /**
+     * Mengosongkan jawaban percobaan yang sedang berjalan lalu mengulang waktunya.
+     *
+     * `daftar_soal` sengaja dibiarkan: urutan soal hanya diacak sekali per
+     * percobaan, bukan pada tiap percobaan ulang.
+     */
+    private function kosongkan(Percobaan $percobaan): Percobaan
+    {
+        $percobaan->riwayatPengerjaan()->delete();
+
+        $percobaan->update([
+            'status' => Percobaan::STATUS_BERJALAN,
+            'urutan_mapel' => 0,
+            'posisi_soal' => 0,
+            'waktu_mulai' => now(),
+            'waktu_selesai' => null,
+            'durasi_detik' => null,
+        ]);
+
+        return $percobaan;
     }
 
     /**

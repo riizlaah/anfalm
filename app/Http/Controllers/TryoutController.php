@@ -53,6 +53,19 @@ class TryoutController extends Controller
         return redirect()->route('tryout.kerja', $paketTryout);
     }
 
+    /**
+     * Mengosongkan jawaban percobaan yang masih berjalan lalu mengulangnya
+     * dari mapel pertama (6.4). Tetap ditolak bila paket sudah dinilai.
+     */
+    public function ulang(Request $request, PaketTryout $paketTryout): RedirectResponse
+    {
+        if ($this->percobaan->mulai($paketTryout, $request->user(), true) === null) {
+            return redirect()->route('tryout.index')->with('error', self::PESAN_SUDAH_SELESAI);
+        }
+
+        return redirect()->route('tryout.kerja', $paketTryout);
+    }
+
     public function kerja(Request $request, PaketTryout $paketTryout): View|RedirectResponse
     {
         $percobaan = $this->percobaan->cariAktif($paketTryout, $request->user());
