@@ -6,8 +6,6 @@
     if (auth()->check() && auth()->user()->isAdmin()) {
         $nav = array_merge($nav, [
             ['label' => 'Mapel', 'route' => 'admin.mapel.index'],
-            ['label' => 'Kompetensi Dasar', 'route' => 'admin.kompetensi-dasar.index'],
-            ['label' => 'Soal', 'route' => 'admin.soal.index'],
             ['label' => 'Paket Soal', 'route' => 'admin.paket-soal.index'],
             ['label' => 'Paket Tryout', 'route' => 'admin.paket-tryout.index'],
         ]);

@@ -166,8 +166,8 @@ class SoalSkemaValidator
             ];
         }
 
-        if (count($pernyataanNormal) < 2) {
-            return ['ok' => false, 'soal' => null, 'alasan' => 'pg_kategori membutuhkan minimal 2 pernyataan valid.'];
+        if (count($pernyataanNormal) < 3) {
+            return ['ok' => false, 'soal' => null, 'alasan' => 'pg_kategori membutuhkan minimal 3 pernyataan valid.'];
         }
 
         $normal['daftar_kategori'] = $kategori;

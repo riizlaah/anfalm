@@ -73,6 +73,7 @@ class AiFake implements AiProvider
                     'pernyataan_kategori' => [
                         ['teks' => 'HTML adalah bahasa markup.', 'kategori_benar' => 'Benar', 'urutan' => 1, 'parameter_irt' => ['a_diskriminasi' => 1.0, 'b_kesulitan' => -0.4, 'c_tebakan' => 0.25]],
                         ['teks' => 'JavaScript berjalan di server saja.', 'kategori_benar' => 'Salah', 'urutan' => 2, 'parameter_irt' => ['a_diskriminasi' => 1.6, 'b_kesulitan' => 0.3, 'c_tebakan' => 0.15]],
+                        ['teks' => 'CSS hanya mengatur tampilan halaman.', 'kategori_benar' => 'Benar', 'urutan' => 3, 'parameter_irt' => ['a_diskriminasi' => 1.3, 'b_kesulitan' => -0.2, 'c_tebakan' => 0.2]],
                     ],
                     'pembahasan' => 'Pembahasan kategori.',
                     'kompetensi_dasar' => ['kode' => '3.2', 'deskripsi' => 'Konsep dasar TI'],

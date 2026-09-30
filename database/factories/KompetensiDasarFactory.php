@@ -21,7 +21,7 @@ class KompetensiDasarFactory extends Factory
             'kode_kompetensi' => '3.'.static::$counter,
             'deskripsi' => fake()->sentence(),
             'materi_pokok' => fake()->words(3, true),
-            'level_kognitif' => 'pemahaman',
+            'level_kognitif' => 'pengetahuan_dan_pemahaman',
             'batasan' => null,
         ];
     }

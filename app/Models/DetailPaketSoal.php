@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DetailPaketSoal extends Model
 {
@@ -14,4 +15,9 @@ class DetailPaketSoal extends Model
         'paket_soal_id',
         'soal_id',
     ];
+
+    public function paketSoal(): BelongsTo
+    {
+        return $this->belongsTo(PaketSoal::class);
+    }
 }

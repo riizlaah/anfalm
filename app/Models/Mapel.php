@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Mapel extends Model
@@ -44,7 +45,7 @@ class Mapel extends Model
         ];
     }
 
-    public function kompetensiDasar(): HasMany
+    public function kompetensiDasars(): HasMany
     {
         return $this->hasMany(KompetensiDasar::class);
     }
@@ -52,5 +53,13 @@ class Mapel extends Model
     public function paketSoal(): HasMany
     {
         return $this->hasMany(PaketSoal::class);
+    }
+
+    /**
+     * Soal dijangkau lewat KD, jadi hubungan mapel ke soal bersifat tidak langsung.
+     */
+    public function soals(): HasManyThrough
+    {
+        return $this->hasManyThrough(Soal::class, KompetensiDasar::class, 'mapel_id', 'kompetensi_dasar_id');
     }
 }

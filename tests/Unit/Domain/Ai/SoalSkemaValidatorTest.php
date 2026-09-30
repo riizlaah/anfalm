@@ -43,17 +43,18 @@ it('menormalkan pg_kategori dengan daftar kategori per soal', function () {
     $payload['daftar_soal'][2]['kategori_pg_kategori'] = ['Setuju', 'Tidak Setuju'];
     $payload['daftar_soal'][2]['pernyataan_kategori'][0]['kategori_benar'] = 'Setuju';
     $payload['daftar_soal'][2]['pernyataan_kategori'][1]['kategori_benar'] = 'Tidak Setuju';
+    $payload['daftar_soal'][2]['pernyataan_kategori'][2]['kategori_benar'] = 'Setuju';
 
     $hasil = (new SoalSkemaValidator)->validate($payload);
     $soalKategori = $hasil['daftar_soal'][2];
 
     expect($soalKategori['daftar_kategori'])->toBe(['Setuju', 'Tidak Setuju']);
-    expect($soalKategori['pernyataan_kategori'])->toHaveCount(2);
+    expect($soalKategori['pernyataan_kategori'])->toHaveCount(3);
     expect($soalKategori['pernyataan_kategori'][0]['kategori_benar'])->toBe('Setuju');
     expect($soalKategori['pernyataan_kategori'][0]['teks_pernyataan'])->toBe('HTML adalah bahasa markup.');
 });
 
-it('membuang soal yang tidak memiliki minimal 2 pernyataan kategori valid', function () {
+it('membuang soal yang tidak memiliki minimal 3 pernyataan kategori valid', function () {
     $payload = AiFake::fixture();
     $payload['daftar_soal'][2]['pernyataan_kategori'][0]['kategori_benar'] = 'Tidak Valid';
 
@@ -61,7 +62,17 @@ it('membuang soal yang tidak memiliki minimal 2 pernyataan kategori valid', func
 
     expect($hasil['daftar_soal'])->toHaveCount(2);
     expect($hasil['soal_dibuang'])->toHaveCount(1);
-    expect($hasil['soal_dibuang'][0]['alasan'])->toBe('pg_kategori membutuhkan minimal 2 pernyataan valid.');
+    expect($hasil['soal_dibuang'][0]['alasan'])->toBe('pg_kategori membutuhkan minimal 3 pernyataan valid.');
+});
+
+it('membuang soal pg_kategori yang hanya memiliki dua pernyataan', function () {
+    $payload = AiFake::fixture();
+    $payload['daftar_soal'][2]['pernyataan_kategori'] = array_slice($payload['daftar_soal'][2]['pernyataan_kategori'], 0, 2);
+
+    $hasil = (new SoalSkemaValidator)->validate($payload);
+
+    expect($hasil['daftar_soal'])->toHaveCount(2);
+    expect($hasil['soal_dibuang'][0]['alasan'])->toBe('pg_kategori membutuhkan minimal 3 pernyataan valid.');
 });
 
 it('membuang soal dengan tipe tidak dikenali dan tetap menormalkan sisanya', function () {

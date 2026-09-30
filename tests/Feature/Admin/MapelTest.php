@@ -24,6 +24,17 @@ it('admin dapat membuka halaman index mapel', function () {
         ->assertSee('Matematika Wajib');
 });
 
+it('index mapel menampilkan aksi kelola KD beserta jumlah KD', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    KompetensiDasar::factory()->count(2)->create(['mapel_id' => $mapel->id]);
+
+    $this->actingAs($admin)->get('/admin/mapel')
+        ->assertOk()
+        ->assertSee(route('admin.mapel.kompetensi-dasar.index', $mapel), false)
+        ->assertSee('Kelola KD (2)');
+});
+
 it('admin dapat membuat mapel baru', function () {
     $admin = User::factory()->admin()->create();
 
@@ -51,6 +62,36 @@ it('validasi mapel: kode, nama, tingkat dan jenis wajib', function () {
         ->assertSessionHasErrors(['kode', 'nama', 'tingkat', 'jenis']);
 });
 
+it('gagal validasi membuka dialog tambah mapel dengan isian yang sama dan tanpa old input', function () {
+    $admin = User::factory()->admin()->create();
+
+    $this->actingAs($admin)->post('/admin/mapel', [
+        'kode' => '',
+        'nama' => 'Kandidat Nama',
+        'tingkat' => 'SMA',
+        'jenis' => Mapel::JENIS_WAJIB,
+    ])
+        ->assertSessionHasErrors(['kode'])
+        ->assertSessionHas('open_dialog', 'create-mapel')
+        ->assertSessionHas('form_input', fn (array $input) => $input['nama'] === 'Kandidat Nama')
+        ->assertSessionMissing('_old_input');
+});
+
+it('gagal validasi pada edit membuka dialog edit baris itu sendiri', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+
+    $this->actingAs($admin)->put("/admin/mapel/{$mapel->id}", [
+        'kode' => $mapel->kode,
+        'nama' => '',
+        'tingkat' => $mapel->tingkat,
+        'jenis' => $mapel->jenis,
+    ])
+        ->assertSessionHasErrors(['nama'])
+        ->assertSessionHas('open_dialog', "edit-mapel-{$mapel->id}")
+        ->assertSessionMissing('_old_input');
+});
+
 it('validasi mapel: kode harus unik', function () {
     $admin = User::factory()->admin()->create();
     Mapel::factory()->create(['kode' => 'MTK']);
@@ -61,6 +102,26 @@ it('validasi mapel: kode harus unik', function () {
         'tingkat' => 'SMA',
         'jenis' => Mapel::JENIS_WAJIB,
     ])->assertSessionHasErrors(['kode']);
+});
+
+it('kode mapel yang sama dengan mapel terhapus dapat dibuat kembali', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create(['kode' => 'MTK', 'nama' => 'Matematika Lama']);
+    $mapel->delete();
+
+    $this->actingAs($admin)->post('/admin/mapel', [
+        'kode' => 'MTK',
+        'nama' => 'Matematika Baru',
+        'tingkat' => 'SMA',
+        'jenis' => Mapel::JENIS_WAJIB,
+    ])->assertSessionHasNoErrors()
+        ->assertRedirect(route('admin.mapel.index'));
+
+    $this->assertDatabaseHas('mapel', [
+        'kode' => 'MTK',
+        'nama' => 'Matematika Baru',
+        'deleted_at' => null,
+    ]);
 });
 
 it('admin dapat mengedit mapel', function () {
@@ -140,4 +201,47 @@ it('mapel yang sudah dipakai (memiliki KD) diblokir dari hapus', function () {
         ->assertSessionHas('error', 'Mapel masih digunakan oleh soal/paket, tidak dapat dihapus.');
 
     $this->assertNotSoftDeleted('mapel', ['id' => $mapel->id]);
+});
+
+it('bulk delete mapel menghapus mapel yang dipilih', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel1 = Mapel::factory()->create();
+    $mapel2 = Mapel::factory()->create();
+
+    $this->actingAs($admin)->post('/admin/mapel/bulk-delete', [
+        'ids' => [$mapel1->id],
+    ])->assertRedirect(route('admin.mapel.index'))
+        ->assertSessionHas('success');
+
+    $this->assertSoftDeleted('mapel', ['id' => $mapel1->id]);
+    $this->assertNotSoftDeleted('mapel', ['id' => $mapel2->id]);
+});
+
+it('bulk delete mapel melewati mapel yang memiliki KD atau paket soal', function () {
+    $admin = User::factory()->admin()->create();
+    $mapelBebas = Mapel::factory()->create();
+    $mapelDipakai = Mapel::factory()->create();
+    KompetensiDasar::factory()->create(['mapel_id' => $mapelDipakai->id]);
+
+    $this->actingAs($admin)->post('/admin/mapel/bulk-delete', [
+        'ids' => [$mapelBebas->id, $mapelDipakai->id],
+    ])->assertRedirect(route('admin.mapel.index'))
+        ->assertSessionHas('success');
+
+    $this->assertSoftDeleted('mapel', ['id' => $mapelBebas->id]);
+    $this->assertNotSoftDeleted('mapel', ['id' => $mapelDipakai->id]);
+});
+
+it('bulk delete semua mapel menghormati filter tingkat', function () {
+    $admin = User::factory()->admin()->create();
+    $mapelSMA = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SMA]);
+    $mapelSMP = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SMP]);
+
+    $this->actingAs($admin)->post('/admin/mapel/bulk-delete', [
+        'all' => true,
+        'tingkat' => Mapel::TINGKAT_SMA,
+    ])->assertRedirect(route('admin.mapel.index'));
+
+    $this->assertSoftDeleted('mapel', ['id' => $mapelSMA->id]);
+    $this->assertNotSoftDeleted('mapel', ['id' => $mapelSMP->id]);
 });

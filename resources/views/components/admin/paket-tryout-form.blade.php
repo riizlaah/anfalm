@@ -11,9 +11,9 @@
 @endphp
 
 <div class="space-y-4">
-    <x-input label="Nama Paket" name="nama_paket" value="{{ old('nama_paket', $paketTryout?->nama_paket) }}" required maxlength="255" />
+    <x-input label="Nama Paket" name="nama_paket" :value="$paketTryout?->nama_paket" required maxlength="255" />
 
-    <x-textarea label="Deskripsi" name="deskripsi" value="{{ old('deskripsi', $paketTryout?->deskripsi) }}" />
+    <x-textarea label="Deskripsi" name="deskripsi" :value="$paketTryout?->deskripsi" />
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <x-select label="Tingkat" name="tingkat" id="tingkat-select" required

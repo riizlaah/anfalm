@@ -5,9 +5,9 @@
     <form method="POST" action="{{ route('register') }}" class="space-y-4">
         @csrf
 
-        <x-input label="Nama Lengkap" name="nama_lengkap" value="{{ old('nama_lengkap') }}" required autofocus />
+        <x-input label="Nama Lengkap" name="nama_lengkap" required autofocus />
 
-        <x-input label="Email" name="email" type="email" value="{{ old('email') }}" required autocomplete="username" />
+        <x-input label="Email" name="email" type="email" required autocomplete="username" />
 
         <x-input label="Kata Sandi (min. 8 karakter)" name="password" type="password" required autocomplete="new-password" />
 

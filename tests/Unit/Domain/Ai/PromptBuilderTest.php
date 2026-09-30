@@ -14,7 +14,8 @@ it('mendistribusikan jumlah soal merata ke semua KD', function () {
     expect($prompt)
         ->toContain('Buatkan 20 soal')
         ->toContain('(target: 7 soal)')
-        ->toContain('(target: 6 soal)');
+        ->toContain('(target: 6 soal)')
+        ->toContain('tepat 20 objek soal');
 });
 
 it('memberikan seluruh soal pada satu KD tunggal', function () {

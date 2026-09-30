@@ -124,14 +124,54 @@ it('generate bertahap mengakumulasi soal antar part', function () {
     $this->actingAs($admin)
         ->postJson('/admin/paket-soal/generate', $payload + ['part' => 1])
         ->assertOk()
-        ->assertJson(['part_total' => 2, 'jumlah_akumulasi' => 3, 'selesai' => false]);
+        ->assertJson(['part_total' => 3, 'jumlah_akumulasi' => 3, 'selesai' => false]);
 
     $this->actingAs($admin)
         ->postJson('/admin/paket-soal/generate', $payload + ['part' => 2])
         ->assertOk()
-        ->assertJson(['part_total' => 2, 'jumlah_akumulasi' => 6, 'selesai' => false]);
+        ->assertJson(['part_total' => 3, 'jumlah_akumulasi' => 6, 'selesai' => false]);
 
     expect(session('ai_parts.daftar_soal'))->toHaveCount(6);
+});
+
+it('generate berlanjut melewati perkiraan part_total saat yield per part kurang', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->app->instance(AiProvider::class, new class implements AiProvider
+    {
+        public function generate(string $prompt): string
+        {
+            return json_encode(AiFake::fixture());
+        }
+    });
+
+    $payload = [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => [$kd->id],
+        'jumlah_soal' => 12,
+        'tingkat_kesulitan' => 'campuran',
+        'run' => 'run-1',
+    ];
+
+    $ekspektasi = [
+        1 => ['part_total' => 3, 'jumlah_akumulasi' => 3, 'selesai' => false],
+        2 => ['part_total' => 3, 'jumlah_akumulasi' => 6, 'selesai' => false],
+        3 => ['part_total' => 4, 'jumlah_akumulasi' => 9, 'selesai' => false],
+        4 => ['part_total' => 4, 'jumlah_akumulasi' => 12, 'selesai' => true],
+    ];
+
+    foreach ($ekspektasi as $part => $json) {
+        $respons = $this->actingAs($admin)
+            ->postJson('/admin/paket-soal/generate', $payload + ['part' => $part])
+            ->assertOk()
+            ->assertJson(['part' => $part] + $json);
+
+        expect($respons->json('part_total'))->toBeGreaterThanOrEqual($part);
+    }
+
+    expect(session('ai_parts.daftar_soal'))->toHaveCount(12);
 });
 
 it('part yang sama diproses ulang tidak menggandakan soal', function () {
@@ -191,14 +231,23 @@ it('nomor part di luar rentang ditolak', function () {
     $mapel = Mapel::factory()->create();
     $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
 
-    $this->actingAs($admin)->postJson('/admin/paket-soal/generate', [
+    $payload = [
         'mapel_id' => $mapel->id,
         'kompetensi_dasar_ids' => [$kd->id],
         'jumlah_soal' => 3,
         'tingkat_kesulitan' => 'campuran',
-        'part' => 2,
         'run' => 'run-1',
-    ])->assertStatus(422)->assertJson(['ok' => false]);
+    ];
+
+    $this->actingAs($admin)
+        ->postJson('/admin/paket-soal/generate', $payload + ['part' => 2])
+        ->assertStatus(422)
+        ->assertJson(['ok' => false]);
+
+    $this->actingAs($admin)
+        ->postJson('/admin/paket-soal/generate', $payload + ['part' => 99])
+        ->assertStatus(422)
+        ->assertJson(['ok' => false]);
 });
 
 it('kegagalan satu part mempertahankan bagian yang sudah terkumpul', function () {
@@ -263,7 +312,9 @@ it('kurasi mematerialisasi draft dari ai_parts tanpa ai_draft', function () {
         ->assertOk()
         ->assertSee('Kurasi Paket Soal dari AI')
         ->assertSee('Hasil dari 2^3 x 2^5')
-        ->assertSee('Kategorikan setiap pernyataan');
+        ->assertSee('Kategorikan setiap pernyataan')
+        ->assertSee('name="daftar_soal_json"', false)
+        ->assertSee('name="daftar_soal[0][gambar_url]"', false);
 
     expect(session('ai_draft.daftar_soal'))->toHaveCount(3);
 });
@@ -361,7 +412,7 @@ it('simpan hasil kurasi membuat paket, soal, opsi, pernyataan dan detail', funct
 
     $soalKategori = Soal::where('pertanyaan', 'Kategorikan setiap pernyataan berikut:')->first();
     expect($soalKategori->tipe_soal)->toBe(Soal::TIPE_PG_KATEGORI)
-        ->and($soalKategori->pernyataanKategori()->count())->toBe(2)
+        ->and($soalKategori->pernyataanKategori()->count())->toBe(3)
         ->and($soalKategori->daftar_kategori)->toBe(['Benar', 'Salah']);
 });
 
@@ -440,6 +491,193 @@ it('simpan kurasi menolak pertanyaan kosong (required)', function () {
         ->assertSessionHasErrors('daftar_soal.0.pertanyaan');
 });
 
+it('simpan kurasi menerima seluruh daftar soal lewat satu field JSON', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    seedAiDraft($mapel);
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    $payload['daftar_soal_json'] = json_encode($payload['daftar_soal']);
+    unset($payload['daftar_soal']);
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertRedirect(route('admin.paket-soal.index'))
+        ->assertSessionHas('success');
+
+    $paket = PaketSoal::where('nama_paket', 'Paket AI Matematika')->first();
+
+    expect($paket)->not->toBeNull()
+        ->and($paket->soal()->count())->toBe(3)
+        ->and($paket->soal()->first()->opsiJawaban()->count())->toBe(5);
+});
+
+it('daftar_soal_json yang bukan array valid ditolak tanpa menyimpan paket', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    seedAiDraft($mapel);
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    $payload['daftar_soal_json'] = '{bukan-json';
+    unset($payload['daftar_soal']);
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors('daftar_soal');
+
+    $this->assertDatabaseCount('paket_soal', 0);
+});
+
+it('daftar_soal_json kosong ditolak', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    seedAiDraft($mapel);
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    $payload['daftar_soal_json'] = '';
+    unset($payload['daftar_soal']);
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors('daftar_soal');
+
+    $this->assertDatabaseCount('paket_soal', 0);
+});
+
+it('simpan kurasi menolak ketika jumlah soal terkirim tidak sama dengan yang dirender', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    session(['ai_draft' => ['mapel_id' => $mapel->id, 'daftar_soal' => $payload['daftar_soal']]]);
+
+    $payload['daftar_soal_json'] = json_encode(array_slice($payload['daftar_soal'], 0, 2));
+    unset($payload['daftar_soal']);
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors('daftar_soal');
+
+    $this->assertDatabaseCount('paket_soal', 0);
+});
+
+it('opsi jawaban antara 6 sampai 8 diterima, 9 ditolak', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    seedAiDraft($mapel);
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+
+    for ($index = 5; $index < 8; $index++) {
+        $payload['daftar_soal'][0]['opsi_jawaban'][$index] = [
+            'urutan' => $index + 1,
+            'teks_opsi' => 'Opsi ekstra '.$index,
+            'is_benar' => 0,
+            'a_diskriminasi' => '',
+            'b_kesulitan' => '',
+            'c_tebakan' => '',
+        ];
+    }
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertRedirect(route('admin.paket-soal.index'));
+
+    $soalPg = Soal::where('pertanyaan', 'Hasil dari 2^3 x 2^5 adalah ...')->first();
+
+    expect($soalPg->opsiJawaban()->count())->toBe(8);
+
+    seedAiDraft($mapel);
+
+    $payload['daftar_soal'][0]['opsi_jawaban'][8] = [
+        'urutan' => 9,
+        'teks_opsi' => 'Opsi kelebihan',
+        'is_benar' => 0,
+        'a_diskriminasi' => '',
+        'b_kesulitan' => '',
+        'c_tebakan' => '',
+    ];
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors('daftar_soal.0.opsi_jawaban');
+});
+
+it('gambar_url dari halaman kurasi ikut tersimpan', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    seedAiDraft($mapel);
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    $payload['daftar_soal'][0]['gambar_url'] = 'https://example.com/soal.png';
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertRedirect(route('admin.paket-soal.index'));
+
+    $this->assertDatabaseHas('soal', [
+        'pertanyaan' => 'Hasil dari 2^3 x 2^5 adalah ...',
+        'gambar_url' => 'https://example.com/soal.png',
+    ]);
+});
+
+it('id soal sementara unik setelah beberapa part digabung', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->app->instance(AiProvider::class, new class implements AiProvider
+    {
+        public function generate(string $prompt): string
+        {
+            return json_encode(AiFake::fixture());
+        }
+    });
+
+    $payload = [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => [$kd->id],
+        'jumlah_soal' => 12,
+        'tingkat_kesulitan' => 'campuran',
+        'run' => 'run-1',
+    ];
+
+    for ($part = 1; $part <= 4; $part++) {
+        $this->actingAs($admin)
+            ->postJson('/admin/paket-soal/generate', $payload + ['part' => $part])
+            ->assertOk();
+    }
+
+    $ids = array_column(session('ai_parts.daftar_soal'), 'id_soal_sementara');
+
+    expect($ids)->toHaveCount(12)
+        ->and(array_unique($ids))->toHaveCount(12)
+        ->and($ids[0])->toBe('S001')
+        ->and($ids[11])->toBe('S012');
+});
+
+it('soal yang dibuang otomatis diberi nomor part agar tidak ambigu', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->app->instance(AiProvider::class, new class implements AiProvider
+    {
+        public function generate(string $prompt): string
+        {
+            $fixture = AiFake::fixture();
+            $fixture['daftar_soal'][0]['pertanyaan'] = '';
+
+            return json_encode($fixture);
+        }
+    });
+
+    $this->actingAs($admin)->postJson('/admin/paket-soal/generate', [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => [$kd->id],
+        'jumlah_soal' => 3,
+        'tingkat_kesulitan' => 'campuran',
+        'part' => 1,
+        'run' => 'run-1',
+    ])->assertOk();
+
+    expect(session('ai_parts.soal_dibuang'))->toHaveCount(1)
+        ->and(session('ai_parts.soal_dibuang.0.id'))->toBe('Part 1 · S001');
+});
+
 function seedAiDraft(Mapel $mapel): void
 {
     session(['ai_draft' => ['mapel_id' => $mapel->id]]);
@@ -507,6 +745,7 @@ function kurasiPayloadValid(Mapel $mapel, KompetensiDasar $kd31, KompetensiDasar
                 'pernyataan_kategori' => [
                     0 => ['urutan' => 1, 'teks_pernyataan' => 'HTML adalah bahasa markup.', 'kategori_benar' => 'Benar', 'a_diskriminasi' => '1.0', 'b_kesulitan' => '-0.4', 'c_tebakan' => '0.25'],
                     1 => ['urutan' => 2, 'teks_pernyataan' => 'JavaScript berjalan di server saja.', 'kategori_benar' => 'Salah', 'a_diskriminasi' => '1.6', 'b_kesulitan' => '0.3', 'c_tebakan' => '0.15'],
+                    2 => ['urutan' => 3, 'teks_pernyataan' => 'CSS hanya mengatur tampilan halaman.', 'kategori_benar' => 'Benar', 'a_diskriminasi' => '1.3', 'b_kesulitan' => '-0.2', 'c_tebakan' => '0.2'],
                 ],
             ],
         ],

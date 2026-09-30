@@ -4,23 +4,35 @@
 ])
 
 @php
-    $opsiRows = old('opsi_jawaban', $soal?->opsi_jawaban?->toArray() ?? []);
-    $pernyataanRows = old('pernyataan_kategori', $soal?->pernyataan_kategori?->toArray() ?? []);
-    $tipeSelected = old('tipe_soal', $soal?->tipe_soal ?? 'pg');
-    $daftarKategori = old('daftar_kategori', $soal?->daftar_kategori ?? []);
+    // Bentuk dinormalisasi ke jumlah minimum validasi supaya percobaan simpan
+    // pertama sudah berarti, bukan gagal karena form baru mulai dari satu baris.
+    $MIN_OPSI = 5;
+    $MIN_KATEGORI = 2;
+    $MIN_PERNYATAAN = 3;
 
-    if (empty($opsiRows)) {
-        $opsiRows[] = [];
-    }
-    if (empty($pernyataanRows)) {
-        $pernyataanRows[] = [];
-    }
+    $opsiRows = array_values(old('opsi_jawaban', $soal?->opsiJawaban?->toArray() ?? []));
+    $pernyataanRows = array_values(old('pernyataan_kategori', $soal?->pernyataanKategori?->toArray() ?? []));
+    $tipeSelected = old('tipe_soal', $soal?->tipe_soal ?? 'pg');
+    $daftarKategori = array_values(old('daftar_kategori', $soal?->daftar_kategori ?? []));
+
+    $opsiRows = array_pad($opsiRows, max(count($opsiRows), $MIN_OPSI), []);
+    $pernyataanRows = array_pad($pernyataanRows, max(count($pernyataanRows), $MIN_PERNYATAAN), []);
+    $daftarKategori = array_pad($daftarKategori, max(count($daftarKategori), $MIN_KATEGORI), '');
 
     $kdSelected = old('kompetensi_dasar_id', $soal?->kompetensi_dasar_id);
     $kdCurrent = $kdSelected ? $kompetensiDasars->firstWhere('id', $kdSelected) : null;
-    $kdDisplay = $kdCurrent
-        ? $kdCurrent->mapel->kode.' · '.$kdCurrent->kode_kompetensi.' — '.\Illuminate\Support\Str::limit($kdCurrent->deskripsi, 60)
-        : '';
+
+    // Peta kode KD ke id + deskripsi penuh, dipakai skrip untuk menampilkan
+    // deskripsi di bawah input tanpa memotong teksnya.
+    $kdPeta = $kompetensiDasars
+        ->filter(fn ($kd) => $kd->kode_kompetensi !== null)
+        ->mapWithKeys(fn ($kd) => [
+            $kd->kode_kompetensi => [
+                'id' => (int) $kd->id,
+                'deskripsi' => $kd->deskripsi,
+                'materi_pokok' => $kd->materi_pokok,
+            ],
+        ]);
 @endphp
 
 <div class="space-y-4">
@@ -33,22 +45,33 @@
         </select>
     </label>
 
-    <label class="block">
-        <span class="label">Kompetensi Dasar</span>
-        <input type="text" id="kd-picker" list="kd-list" class="input" placeholder="Ketik kode atau nama KD…"
-            value="{{ $kdDisplay }}" autocomplete="off">
-        <input type="hidden" name="kompetensi_dasar_id" id="kompetensi_dasar_id"
-            value="{{ old('kompetensi_dasar_id', $soal?->kompetensi_dasar_id) }}">
-        <datalist id="kd-list">
-            @foreach ($kompetensiDasars as $kd)
-                <option value="{{ $kd->mapel->kode }} · {{ $kd->kode_kompetensi }} — {{ \Illuminate\Support\Str::limit($kd->deskripsi, 60) }}" data-id="{{ $kd->id }}"></option>
-            @endforeach
-        </datalist>
-    </label>
+    <div>
+        <label class="block">
+            <span class="label">Kode Kompetensi Dasar</span>
+            <input type="text" id="kd-picker" list="kd-list" class="input" placeholder="Ketik kode KD…"
+                value="{{ $kdCurrent?->kode_kompetensi }}" autocomplete="off">
+            <input type="hidden" name="kompetensi_dasar_id" id="kompetensi_dasar_id" value="{{ $kdSelected }}">
+            <datalist id="kd-list">
+                @foreach ($kompetensiDasars as $kd)
+                    @continue($kd->kode_kompetensi === null)
+                    <option value="{{ $kd->kode_kompetensi }}"></option>
+                @endforeach
+            </datalist>
+        </label>
 
-    <x-textarea label="Pertanyaan" name="pertanyaan" value="{{ old('pertanyaan', $soal?->pertanyaan) }}" required />
+        <p id="kd-detail" class="mt-2 text-xs leading-relaxed text-slate-600" @if (! $kdCurrent) hidden @endif>
+            <span id="kd-detail-kode" class="block font-medium text-ink">{{ $kdCurrent?->kode_kompetensi }}</span>
+            <span id="kd-detail-deskripsi">{{ $kdCurrent?->deskripsi }}</span>
+            <span id="kd-detail-materi" class="mt-0.5 block text-slate-500"
+                @if (! $kdCurrent?->materi_pokok) hidden @endif>Materi pokok: {{ $kdCurrent?->materi_pokok }}</span>
+        </p>
+    </div>
 
-    <x-textarea label="Pembahasan" name="pembahasan" value="{{ old('pembahasan', $soal?->pembahasan) }}" />
+    <script type="application/json" id="kd-peta">@json($kdPeta)</script>
+
+    <x-textarea label="Pertanyaan" name="pertanyaan" :value="$soal?->pertanyaan" required />
+
+    <x-textarea label="Pembahasan" name="pembahasan" :value="$soal?->pembahasan" />
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label class="block">
@@ -93,7 +116,7 @@
             @endforeach
         </div>
         <button type="button" class="btn btn-ghost" id="add-opsi">+ Tambah Opsi</button>
-        <p class="hint">Minimal 5 opsi. PG: tepat 1 benar (pilih dengan radio). PG Kompleks: minimal 2 benar (centang dengan checkbox).</p>
+        <p class="hint">Minimal 5, maksimal 8 opsi (tombol Hapus muncul setelah jumlah melewati 5). PG: tepat 1 benar (pilih dengan radio). PG Kompleks: minimal 2 benar (centang dengan checkbox).</p>
     </section>
 
     <section data-for-tipe="pg_kategori" class="mt-6 border-t border-slate-200 pt-5">
@@ -127,7 +150,7 @@
             @endforeach
         </div>
         <button type="button" class="btn btn-ghost" id="add-pernyataan">+ Tambah Pernyataan</button>
-        <p class="hint">Minimal 2 pernyataan; kategori benar dipilih dari daftar kategori di atas.</p>
+        <p class="hint">Minimal 3 pernyataan (tombol Hapus muncul setelah jumlah melewati 3); kategori benar dipilih dari daftar kategori di atas.</p>
     </section>
 </div>
 
@@ -165,22 +188,62 @@
         tipeInput.addEventListener('change', syncForm);
         syncForm();
 
-        // --- KD autocomplete sync ---
+        // Tombol hapus hanya muncul ketika jumlah baris melewati minimal,
+        // sehingga bentuk tidak bisa dihapus di bawah batas validasi.
+        const MIN_OPSI = 5;
+        const MAX_OPSI = 8;
+        const BATAS_HAPUS_PERNYATAAN = 3;
+        const MAX_PERNYATAAN = 5;
+
+        function refreshJumlahBaris() {
+            const opsiRows = document.querySelectorAll('#opsi-list .opsi-row');
+            document.getElementById('add-opsi').classList.toggle('hidden', opsiRows.length >= MAX_OPSI);
+            opsiRows.forEach(function (row) {
+                row.querySelector('.remove-row').classList.toggle('hidden', opsiRows.length <= MIN_OPSI);
+            });
+
+            const pernyataanRows = document.querySelectorAll('#pernyataan-list .pernyataan-row');
+            document.getElementById('add-pernyataan').classList.toggle('hidden', pernyataanRows.length >= MAX_PERNYATAAN);
+            pernyataanRows.forEach(function (row) {
+                row.querySelector('.remove-row').classList.toggle('hidden', pernyataanRows.length <= BATAS_HAPUS_PERNYATAAN);
+            });
+
+            const kategoriRows = document.querySelectorAll('#kategori-list .kategori-row');
+            kategoriRows.forEach(function (row) {
+                row.querySelector('.remove-row').classList.toggle('hidden', kategoriRows.length <= 1);
+            });
+        }
+        refreshJumlahBaris();
+
+        // --- KD picker: input kode, deskripsi penuh ditampilkan di bawahnya ---
         var kdPicker = document.getElementById('kd-picker');
         var kdHidden = document.getElementById('kompetensi_dasar_id');
-        var kdOptions = document.getElementById('kd-list').options;
+        var kdDetail = document.getElementById('kd-detail');
+        var kdDetailKode = document.getElementById('kd-detail-kode');
+        var kdDetailDeskripsi = document.getElementById('kd-detail-deskripsi');
+        var kdDetailMateri = document.getElementById('kd-detail-materi');
+        var kdPeta = JSON.parse(document.getElementById('kd-peta').textContent || '{}');
 
         function syncKd() {
-            for (var i = 0; i < kdOptions.length; i++) {
-                if (kdOptions[i].value === kdPicker.value) {
-                    kdHidden.value = kdOptions[i].dataset.id || '';
-                    return;
-                }
+            var kode = kdPicker.value.trim();
+            var kd = kdPeta[kode];
+
+            kdHidden.value = kd ? kd.id : '';
+
+            if (!kd) {
+                kdDetail.hidden = true;
+                return;
             }
-            kdHidden.value = '';
+
+            kdDetailKode.textContent = kode;
+            kdDetailDeskripsi.textContent = kd.deskripsi || '';
+            kdDetailMateri.textContent = kd.materi_pokok ? 'Materi pokok: ' + kd.materi_pokok : '';
+            kdDetailMateri.hidden = ! kd.materi_pokok;
+            kdDetail.hidden = false;
         }
         kdPicker.addEventListener('input', syncKd);
         kdPicker.addEventListener('change', syncKd);
+        syncKd();
 
         // --- Kategori benar hot reload ---
         function getDaftarKategori() {
@@ -209,7 +272,29 @@
         document.getElementById('kategori-list').addEventListener('input', syncKategoriSelects);
 
         // --- Row helpers ---
+        // Indeks baris selalu dirapikan setiap kali baris berubah supaya nama
+        // field tetap berurutan, `urutan` tidak pernah lompat, dan baris yang
+        // ditambahkan berikutnya tidak bentrok dengan indeks yang sudah dipakai.
+        function reindexRows() {
+            [
+                ['#opsi-list .opsi-row', 'opsi_jawaban'],
+                ['#pernyataan-list .pernyataan-row', 'pernyataan_kategori'],
+            ].forEach(function (konfig) {
+                const pola = new RegExp('^' + konfig[1] + '\\[\\d+\\]');
+                document.querySelectorAll(konfig[0]).forEach(function (row, pos) {
+                    row.querySelectorAll('[name]').forEach(function (el) {
+                        el.name = el.name.replace(pola, konfig[1] + '[' + pos + ']');
+                    });
+                    const urutan = row.querySelector('input[name$="[urutan]"]');
+                    if (urutan) urutan.value = String(pos + 1);
+                    const radio = row.querySelector('input[type="radio"]');
+                    if (radio) radio.value = String(pos);
+                });
+            });
+        }
+
         function addRow(template, container, prefix, buildHtml) {
+            reindexRows();
             var index = container.querySelectorAll('.' + template + '-row').length;
             var row = document.createElement('div');
             row.className = template + '-row';
@@ -234,6 +319,7 @@
                     '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>';
             });
             refreshBenarControls();
+            refreshJumlahBaris();
         });
 
         function buildKategoriSelect(name, daftarKategori) {
@@ -254,6 +340,7 @@
                     buildKategoriSelect(name + '[kategori_benar]', daftar) +
                     '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>';
             });
+            refreshJumlahBaris();
         });
 
         document.getElementById('add-kategori').addEventListener('click', function () {
@@ -263,6 +350,7 @@
             row.innerHTML = '<input type="text" name="daftar_kategori[]" placeholder="Nama kategori" class="input" required>' +
                 '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>';
             container.appendChild(row);
+            refreshJumlahBaris();
         });
 
         // --- Benar (radio/checkbox) sync ---
@@ -288,6 +376,8 @@
                 var wasKategori = row !== null && row.classList.contains('kategori-row');
                 if (row) row.remove();
                 if (wasKategori) syncKategoriSelects();
+                reindexRows();
+                refreshJumlahBaris();
             }
         });
 

@@ -91,7 +91,10 @@ class PaketSoalController extends Controller
                 ->with('error', 'Paket soal masih digunakan oleh tryout, tidak dapat dihapus.');
         }
 
-        $paketSoal->delete();
+        DB::transaction(function () use ($paketSoal) {
+            $paketSoal->soal()->detach();
+            $paketSoal->delete();
+        });
 
         return redirect()->route('admin.paket-soal.index')
             ->with('success', 'Paket soal berhasil dihapus.');

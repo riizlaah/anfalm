@@ -7,9 +7,9 @@
 @endphp
 
 <div class="space-y-4">
-    <x-input label="Nama Paket" name="nama_paket" value="{{ old('nama_paket', $paket?->nama_paket) }}" required maxlength="255" />
+    <x-input label="Nama Paket" name="nama_paket" :value="$paket?->nama_paket" required maxlength="255" />
 
-    <x-textarea label="Deskripsi" name="deskripsi" value="{{ old('deskripsi', $paket?->deskripsi) }}" />
+    <x-textarea label="Deskripsi" name="deskripsi" :value="$paket?->deskripsi" />
 
     <x-select label="Mapel" name="mapel_id" id="mapel-picker" required :value="$mapelId"
         :options="$mapels->pluck('nama', 'id')->all()" />
@@ -17,7 +17,7 @@
     <label class="block">
         <span class="label">Pilih Soal</span>
         @if ($soals->isEmpty())
-            <p class="hint">Belum ada soal. Buat soal terlebih dahulu di menu Soal.</p>
+            <p class="hint">Belum ada soal. Buat soal terlebih dahulu di menu Mapel &rarr; Kelola Soal.</p>
         @else
             <div class="space-y-3 rounded-lg border border-slate-200 p-4">
                 @foreach ($soalByMapel as $soalMapelId => $soalList)

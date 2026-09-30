@@ -5,7 +5,7 @@
     <form method="POST" action="{{ route('login') }}" class="space-y-4">
         @csrf
 
-        <x-input label="Email" name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="username" />
+        <x-input label="Email" name="email" type="email" required autofocus autocomplete="username" />
 
         <x-input label="Kata Sandi" name="password" type="password" required autocomplete="current-password" />
 

@@ -13,7 +13,7 @@
                 <option value="" @selected(old('mapel_id', $generateInput['mapel_id'] ?? '') === '')>— pilih mapel —</option>
                 @foreach ($mapels as $mapel)
                     <option value="{{ $mapel->id }}"
-                        data-kd-count="{{ $mapel->kompetensiDasar->count() }}"
+                        data-kd-count="{{ $mapel->kompetensiDasars->count() }}"
                         @selected((string) old('mapel_id', $generateInput['mapel_id'] ?? '') === (string) $mapel->id)>
                         {{ $mapel->nama }}
                     </option>
@@ -32,7 +32,7 @@
             <p class="hint" id="kd-hint">Pilih mapel terlebih dahulu untuk menampilkan daftar KD.</p>
             <div class="kd-list mt-2 grid grid-cols-1 gap-2 md:grid-cols-2" id="kd-list">
                 @foreach ($mapels as $mapel)
-                    @foreach ($mapel->kompetensiDasar as $kd)
+                    @foreach ($mapel->kompetensiDasars as $kd)
                         <label class="kd-item rounded-md border border-slate-200 px-3 py-2 text-sm" data-mapel-id="{{ $mapel->id }}">
                             <input type="checkbox" name="kompetensi_dasar_ids[]" value="{{ $kd->id }}" class="h-4 w-4 rounded border-slate-300 accent-ink"
                                 @checked(in_array($kd->id, old('kompetensi_dasar_ids', $generateInput['kompetensi_dasar_ids'] ?? []), true))>
@@ -178,7 +178,6 @@
             const cancelBtn = document.getElementById('cancel-generate');
 
             let partBerjalan = 1;
-            let partTotal = null;
             let akumulasi = 0;
             let payloadPart = null;
 
@@ -227,7 +226,6 @@
                         return;
                     }
 
-                    if (partTotal === null) partTotal = json.part_total;
                     akumulasi = json.jumlah_akumulasi;
 
                     updateProgress(labelPart(json.part));
@@ -247,18 +245,19 @@
             function labelPart(part) {
                 const target = form.elements.jumlah_soal.value;
 
-                return 'Menghasilkan part '.concat(part).concat('/').concat(partTotal)
+                return 'Menghasilkan part '.concat(part)
                     .concat(' — ').concat(akumulasi).concat('/').concat(target).concat(' soal…');
             }
 
             function updateProgress(label) {
                 progressText.textContent = label;
-                const porsi = partTotal > 0 ? ((partBerjalan - 1) / partTotal) * 100 : 0;
+                const target = Number(form.elements.jumlah_soal.value);
+                const porsi = target > 0 ? Math.min(100, (akumulasi / target) * 100) : 0;
                 progressBar.style.width = porsi + '%';
             }
 
             function tampilKegagalan(pesan) {
-                errorText.textContent = 'Bagian '.concat(partBerjalan).concat('/').concat(partTotal ?? '?')
+                errorText.textContent = 'Bagian '.concat(partBerjalan)
                     .concat(' gagal: ').concat(pesan);
                 failBox.classList.remove('hidden');
             }
@@ -277,7 +276,6 @@
                 payloadPart = muatPayloadUtuh();
                 payloadPart.run = buatRunId();
                 partBerjalan = 1;
-                partTotal = null;
                 akumulasi = 0;
                 updateProgress('Menyiapkan…');
                 progress.classList.remove('hidden');
@@ -292,7 +290,7 @@
                 progress.classList.add('hidden');
                 failBox.classList.add('hidden');
                 partBerjalan = 1;
-                partTotal = null;
+                akumulasi = 0;
             });
         });
     </script>

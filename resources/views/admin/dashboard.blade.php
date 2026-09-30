@@ -6,19 +6,7 @@
         <a href="{{ route('admin.mapel.index') }}"
             class="card group p-5 transition hover:border-ink/40 hover:shadow-md">
             <h2 class="text-lg font-semibold text-ink group-hover:text-ink-soft">Mapel</h2>
-            <p class="mt-1 text-sm text-slate-500">Daftar mata pelajaran</p>
-        </a>
-
-        <a href="{{ route('admin.kompetensi-dasar.index') }}"
-            class="card group p-5 transition hover:border-ink/40 hover:shadow-md">
-            <h2 class="text-lg font-semibold text-ink group-hover:text-ink-soft">Kompetensi Dasar</h2>
-            <p class="mt-1 text-sm text-slate-500">KD per mapel</p>
-        </a>
-
-        <a href="{{ route('admin.soal.index') }}"
-            class="card group p-5 transition hover:border-ink/40 hover:shadow-md">
-            <h2 class="text-lg font-semibold text-ink group-hover:text-ink-soft">Soal</h2>
-            <p class="mt-1 text-sm text-slate-500">Bank soal PG / PG Kompleks / PG Kategori</p>
+            <p class="mt-1 text-sm text-slate-500">Mata pelajaran, KD, dan bank soal per mapel</p>
         </a>
 
         <a href="{{ route('admin.paket-soal.index') }}"

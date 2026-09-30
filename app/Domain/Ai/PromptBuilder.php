@@ -65,7 +65,7 @@ class PromptBuilder
            - tipe_soal: "pg" (Pilihan Ganda), "pg_kompleks" (lebih dari 1 jawaban benar), atau "pg_kategori" (pernyataan dikategorikan ke kategori kustom).
            - pertanyaan yang jelas dan tidak ambigu (bisa mengandung ekspresi matematika dalam format LaTeX, contoh: \( \frac{2}{3} \)).
            - opsi_jawaban: tepat 5 opsi dengan tepat 1 benar untuk "pg" dan minimal 2 benar untuk "pg_kompleks".
-           - pernyataan_kategori: minimal 2 pernyataan (hanya untuk tipe "pg_kategori").
+           - pernyataan_kategori: minimal 3 pernyataan (hanya untuk tipe "pg_kategori").
            - kompetensi_dasar yang sesuai dengan salah satu KD yang diberikan.
            - pembahasan yang edukatif dan mudah dipahami.
 
@@ -79,7 +79,7 @@ class PromptBuilder
            c. PG Kategori:
               - Tidak menggunakan field "opsi_jawaban"; gunakan "pernyataan_kategori".
               - Setiap soal mendefinisikan "kategori_pg_kategori" (daftar kategori per-soal, contoh: ["Benar", "Salah"]) dan setiap pernyataan memakai salah satu kategori tersebut.
-              - Minimal 2 pernyataan, maksimal 5 pernyataan.
+              - Minimal 3 pernyataan, maksimal 5 pernyataan.
               - Setiap pernyataan memiliki "parameter_irt" sendiri (a, b, c per pernyataan).
 
         3. Parameter IRT (a: daya beda, b: tingkat kesulitan, c: tebakan):
@@ -122,6 +122,7 @@ class PromptBuilder
           ]
         }
         JANGAN tambahkan teks di luar JSON. JANGAN gunakan markdown code block.
+        7. Array "daftar_soal" harus berisi tepat {$jumlahSoal} objek soal, tidak lebih dan tidak kurang. Setiap objek lengkap sesuai struktur di atas.
         PROMPT;
     }
 

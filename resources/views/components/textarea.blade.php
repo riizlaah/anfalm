@@ -2,6 +2,7 @@
     'label' => '',
     'name' => '',
     'value' => null,
+    'rows' => 4,
 ])
 
 <label class="block">
@@ -11,7 +12,7 @@
 
     <textarea
         name="{{ $name }}"
-        rows="4"
+        rows="{{ $rows }}"
         {{ $attributes->merge(['class' => 'textarea']) }}
     >{{ old($name, $value) }}</textarea>
 </label>

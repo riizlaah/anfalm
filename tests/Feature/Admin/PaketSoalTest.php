@@ -135,3 +135,29 @@ it('soal yang sudah dimasukkan ke paket ditandai di halaman create', function ()
         ->assertSee('Tambah Paket Soal')
         ->assertSee('Bahasa Indonesia');
 });
+
+it('menghapus paket soal juga membersihkan relasi detail paket soal', function () {
+    $admin = User::factory()->admin()->create();
+    $paket = paketSoalF4(Mapel::factory()->create());
+
+    $this->actingAs($admin)->delete("/admin/paket-soal/{$paket->id}")
+        ->assertRedirect(route('admin.paket-soal.index'));
+
+    $this->assertSoftDeleted('paket_soal', ['id' => $paket->id]);
+    $this->assertDatabaseMissing('detail_paket_soal', ['paket_soal_id' => $paket->id]);
+});
+
+it('soal yang terkait paket soal yang sudah dihapus dapat dihapus', function () {
+    $admin = User::factory()->admin()->create();
+    $paket = paketSoalF4(Mapel::factory()->create());
+    $soal = $paket->soal()->firstOrFail();
+
+    $this->actingAs($admin)->delete("/admin/paket-soal/{$paket->id}")
+        ->assertRedirect(route('admin.paket-soal.index'));
+
+    $this->actingAs($admin)->delete(route('admin.mapel.soal.destroy', [$soal->kompetensiDasar->mapel, $soal]))
+        ->assertRedirect(route('admin.mapel.soal.index', $soal->kompetensiDasar->mapel))
+        ->assertSessionHas('success');
+
+    $this->assertSoftDeleted('soal', ['id' => $soal->id]);
+});

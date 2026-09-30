@@ -31,15 +31,22 @@ Route::middleware(['auth', 'single.session'])->group(function () {
 
 Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {
     Route::get('admin', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
+    Route::post('admin/mapel/bulk-delete', [MapelController::class, 'bulkDestroy'])->name('admin.mapel.bulk-delete');
     Route::resource('admin/mapel', MapelController::class)
-        ->except(['show'])
+        ->only(['index', 'store', 'update', 'destroy'])
         ->names('admin.mapel');
-    Route::resource('admin/kompetensi-dasar', KompetensiDasarController::class)
-        ->except(['show'])
-        ->names('admin.kompetensi-dasar');
-    Route::resource('admin/soal', SoalController::class)
-        ->except(['show'])
-        ->names('admin.soal');
+    Route::post('admin/mapel/{mapel}/kompetensi-dasar/bulk-delete', [KompetensiDasarController::class, 'bulkDestroy'])
+        ->name('admin.mapel.kompetensi-dasar.bulk-delete');
+    Route::resource('admin/mapel.kompetensi-dasar', KompetensiDasarController::class)
+        ->only(['index', 'store', 'update', 'destroy'])
+        ->scoped()
+        ->names('admin.mapel.kompetensi-dasar');
+    Route::post('admin/mapel/{mapel}/soal/bulk-delete', [SoalController::class, 'bulkDestroy'])
+        ->name('admin.mapel.soal.bulk-delete');
+    Route::resource('admin/mapel.soal', SoalController::class)
+        ->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
+        ->scoped()
+        ->names('admin.mapel.soal');
     Route::get('admin/paket-soal/generate', [GeneratePaketController::class, 'create'])->name('admin.paket-soal.generate');
     Route::post('admin/paket-soal/generate', [GeneratePaketController::class, 'storePart'])->name('admin.paket-soal.generate.store');
     Route::get('admin/paket-soal/kurasi', [GeneratePaketController::class, 'kurasi'])->name('admin.paket-soal.kurasi');
