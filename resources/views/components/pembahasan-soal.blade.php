@@ -2,7 +2,8 @@
     Daftar pembahasan per soal untuk halaman hasil tryout maupun latihan (3.7).
 
     Peserta melihat pertanyaan, opsi yang dipilih, kunci jawaban, lalu pembahasan.
-    Kontennya masih teks polos; rendering WYSIWYG + KaTeX menyusul pada Fase 8.
+    Konten sudah dirender WYSIWYG; ekspresi KaTeX-nya di-render oleh JavaScript
+    pada setiap elemen bertanda `data-rumus`.
 
     @param \Illuminate\Support\Collection<int, \App\Models\RiwayatPengerjaan> $riwayat
 --}}
@@ -28,9 +29,11 @@
 
                 <article class="card p-5">
                     <div class="flex flex-wrap items-start justify-between gap-3">
-                        <p class="text-sm font-medium text-slate-800">
+                        {{-- div, bukan p: konten WYSIWYG berupa `<p>`, dan `<p>`
+                             bersarang akan ditutup paksa oleh parser. --}}
+                        <div class="text-sm font-medium text-slate-800" data-rumus>
                             {{ $index + 1 }}. <x-konten :isi="$soal->pertanyaan" />
-                        </p>
+                        </div>
 
                         @unless ($adaJawaban)
                             <span class="text-xs font-semibold text-slate-400">Tidak dijawab</span>
@@ -45,7 +48,7 @@
                         <ul class="mt-3 space-y-1 text-sm">
                             @foreach ($soal->pernyataanKategori as $pernyataan)
                                 <li class="text-slate-700">
-                                    <span class="font-medium"><x-konten :isi="$pernyataan->teks_pernyataan" /></span><br>
+                                    <span class="font-medium" data-rumus><x-konten :isi="$pernyataan->teks_pernyataan" /></span><br>
                                     Jawabanmu: {{ $terkirim['kategori'][$pernyataan->id] ?? '—' }}
                                     · Kunci: {{ $pernyataan->kategori_benar }}
                                 </li>
@@ -58,7 +61,7 @@
                                     $dipilih = in_array($opsi->id, (array) ($terkirim['opsi'] ?? []));
                                 @endphp
 
-                                <li @class([
+                                <li data-rumus @class([
                                     'font-semibold text-emerald-700' => $opsi->is_benar,
                                     'text-rose-600' => $dipilih && ! $opsi->is_benar,
                                     'text-slate-700' => ! $opsi->is_benar && ! $dipilih,
@@ -74,7 +77,7 @@
                         <div class="mt-4 border-t border-slate-100 pt-3">
                             <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pembahasan</p>
 
-                            <div class="mt-1 text-sm leading-relaxed text-slate-700">
+                            <div class="mt-1 text-sm leading-relaxed text-slate-700" data-rumus>
                                 <x-konten :isi="$soal->pembahasan" />
                             </div>
                         </div>

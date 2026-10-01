@@ -69,9 +69,15 @@
 
     <script type="application/json" id="kd-peta">@json($kdPeta)</script>
 
-    <x-textarea label="Pertanyaan" name="pertanyaan" :value="$soal?->pertanyaan" required />
+    <livewire:wysiwyg
+        nama="pertanyaan"
+        label="Pertanyaan"
+        :nilai="old('pertanyaan', $soal?->pertanyaan)" />
 
-    <x-textarea label="Pembahasan" name="pembahasan" :value="$soal?->pembahasan" />
+    <livewire:wysiwyg
+        nama="pembahasan"
+        label="Pembahasan"
+        :nilai="old('pembahasan', $soal?->pembahasan)" />
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label class="block">

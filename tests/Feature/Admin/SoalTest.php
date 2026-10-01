@@ -681,3 +681,16 @@ it('teks biasa tidak di-encode saat disimpan agar soal matematika tetap terbaca'
     expect(Soal::query()->where('kompetensi_dasar_id', $kd->id)->firstOrFail()->pertanyaan)
         ->toBe("Jika i < n, hitung 2 + 2 = ?\nKemudian i = i + 1");
 });
+
+it('menolak pertanyaan yang hanya berisi paragraf kosong dari editor', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->actingAs($admin)->post(route('admin.mapel.soal.store', $mapel), payloadSoal([
+        'kompetensi_dasar_id' => $kd->id,
+        'pertanyaan' => '<p></p>',
+    ]))->assertSessionHasErrors('pertanyaan');
+
+    $this->assertDatabaseCount('soal', 0);
+});

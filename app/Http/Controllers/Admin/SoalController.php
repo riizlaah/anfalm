@@ -232,7 +232,16 @@ class SoalController extends Controller
                 Soal::TIPE_PG_KOMPLEKS,
                 Soal::TIPE_PG_KATEGORI,
             ])],
-            'pertanyaan' => ['required', 'string'],
+            'pertanyaan' => [
+                'required',
+                'string',
+                // Editor kosong mengirim `<p></p>` yang tetap lolos `required`.
+                function (string $attribute, mixed $nilai, \Closure $gagal): void {
+                    if (! $this->konten->adaIsi($nilai)) {
+                        $gagal('Pertanyaan wajib diisi.');
+                    }
+                },
+            ],
             'gambar_url' => ['nullable', 'url', 'max:255'],
             'pembahasan' => ['nullable', 'string'],
             'a_diskriminasi' => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],

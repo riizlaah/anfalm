@@ -14,7 +14,7 @@
     $jawabanSoal = $jawaban[$kunci][$soal->id] ?? null;
 @endphp
 
-<div class="text-sm leading-relaxed text-slate-800">
+<div class="text-sm leading-relaxed text-slate-800" data-rumus>
     <x-konten :isi="$soal->pertanyaan" />
 </div>
 
@@ -22,7 +22,9 @@
     <div class="mt-4 space-y-3">
         @foreach ($soal->pernyataanKategori as $pernyataan)
             <div>
-                <p class="text-sm text-slate-700"><x-konten :isi="$pernyataan->teks_pernyataan" /></p>
+                {{-- div, bukan p: konten WYSIWYG berupa `<p>`, dan `<p>` bersarang
+                     akan ditutup paksa oleh parser HTML. --}}
+                <div class="text-sm text-slate-700" data-rumus><x-konten :isi="$pernyataan->teks_pernyataan" /></div>
 
                 <select name="jawaban[kategori][{{ $soal->id }}][{{ $pernyataan->id }}]"
                     class="select mt-1 w-auto">
@@ -50,7 +52,7 @@
                     name="jawaban[opsi][{{ $soal->id }}]{{ $satuJawaban ? '' : '[]' }}"
                     value="{{ $opsi->id }}"
                     @checked(in_array($opsi->id, $opsiTerpilih))>
-                <span><x-konten :isi="$opsi->teks_opsi" /></span>
+                <span data-rumus><x-konten :isi="$opsi->teks_opsi" /></span>
             </label>
         @endforeach
     </div>

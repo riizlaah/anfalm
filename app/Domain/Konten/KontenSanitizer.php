@@ -99,4 +99,25 @@ class KontenSanitizer
     {
         return preg_match(self::TAG_HTML, $isi) === 1;
     }
+
+    /**
+     * Apakah konten memuat teks yang terlihat atau sekurangnya satu gambar?
+     *
+     * Dipakai validasi untuk menolak editor WYSIWYG yang dikirim kosong: TipTap
+     * selalu menghasilkan `<p></p>` untuk dokumen kosong, sehingga aturan
+     * `required` saja tidak cukup. Pemotongan tagnya memakai pola yang sama
+     * dengan {@see self::TAG_HTML} agar `i < n` tidak ikut terpotong.
+     */
+    public function adaIsi(?string $isi): bool
+    {
+        if ($isi === null) {
+            return false;
+        }
+
+        if (str_contains($isi, '<img')) {
+            return true;
+        }
+
+        return trim((string) preg_replace('/<\/?[a-z][^>]*>/i', '', $isi)) !== '';
+    }
 }

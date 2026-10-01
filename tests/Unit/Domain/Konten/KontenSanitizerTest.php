@@ -89,3 +89,16 @@ it('untukTampilan mengembalikan string kosong untuk null', function () {
     expect($this->sanitizer->untukTampilan(null))->toBe('')
         ->and($this->sanitizer->untukTampilan(''))->toBe('');
 });
+
+it('mengenali konten WYSIWYG yang kosong agar editor kosong ditolak', function (?string $masukan, bool $harapan) {
+    expect($this->sanitizer->adaIsi($masukan))->toBe($harapan);
+})->with([
+    'null' => [null, false],
+    'string kosong' => ['', false],
+    'paragraf kosong' => ['<p></p>', false],
+    'paragraf ber-spasi' => ['<p>   </p>', false],
+    'hanya pemisah baris' => ['<p><br></p>', false],
+    'ada teks' => ['<p>Ada isinya</p>', true],
+    'hanya gambar' => ['<p><img src="/storage/gambar/soal.webp"></p>', true],
+    'teks kurang dari yang mirip tag' => ['karena i < n dan n > 0', true],
+]);
