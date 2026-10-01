@@ -13,6 +13,7 @@ use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
 use App\Models\TrackingKompetensi;
+use App\Models\TrackingMapel;
 use App\Models\User;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -447,6 +448,7 @@ class PercobaanService
             ]);
 
             $this->perbaruiTrackingKompetensi($percobaan->user, array_keys($indeksMapel));
+            $this->perbaruiTrackingMapel($percobaan->user, $this->mapelTerlibat($percobaan));
 
             if ($percobaan->paket_tryout_id === null) {
                 return null;
@@ -610,6 +612,102 @@ class PercobaanService
             $baris,
             ['user_id', 'kompetensi_dasar_id'],
             ['total_soal_dikerjakan', 'total_benar', 'persentase_benar', 'theta_estimasi', 'theta_se', 'last_updated'],
+        );
+    }
+
+    /**
+     * Mapel yang masuk dalam daftar soal percobaan ini, tanpa duplikat.
+     *
+     * @return array<int, int>
+     */
+    private function mapelTerlibat(Percobaan $percobaan): array
+    {
+        $mapelIds = array_map(
+            fn (array $grup): int => (int) $grup['mapel_id'],
+            $percobaan->daftar_soal ?? [],
+        );
+
+        return array_values(array_unique($mapelIds));
+    }
+
+    /**
+     * Menulis ulang `tracking_mapel` untuk tiap mapel yang tersentuh percobaan
+     * ini, dihitung dari seluruh riwayat peserta pada mapel tersebut.
+     *
+     * Dipanggil ulang, bukan ditambah, supaya idempoten: menutup percobaan
+     * berulang tidak menggandakan jumlah (3.9).
+     *
+     * `theta_estimasi` memakai seluruh item mapel — termasuk jawaban latihan —
+     * agar analisis tidak kedaluwarsa sampai peserta ikut tryout berikutnya.
+     * Sebaliknya `total_tryout_diikuti` dan `rata_rata_skor_irt` hanya dari
+     * percobaan tryout, jadi latihan memperkaya theta tanpa pernah menaikkan
+     * jumlah tryout.
+     *
+     * @param  array<int, int>  $mapelTerlibat
+     */
+    private function perbaruiTrackingMapel(User $user, array $mapelTerlibat): void
+    {
+        if ($mapelTerlibat === []) {
+            return;
+        }
+
+        $perMapel = RiwayatPengerjaan::query()
+            ->with(['soal.opsiJawaban', 'soal.pernyataanKategori', 'soal.kompetensiDasar'])
+            ->where('user_id', $user->getKey())
+            ->whereHas('soal.kompetensiDasar', fn ($q) => $q->whereIn('mapel_id', $mapelTerlibat))
+            ->get()
+            ->groupBy(fn (RiwayatPengerjaan $baris): int => (int) ($baris->soal?->kompetensiDasar?->mapel_id ?? 0));
+
+        $baris = [];
+
+        foreach ($mapelTerlibat as $mapelId) {
+            $items = [];
+            $skorTryout = [];
+            $percobaanTryout = [];
+
+            foreach ($perMapel->get((int) $mapelId, collect()) as $barisRiwayat) {
+                if ($barisRiwayat->soal === null || $barisRiwayat->skor_irt === null) {
+                    continue;
+                }
+
+                $skor = $this->scoring->score($barisRiwayat->soal, $barisRiwayat->jawaban_user);
+
+                $items = [...$items, ...$this->keItemIrt(array_values(array_filter(
+                    $skor['items'],
+                    fn (array $item): bool => $item['resp'] !== null
+                )))];
+
+                if ($barisRiwayat->paket_tryout_id === null || $barisRiwayat->percobaan_id === null) {
+                    continue;
+                }
+
+                $percobaanTryout[(int) $barisRiwayat->percobaan_id] = true;
+                $skorTryout[] = (float) $barisRiwayat->skor_irt;
+            }
+
+            $theta = $items === []
+                ? null
+                : (count($items) < self::MIN_ITEM_MLE
+                    ? $this->irt->estimateWithPrior($items)
+                    : $this->irt->estimateMle($items));
+
+            $baris[] = [
+                'user_id' => $user->getKey(),
+                'mapel_id' => (int) $mapelId,
+                'theta_estimasi' => $theta,
+                'level_kompetensi' => $this->level->levelFor($theta),
+                'total_tryout_diikuti' => count($percobaanTryout),
+                'rata_rata_skor_irt' => $skorTryout === []
+                    ? null
+                    : round(array_sum($skorTryout) / count($skorTryout), 3),
+                'last_updated' => now(),
+            ];
+        }
+
+        TrackingMapel::upsert(
+            $baris,
+            ['user_id', 'mapel_id'],
+            ['theta_estimasi', 'level_kompetensi', 'total_tryout_diikuti', 'rata_rata_skor_irt', 'last_updated'],
         );
     }
 

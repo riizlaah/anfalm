@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Percobaan\PercobaanService;
+use App\Domain\Scoring\KompetensiLevel;
 use App\Http\Controllers\TryoutController;
 use App\Models\HasilTryout;
 use App\Models\PaketSoal;
@@ -8,6 +9,7 @@ use App\Models\PaketTryout;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
+use App\Models\TrackingMapel;
 use App\Models\User;
 
 beforeEach(function () {
@@ -284,6 +286,78 @@ it('menandai kompetensi dasar yang belum pernah dijawab sebagai belum teridentif
         ->assertOk()
         ->assertDontSee('Mahir')
         ->assertSee('Belum Teridentifikasi');
+});
+
+it('menulis tracking mapel untuk tiap mapel pada paket tryout yang selesai', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+
+    // Menjawab mapel terakhir saja; empat mapel sebelumnya dibiarkan kosong.
+    $percobaan->update(['urutan_mapel' => 4]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']))
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    $baris = TrackingMapel::query()->where('user_id', $peserta->getKey())->get()->keyBy('mapel_id');
+    $mapelKosong = (int) $percobaan->daftar_soal[0]['mapel_id'];
+
+    expect($baris)->toHaveCount(5)
+        ->and($baris[$mapelKosong]->theta_estimasi)->toBeNull()
+        ->and($baris[$mapelKosong]->level_kompetensi)->toBe(KompetensiLevel::BELUM_TERIDENTIFIKASI)
+        ->and($baris[$mapelKosong]->total_tryout_diikuti)->toBe(0)
+        ->and($baris[$mapelKosong]->rata_rata_skor_irt)->toBeNull();
+
+    $mapelTerjawab = (int) $terakhir['urut'];
+
+    expect($baris[$mapelTerjawab]->theta_estimasi)->not->toBeNull()
+        ->and($baris[$mapelTerjawab]->level_kompetensi)->toBe(KompetensiLevel::MAHIR)
+        ->and($baris[$mapelTerjawab]->total_tryout_diikuti)->toBe(1)
+        ->and($baris[$mapelTerjawab]->rata_rata_skor_irt)->toEqualWithDelta(1.0, 0.01)
+        ->and($baris[$mapelTerjawab]->last_updated)->not->toBeNull();
+});
+
+it('menghitung ulang theta mapel dari latihan tanpa menambah jumlah tryout', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $percobaan->update(['urutan_mapel' => 4]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']));
+
+    // Latihan pada mapel yang tadi dilewati sama sekali.
+    $mapelLatihan = (int) $percobaan->refresh()->daftar_soal[0]['mapel_id'];
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapelLatihan,
+        'jumlah_soal' => 5,
+        'timer' => 'stopwatch',
+    ]);
+
+    $latihan = Percobaan::query()->where('jenis', Percobaan::JENIS_LATIHAN)->sole();
+    $aktifLatihan = soalMapelAktif($latihan);
+
+    $this->actingAs($peserta)->post(
+        route('latihan.jawab', $latihan),
+        [...payloadSemuaBenar($aktifLatihan['soal']), 'aksi' => 'selesai']
+    );
+
+    $baris = TrackingMapel::query()->where('user_id', $peserta->getKey())->get()->keyBy('mapel_id');
+
+    // Theta terisi dari jawaban latihan, tetapi latihan bukan tryout jadi
+    // penghitung tryout tetap 0 dan rata-rata skor tidak ikut berubah (3.9).
+    expect($baris[$mapelLatihan]->theta_estimasi)->not->toBeNull()
+        ->and($baris[$mapelLatihan]->level_kompetensi)->toBe(KompetensiLevel::MAHIR)
+        ->and($baris[$mapelLatihan]->total_tryout_diikuti)->toBe(0)
+        ->and($baris[$mapelLatihan]->rata_rata_skor_irt)->toBeNull()
+        ->and($baris[(int) $terakhir['urut']]->total_tryout_diikuti)->toBe(1);
 });
 
 it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman', function () {
