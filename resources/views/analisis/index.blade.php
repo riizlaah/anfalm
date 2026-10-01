@@ -92,7 +92,7 @@
                                 <td class="py-2 pr-4 text-slate-700">
                                     {{ $barisKd['kd']->kode_kompetensi }} — {{ $barisKd['kd']->deskripsi }}
                                 </td>
-                                <td class="py-2 pr-4 font-medium text-ink">
+                                <td class="py-2 pr-4 font-medium whitespace-nowrap text-ink">
                                     {{ $barisKd['label'] }}
                                 </td>
                                 <td class="py-2 pr-4 text-slate-700">

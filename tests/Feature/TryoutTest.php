@@ -612,3 +612,24 @@ it('menampilkan leaderboard kosong tanpa peserta yang sudah selesai', function (
         ->assertOk()
         ->assertSee('Belum ada peserta yang menyelesaikan tryout ini');
 });
+
+it('menampilkan pembahasan per soal di halaman hasil tryout (3.7)', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+
+    $percobaan->update(['urutan_mapel' => 4]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+    $soal = $terakhir['soal']->first();
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']));
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.hasil', $paket))
+        ->assertOk()
+        ->assertSee('Pembahasan')
+        ->assertSee($soal->pembahasan)
+        ->assertSee($soal->pertanyaan);
+});

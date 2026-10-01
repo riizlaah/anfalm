@@ -772,6 +772,23 @@ class PercobaanService
     }
 
     /**
+     * Id soal pada seluruh kelompok `daftar_soal`, urut sesuai acakan saat mulai.
+     *
+     * Dipakai halaman hasil untuk menyusun `riwayat_pengerjaan`, supaya
+     * pembahasan per soal (3.7) tampil mengikuti urutan peserta mengerjakan
+     * dan bukan urutan penyimpanan.
+     *
+     * @return array<int, int>
+     */
+    public function urutanSoal(Percobaan $percobaan): array
+    {
+        return collect($percobaan->daftar_soal ?? [])
+            ->flatMap(fn (array $grup): array => $grup['soal_ids'])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Durasi pengerjaan dalam detik, tidak pernah melewati batas waktu paket
      * agar peserta yang terlambat mengumpulkan tidak keunggulan di leaderboard.
      */

@@ -208,7 +208,7 @@ class LatihanController extends Controller
             ->get()
             ->sortBy(fn (RiwayatPengerjaan $baris): int => array_search(
                 $baris->soal_id,
-                $this->urutanSoal($percobaan)
+                $this->percobaan->urutanSoal($percobaan)
             ))
             ->values();
 
@@ -220,17 +220,6 @@ class LatihanController extends Controller
             'jumlahBenar' => $riwayat->filter(fn (RiwayatPengerjaan $b) => $b->is_benar)->count(),
             'jumlahKosong' => $riwayat->filter(fn (RiwayatPengerjaan $b) => $b->skor_irt === null)->count(),
         ]);
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function urutanSoal(Percobaan $percobaan): array
-    {
-        return collect($percobaan->daftar_soal ?? [])
-            ->flatMap(fn (array $grup): array => $grup['soal_ids'])
-            ->values()
-            ->all();
     }
 
     /**

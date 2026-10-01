@@ -184,6 +184,20 @@ class TryoutController extends Controller
             ? $this->percobaan->ringkasanKompetensi($percobaan)
             : [];
 
+        // Riwayat disusun ulang mengikuti urutan daftar_soal, supaya pembahasan
+        // per soal (3.7) tampil sesuai urutan peserta mengerjakan.
+        $riwayat = $percobaan !== null
+            ? RiwayatPengerjaan::query()
+                ->with(['soal.opsiJawaban', 'soal.pernyataanKategori', 'soal.kompetensiDasar'])
+                ->where('percobaan_id', $percobaan->getKey())
+                ->get()
+                ->sortBy(fn (RiwayatPengerjaan $baris): int => array_search(
+                    $baris->soal_id,
+                    $this->percobaan->urutanSoal($percobaan)
+                ))
+                ->values()
+            : collect();
+
         $jumlahSoal = (int) DB::table('detail_paket_soal')
             ->whereIn('paket_soal_id', [
                 $paketTryout->paket_soal_wajib_1_id,
@@ -194,7 +208,7 @@ class TryoutController extends Controller
             ])
             ->count();
 
-        return view('tryout.hasil', compact('paketTryout', 'hasil', 'jumlahSoal', 'perKd'));
+        return view('tryout.hasil', compact('paketTryout', 'hasil', 'jumlahSoal', 'perKd', 'riwayat'));
     }
 
     /**
