@@ -27,7 +27,7 @@
                             <label class="check mb-2">
                                 <input type="checkbox" name="soal_ids[]" value="{{ $soal->id }}" class="soal-check"
                                     @checked(in_array($soal->id, $selectedSoalIds))>
-                                <span class="truncate">{{ \Illuminate\Support\Str::limit($soal->pertanyaan, 110) }}</span>
+                                <span class="truncate">{{ \Illuminate\Support\Str::limit(htmlspecialchars_decode(strip_tags($soal->pertanyaan)), 110) }}</span>
                             </label>
                         @endforeach
                     </div>

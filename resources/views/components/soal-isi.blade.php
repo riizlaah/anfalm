@@ -14,17 +14,15 @@
     $jawabanSoal = $jawaban[$kunci][$soal->id] ?? null;
 @endphp
 
-{{-- Konten soal masih teks polos; penyuntingan HTML dan sanitasinya
-     menyusul bersama editor pada Fase 8. --}}
 <div class="text-sm leading-relaxed text-slate-800">
-    {!! nl2br(e($soal->pertanyaan)) !!}
+    <x-konten :isi="$soal->pertanyaan" />
 </div>
 
 @if ($soal->isPGKategori())
     <div class="mt-4 space-y-3">
         @foreach ($soal->pernyataanKategori as $pernyataan)
             <div>
-                <p class="text-sm text-slate-700">{{ $pernyataan->teks_pernyataan }}</p>
+                <p class="text-sm text-slate-700"><x-konten :isi="$pernyataan->teks_pernyataan" /></p>
 
                 <select name="jawaban[kategori][{{ $soal->id }}][{{ $pernyataan->id }}]"
                     class="select mt-1 w-auto">
@@ -52,7 +50,7 @@
                     name="jawaban[opsi][{{ $soal->id }}]{{ $satuJawaban ? '' : '[]' }}"
                     value="{{ $opsi->id }}"
                     @checked(in_array($opsi->id, $opsiTerpilih))>
-                <span>{{ $opsi->teks_opsi }}</span>
+                <span><x-konten :isi="$opsi->teks_opsi" /></span>
             </label>
         @endforeach
     </div>

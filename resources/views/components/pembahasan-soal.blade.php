@@ -29,7 +29,7 @@
                 <article class="card p-5">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <p class="text-sm font-medium text-slate-800">
-                            {{ $index + 1 }}. {!! nl2br(e($soal->pertanyaan)) !!}
+                            {{ $index + 1 }}. <x-konten :isi="$soal->pertanyaan" />
                         </p>
 
                         @unless ($adaJawaban)
@@ -45,7 +45,7 @@
                         <ul class="mt-3 space-y-1 text-sm">
                             @foreach ($soal->pernyataanKategori as $pernyataan)
                                 <li class="text-slate-700">
-                                    <span class="font-medium">{{ $pernyataan->teks_pernyataan }}</span><br>
+                                    <span class="font-medium"><x-konten :isi="$pernyataan->teks_pernyataan" /></span><br>
                                     Jawabanmu: {{ $terkirim['kategori'][$pernyataan->id] ?? '—' }}
                                     · Kunci: {{ $pernyataan->kategori_benar }}
                                 </li>
@@ -64,7 +64,7 @@
                                     'text-slate-700' => ! $opsi->is_benar && ! $dipilih,
                                 ])>
                                     {{ $opsi->is_benar ? '✓' : ($dipilih ? '✗' : '') }}
-                                    {{ $opsi->teks_opsi }}
+                                    <x-konten :isi="$opsi->teks_opsi" />
                                 </li>
                             @endforeach
                         </ul>
@@ -75,7 +75,7 @@
                             <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pembahasan</p>
 
                             <div class="mt-1 text-sm leading-relaxed text-slate-700">
-                                {!! nl2br(e($soal->pembahasan)) !!}
+                                <x-konten :isi="$soal->pembahasan" />
                             </div>
                         </div>
                     @endif

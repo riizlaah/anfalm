@@ -76,7 +76,7 @@
                                 {{ $kd->kode_kompetensi }}
                             </abbr>
                         </td>
-                        <td class="px-4 py-3">{{ \Illuminate\Support\Str::limit(strip_tags($soal->pertanyaan), 50) }}</td>
+                        <td class="px-4 py-3">{{ \Illuminate\Support\Str::limit(htmlspecialchars_decode(strip_tags($soal->pertanyaan)), 50) }}</td>
                         <td class="px-4 py-3">
                             @switch($soal->tipe_soal)
                                 @case('pg')

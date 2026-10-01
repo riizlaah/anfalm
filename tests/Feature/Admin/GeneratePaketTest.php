@@ -751,3 +751,25 @@ function kurasiPayloadValid(Mapel $mapel, KompetensiDasar $kd31, KompetensiDasar
         ],
     ];
 }
+
+it('menyaring konten WYSIWYG yang disimpan dari halaman kurasi (6.12)', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    seedAiDraft($mapel);
+
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    $payload['daftar_soal'][0]['pertanyaan'] = '<p>Soal <strong>aman</strong></p><script>alert(1)</script>';
+    $payload['daftar_soal'][0]['pembahasan'] = '<p onclick="evil()">pembahasan</p>';
+    $payload['daftar_soal'][0]['opsi_jawaban'][0]['teks_opsi'] = '<a href="javascript:alert(1)">2^8</a>';
+    $payload['daftar_soal'][2]['pernyataan_kategori'][0]['teks_pernyataan'] = '<img src="x" onerror="alert(1)">HTML adalah bahasa markup.';
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertRedirect(route('admin.paket-soal.index'))
+        ->assertSessionHas('success');
+
+    $soal = Soal::where('pertanyaan', '<p>Soal <strong>aman</strong></p>')->firstOrFail();
+
+    expect($soal->pembahasan)->toBe('<p>pembahasan</p>')
+        ->and($soal->opsiJawaban()->orderBy('urutan')->first()->teks_opsi)->toBe('<a>2^8</a>')
+        ->and(Soal::where('pertanyaan', 'like', '%<script>%')->exists())->toBeFalse();
+});

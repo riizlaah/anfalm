@@ -9,6 +9,7 @@ use App\Domain\Ai\JsonRepairService;
 use App\Domain\Ai\PromptBuilder;
 use App\Domain\Ai\SoalSkemaException;
 use App\Domain\Ai\SoalSkemaValidator;
+use App\Domain\Konten\KontenSanitizer;
 use App\Http\Controllers\Controller;
 use App\Models\DetailPaketSoal;
 use App\Models\KompetensiDasar;
@@ -34,7 +35,7 @@ class GeneratePaketController extends Controller
 
     public const TINGKAT_OPTIONS = ['mudah', 'sedang', 'sulit', 'campuran'];
 
-    public function __construct(private AiProvider $aiProvider) {}
+    public function __construct(private AiProvider $aiProvider, private KontenSanitizer $konten) {}
 
     public function create(): View
     {
@@ -264,9 +265,9 @@ class GeneratePaketController extends Controller
                 $soalRow = Soal::create([
                     'kompetensi_dasar_id' => (int) $soal['kompetensi_dasar_id'],
                     'tipe_soal' => $soal['tipe_soal'],
-                    'pertanyaan' => $soal['pertanyaan'],
+                    'pertanyaan' => $this->konten->bersihkan($soal['pertanyaan']),
                     'gambar_url' => $soal['gambar_url'] ?? null,
-                    'pembahasan' => $soal['pembahasan'] ?? null,
+                    'pembahasan' => $this->konten->bersihkan($soal['pembahasan'] ?? null),
                     'daftar_kategori' => $soal['daftar_kategori'] ?? null,
                     'a_diskriminasi' => $soal['a_diskriminasi'] ?? null,
                     'b_kesulitan' => $soal['b_kesulitan'] ?? null,
@@ -360,7 +361,7 @@ class GeneratePaketController extends Controller
         if ($soal->tipe_soal === Soal::TIPE_PG || $soal->tipe_soal === Soal::TIPE_PG_KOMPLEKS) {
             foreach ($data['opsi_jawaban'] as $opsi) {
                 $soal->opsiJawaban()->create([
-                    'teks_opsi' => $opsi['teks_opsi'],
+                    'teks_opsi' => $this->konten->bersihkan($opsi['teks_opsi']),
                     'is_benar' => (bool) ($opsi['is_benar'] ?? false),
                     'urutan' => $opsi['urutan'] ?? null,
                     'a_diskriminasi' => $opsi['a_diskriminasi'] ?? null,
@@ -374,7 +375,7 @@ class GeneratePaketController extends Controller
 
         foreach ($data['pernyataan_kategori'] as $pernyataan) {
             $soal->pernyataanKategori()->create([
-                'teks_pernyataan' => $pernyataan['teks_pernyataan'],
+                'teks_pernyataan' => $this->konten->bersihkan($pernyataan['teks_pernyataan']),
                 'kategori_benar' => $pernyataan['kategori_benar'],
                 'urutan' => $pernyataan['urutan'] ?? null,
                 'a_diskriminasi' => $pernyataan['a_diskriminasi'] ?? null,

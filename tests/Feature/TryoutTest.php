@@ -633,3 +633,41 @@ it('menampilkan pembahasan per soal di halaman hasil tryout (3.7)', function () 
         ->assertSee($soal->pembahasan)
         ->assertSee($soal->pertanyaan);
 });
+
+it('me-render konten HTML soal secara mentah sekaligus membuang skripnya (6.13)', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $soal = soalMapelAktif($percobaan)['soal']->first();
+
+    $soal->update([
+        'pertanyaan' => '<p>Soal <strong>penting</strong></p><script>alert(1)</script>',
+        'pembahasan' => '<p onclick="evil()">Lihat pembahasan</p>',
+    ]);
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertOk()
+        ->assertSee('<strong>penting</strong>', false)
+        ->assertDontSee('<script>alert(1)</script>', false)
+        ->assertDontSee('alert(1)');
+});
+
+it('me-escape teks biasa saat ditampilkan agar karakter kurang dari tidak jadi tag', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+    $soal = soalMapelAktif($percobaan)['soal']->first();
+
+    $soal->update(['pertanyaan' => 'Karena i < n, jawabannya 3']);
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertOk()
+        ->assertSee('Karena i &lt; n, jawabannya 3', false)
+        ->assertDontSee('Karena i < n, jawabannya 3', false);
+});

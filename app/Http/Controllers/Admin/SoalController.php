@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Konten\KontenSanitizer;
 use App\Http\Controllers\Controller;
 use App\Models\DetailPaketSoal;
 use App\Models\KompetensiDasar;
@@ -20,6 +21,8 @@ use Illuminate\View\View;
 
 class SoalController extends Controller
 {
+    public function __construct(private readonly KontenSanitizer $konten) {}
+
     public function index(Request $request, Mapel $mapel): View
     {
         $soals = Soal::with(['kompetensiDasar.mapel', 'opsiJawaban', 'pernyataanKategori'])
@@ -159,6 +162,12 @@ class SoalController extends Controller
      */
     private function soalAttributes(array $data): array
     {
+        foreach (['pertanyaan', 'pembahasan'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $data[$key] = $this->konten->bersihkan($data[$key]);
+            }
+        }
+
         foreach (['a_diskriminasi', 'b_kesulitan', 'c_tebakan'] as $key) {
             if (is_null($data[$key] ?? null)) {
                 unset($data[$key]);
@@ -180,7 +189,7 @@ class SoalController extends Controller
         if ($soal->tipe_soal === Soal::TIPE_PG || $soal->tipe_soal === Soal::TIPE_PG_KOMPLEKS) {
             foreach ($children['opsi_jawaban'] as $opsi) {
                 $soal->opsiJawaban()->create([
-                    'teks_opsi' => $opsi['teks_opsi'],
+                    'teks_opsi' => $this->konten->bersihkan($opsi['teks_opsi']),
                     'is_benar' => (bool) $opsi['is_benar'],
                     'urutan' => $opsi['urutan'] ?? null,
                 ]);
@@ -191,7 +200,7 @@ class SoalController extends Controller
 
         foreach ($children['pernyataan_kategori'] as $pernyataan) {
             $soal->pernyataanKategori()->create([
-                'teks_pernyataan' => $pernyataan['teks_pernyataan'],
+                'teks_pernyataan' => $this->konten->bersihkan($pernyataan['teks_pernyataan']),
                 'kategori_benar' => $pernyataan['kategori_benar'],
                 'urutan' => $pernyataan['urutan'] ?? null,
             ]);

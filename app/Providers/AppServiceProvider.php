@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Ai\AiProvider;
 use App\Domain\Ai\AiProviderFactory;
+use App\Domain\Konten\KontenSanitizer;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -16,6 +17,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AiProvider::class, static function (): AiProvider {
             return AiProviderFactory::make();
         });
+
+        $this->app->singleton(KontenSanitizer::class);
     }
 
     /**

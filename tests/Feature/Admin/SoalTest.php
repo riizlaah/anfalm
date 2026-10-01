@@ -596,3 +596,88 @@ it('bulk delete soal tanpa pilihan menampilkan error', function () {
         ->assertRedirect(route('admin.mapel.soal.index', $mapel))
         ->assertSessionHas('error');
 });
+
+it('menyaring konten WYSIWYG berbahaya sebelum disimpan (6.12)', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->actingAs($admin)->post(route('admin.mapel.soal.store', $mapel), payloadSoal([
+        'kompetensi_dasar_id' => $kd->id,
+        'pertanyaan' => '<p>Soal <strong>aman</strong></p><script>alert(1)</script>',
+        'pembahasan' => '<p onclick="evil()">pembahasan</p>',
+        'opsi_jawaban' => [
+            ['teks_opsi' => '<script>x</script>Opsi A', 'is_benar' => false, 'urutan' => 1],
+            ['teks_opsi' => '<a href="javascript:alert(1)">Opsi B</a>', 'is_benar' => false, 'urutan' => 2],
+            ['teks_opsi' => 'Opsi C', 'is_benar' => true, 'urutan' => 3],
+            ['teks_opsi' => 'Opsi D', 'is_benar' => false, 'urutan' => 4],
+            ['teks_opsi' => 'Opsi E', 'is_benar' => false, 'urutan' => 5],
+        ],
+    ]))->assertRedirect(route('admin.mapel.soal.index', $mapel));
+
+    $soal = Soal::query()->where('kompetensi_dasar_id', $kd->id)->firstOrFail();
+
+    expect($soal->pertanyaan)->toBe('<p>Soal <strong>aman</strong></p>')
+        ->and($soal->pembahasan)->toBe('<p>pembahasan</p>')
+        ->and($soal->opsiJawaban()->orderBy('urutan')->pluck('teks_opsi')->all())->toBe([
+            'Opsi A',
+            '<a>Opsi B</a>',
+            'Opsi C',
+            'Opsi D',
+            'Opsi E',
+        ]);
+});
+
+it('menyaring konten yang dikirim saat memperbarui soal', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+    $soal = Soal::factory()->create(['kompetensi_dasar_id' => $kd->id, 'pertanyaan' => 'Soal lama']);
+
+    $this->actingAs($admin)->put(route('admin.mapel.soal.update', [$mapel, $soal]), payloadSoal([
+        'kompetensi_dasar_id' => $kd->id,
+        'pertanyaan' => '<p>Baru</p><img src="x" onerror="alert(1)">',
+    ]))->assertRedirect(route('admin.mapel.soal.index', $mapel));
+
+    expect($soal->refresh()->pertanyaan)->toBe('<p>Baru</p><img src="x" />');
+});
+
+it('menyaring pernyataan PG Kategori sebelum disimpan', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->actingAs($admin)->post(route('admin.mapel.soal.store', $mapel), payloadSoal([
+        'kompetensi_dasar_id' => $kd->id,
+        'tipe_soal' => Soal::TIPE_PG_KATEGORI,
+        'opsi_jawaban' => null,
+        'daftar_kategori' => ['Benar', 'Salah'],
+        'pernyataan_kategori' => array_map(fn (int $i): array => [
+            'teks_pernyataan' => ($i === 0 ? '<script>x</script>' : '').'pernyataan '.($i + 1),
+            'kategori_benar' => 'Benar',
+            'urutan' => $i + 1,
+        ], range(0, 2)),
+    ]))->assertRedirect(route('admin.mapel.soal.index', $mapel));
+
+    $soal = Soal::query()->where('kompetensi_dasar_id', $kd->id)->firstOrFail();
+
+    expect($soal->pernyataanKategori()->orderBy('urutan')->pluck('teks_pernyataan')->all())->toBe([
+        'pernyataan 1',
+        'pernyataan 2',
+        'pernyataan 3',
+    ]);
+});
+
+it('teks biasa tidak di-encode saat disimpan agar soal matematika tetap terbaca', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->actingAs($admin)->post(route('admin.mapel.soal.store', $mapel), payloadSoal([
+        'kompetensi_dasar_id' => $kd->id,
+        'pertanyaan' => "Jika i < n, hitung 2 + 2 = ?\nKemudian i = i + 1",
+    ]))->assertRedirect(route('admin.mapel.soal.index', $mapel));
+
+    expect(Soal::query()->where('kompetensi_dasar_id', $kd->id)->firstOrFail()->pertanyaan)
+        ->toBe("Jika i < n, hitung 2 + 2 = ?\nKemudian i = i + 1");
+});
