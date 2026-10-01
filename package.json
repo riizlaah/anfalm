@@ -15,5 +15,14 @@
     },
     "optionalDependencies": {
         "@laravel/multiplex": "^0.4.1"
+    },
+    "dependencies": {
+        "@tiptap/core": "^3.31.4",
+        "@tiptap/extension-image": "^3.31.4",
+        "@tiptap/extension-underline": "^3.31.4",
+        "@tiptap/starter-kit": "^3.31.4",
+        "chart.js": "^4.5.1",
+        "dompurify": "^3.4.16",
+        "katex": "^0.18.10"
     }
 }
