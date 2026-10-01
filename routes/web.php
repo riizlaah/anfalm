@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\MapelController;
 use App\Http\Controllers\Admin\PaketSoalController;
 use App\Http\Controllers\Admin\PaketTryoutController;
 use App\Http\Controllers\Admin\SoalController;
+use App\Http\Controllers\AnalisisController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\DashboardController;
@@ -43,6 +44,8 @@ Route::middleware(['auth', 'single.session'])->group(function () {
     Route::get('latihan/{percobaan}/kerja', [LatihanController::class, 'kerja'])->name('latihan.kerja');
     Route::post('latihan/{percobaan}/jawab', [LatihanController::class, 'jawab'])->name('latihan.jawab');
     Route::get('latihan/{percobaan}/hasil', [LatihanController::class, 'hasil'])->name('latihan.hasil');
+
+    Route::get('analisis-kompetensi', [AnalisisController::class, 'index'])->name('analisis.index');
 });
 
 Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {

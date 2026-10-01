@@ -5,6 +5,7 @@
         ['label' => 'Dashboard', 'route' => 'dashboard'],
         ['label' => 'Tryout', 'route' => 'tryout.index'],
         ['label' => 'Latihan', 'route' => 'latihan.index'],
+        ['label' => 'Analisis', 'route' => 'analisis.index'],
     ];
 
     if (auth()->check() && auth()->user()->isAdmin()) {

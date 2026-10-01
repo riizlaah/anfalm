@@ -49,3 +49,27 @@ it('menyediakan label Bahasa Indonesia per level', function () {
 it('label untuk level tak dikenal mengembalikan input apa adanya', function () {
     expect($this->level->label('bukan_level'))->toBe('bukan_level');
 });
+
+it('memberi rekomendasi latihan sesuai theta pada tiap level (3.9)', function () {
+    expect($this->level->rekomendasiFor(2.0))
+        ->toBe('Pertahankan, KD ini sudah Mahir. Tantang dirimu dengan soal lebih sulit.')
+        ->and($this->level->rekomendasiFor(1.0))
+        ->toBe('Lanjutkan latihan KD ini agar naik ke Mahir.')
+        ->and($this->level->rekomendasiFor(0.0))
+        ->toBe('Terus latihan KD ini agar naik ke Menengah.')
+        ->and($this->level->rekomendasiFor(-1.0))
+        ->toBe('Fokus latihan KD ini karena masih Perlu Bimbingan.')
+        ->and($this->level->rekomendasiFor(-3.0))
+        ->toBe('Belum ada data untuk KD ini. Kerjakan latihan agar kompetensimu teridentifikasi.');
+});
+
+it('theta null direkomendasikan seperti belum teridentifikasi', function () {
+    expect($this->level->rekomendasiFor(null))
+        ->toBe($this->level->rekomendasi(KompetensiLevel::BELUM_TERIDENTIFIKASI))
+        ->and($this->level->rekomendasiFor(null))
+        ->toBe('Belum ada data untuk KD ini. Kerjakan latihan agar kompetensimu teridentifikasi.');
+});
+
+it('rekomendasi untuk level tak dikenal mengembalikan input apa adanya', function () {
+    expect($this->level->rekomendasi('bukan_level'))->toBe('bukan_level');
+});
