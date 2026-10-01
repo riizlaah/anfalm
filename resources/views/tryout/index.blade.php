@@ -34,18 +34,18 @@
                         </p>
                     </div>
 
-                    <div class="shrink-0">
+                    <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        <a href="{{ route('tryout.leaderboard', $paketTryout) }}" class="btn btn-ghost">Leaderboard</a>
+
                         @if ($adaHasil)
                             <a href="{{ route('tryout.hasil', $paketTryout) }}" class="btn btn-ghost">Lihat Hasil</a>
                         @elseif ($masihBerjalan)
-                            <div class="flex flex-wrap justify-end gap-2">
-                                <form method="POST" action="{{ route('tryout.ulang', $paketTryout) }}">
-                                    @csrf
-                                    <button type="submit" class="btn btn-ghost">Mulai Ulang</button>
-                                </form>
+                            <form method="POST" action="{{ route('tryout.ulang', $paketTryout) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-ghost">Mulai Ulang</button>
+                            </form>
 
-                                <a href="{{ route('tryout.kerja', $paketTryout) }}" class="btn btn-primary">Lanjutkan Tryout</a>
-                            </div>
+                            <a href="{{ route('tryout.kerja', $paketTryout) }}" class="btn btn-primary">Lanjutkan Tryout</a>
                         @else
                             <form method="POST" action="{{ route('tryout.mulai', $paketTryout) }}">
                                 @csrf

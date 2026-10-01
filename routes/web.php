@@ -36,6 +36,7 @@ Route::middleware(['auth', 'single.session'])->group(function () {
     Route::get('tryout/{paketTryout}/kerja', [TryoutController::class, 'kerja'])->name('tryout.kerja');
     Route::post('tryout/{paketTryout}/jawab', [TryoutController::class, 'jawab'])->name('tryout.jawab');
     Route::get('tryout/{paketTryout}/hasil', [TryoutController::class, 'hasil'])->name('tryout.hasil');
+    Route::get('tryout/{paketTryout}/leaderboard', [TryoutController::class, 'leaderboard'])->name('tryout.leaderboard');
 
     Route::get('latihan', [LatihanController::class, 'index'])->name('latihan.index');
     Route::post('latihan/mulai', [LatihanController::class, 'mulai'])->name('latihan.mulai');

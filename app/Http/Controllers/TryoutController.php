@@ -198,6 +198,35 @@ class TryoutController extends Controller
     }
 
     /**
+     * Peringkat peserta dalam satu paket tryout (3.10).
+     *
+     * Hanya peserta yang sudah menghasilkan nilai yang tampil — yang sedang
+     * mengerjakan tidak muncul (6.9). Seri skor dipecah oleh durasi lalu
+     * waktu selesai (7.7), dan skor yang dipakai `skor_konversi` karena itulah
+     * angka pada skala pelaporan yang dilihat peserta.
+     */
+    public function leaderboard(Request $request, PaketTryout $paketTryout): View
+    {
+        $peringkat = HasilTryout::query()
+            ->where('paket_tryout_id', $paketTryout->getKey())
+            ->with('user:id,nama_lengkap')
+            ->orderByDesc('skor_konversi')
+            ->orderBy('durasi_total')
+            ->orderBy('selesai_pada')
+            ->get();
+
+        $posisi = $peringkat->search(
+            fn (HasilTryout $hasil): bool => $hasil->user_id === $request->user()->getKey()
+        );
+
+        return view('tryout.leaderboard', [
+            'paketTryout' => $paketTryout,
+            'peringkat' => $peringkat,
+            'peringkatKe' => $posisi === false ? null : $posisi + 1,
+        ]);
+    }
+
+    /**
      * Peserta sudah tidak punya percobaan berjalan di paket ini: tampilkan
      * hasil bila sudah dinilai, kalau tidak kembali ke daftar tryout.
      */

@@ -529,3 +529,86 @@ it('menutup percobaan ketika peserta memilih selesai di tengah mapel', function 
         ->and($percobaan->urutan_mapel)->toBe(0)
         ->and(RiwayatPengerjaan::count())->toBe($aktif['soal']->count());
 });
+
+/**
+ * Peserta beserta hasil tryoutnya, sebagai satu baris kandidat leaderboard.
+ */
+function barisLeaderboard(PaketTryout $paket, string $nama, int $skor, int $durasi, int $menitLalu): User
+{
+    $peserta = User::factory()->peserta()->create(['nama_lengkap' => $nama]);
+
+    HasilTryout::factory()->create([
+        'user_id' => $peserta->getKey(),
+        'paket_tryout_id' => $paket->getKey(),
+        'skor_konversi' => $skor,
+        'durasi_total' => $durasi,
+        'selesai_pada' => now()->subMinutes($menitLalu),
+    ]);
+
+    return $peserta;
+}
+
+it('menampilkan leaderboard peserta yang sudah selesai saja diurutkan dari skor tertinggi', function () {
+    $paket = PaketTryout::firstOrFail();
+
+    barisLeaderboard($paket, 'Budi Rendah', 500, 2000, 1);
+    $penonton = barisLeaderboard($paket, 'Siti Juara', 600, 3000, 2);
+
+    // Peserta yang masih mengerjakan tidak boleh muncul (6.9).
+    $sedang = User::factory()->peserta()->create(['nama_lengkap' => 'Andi Sedang']);
+    $this->actingAs($sedang)->post(route('tryout.mulai', $paket));
+
+    $this->actingAs($penonton)
+        ->get(route('tryout.leaderboard', $paket))
+        ->assertOk()
+        ->assertSeeInOrder(['Siti Juara', 'Budi Rendah'])
+        ->assertDontSee('Andi Sedang');
+});
+
+it('menempatkan durasi lebih cepat di atas di leaderboard saat skor sama', function () {
+    $paket = PaketTryout::firstOrFail();
+
+    barisLeaderboard($paket, 'Rina Lambat', 550, 1800, 1);
+    $penonton = barisLeaderboard($paket, 'Rina Cepat', 550, 900, 3);
+
+    $this->actingAs($penonton)
+        ->get(route('tryout.leaderboard', $paket))
+        ->assertOk()
+        ->assertSeeInOrder(['Rina Cepat', 'Rina Lambat']);
+});
+
+it('menempatkan yang selesai lebih dulu di atas di leaderboard saat skor dan durasi sama', function () {
+    $paket = PaketTryout::firstOrFail();
+
+    barisLeaderboard($paket, 'Tono Akhir', 550, 1200, 1);
+    $penonton = barisLeaderboard($paket, 'Tono Awal', 550, 1200, 30);
+
+    $this->actingAs($penonton)
+        ->get(route('tryout.leaderboard', $paket))
+        ->assertOk()
+        ->assertSeeInOrder(['Tono Awal', 'Tono Akhir']);
+});
+
+it('menandai posisi peserta sendiri di leaderboard', function () {
+    $paket = PaketTryout::firstOrFail();
+
+    barisLeaderboard($paket, 'Eka Pertama', 650, 1000, 5);
+    $penonton = barisLeaderboard($paket, 'Dewi Sendiri', 550, 2000, 4);
+    barisLeaderboard($paket, 'Fajar Ketiga', 450, 3000, 3);
+
+    $this->actingAs($penonton)
+        ->get(route('tryout.leaderboard', $paket))
+        ->assertOk()
+        ->assertSee('Peringkat Anda: 2')
+        ->assertSee('data-posisi-sendiri', false);
+});
+
+it('menampilkan leaderboard kosong tanpa peserta yang sudah selesai', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.leaderboard', $paket))
+        ->assertOk()
+        ->assertSee('Belum ada peserta yang menyelesaikan tryout ini');
+});
