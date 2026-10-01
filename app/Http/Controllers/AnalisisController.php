@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Scoring\KompetensiLevel;
+use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\TrackingKompetensi;
@@ -16,8 +17,8 @@ use Illuminate\View\View;
  * Halaman "Analisis Kompetensi" peserta (3.9).
  *
  * Memetakan `tracking_kompetensi` per KD dan `tracking_mapel` per mapel menjadi
- * level, persentase, theta, dan rekomendasi latihan. Grafik radar, batang, dan
- * garisnya ditunda ke Fase 8.
+ * level, persentase, theta, dan rekomendasi latihan. Payload ketiga grafik
+ * (radar, batang, garis) ikut dikirim dan dirender Chart.js di sisi klien.
  */
 class AnalisisController extends Controller
 {
@@ -52,6 +53,7 @@ class AnalisisController extends Controller
             'mapel' => $mapel,
             'baris' => $baris,
             'ringkasan' => $ringkasan,
+            'grafik' => $this->grafik($peserta, $mapels, $baris),
             'labelRingkasan' => $ringkasan === null
                 ? null
                 : $this->kompetensi->label($ringkasan->level_kompetensi ?? ''),
@@ -91,5 +93,67 @@ class AnalisisController extends Controller
                 'rekomendasi' => $this->kompetensi->rekomendasiFor($theta),
             ];
         });
+    }
+
+    /**
+     * Payload ketiga grafik halaman analisis (3.9 butir 3–4).
+     *
+     * - `radar`: theta per mapel milik peserta.
+     * - `level`: perbandingan level tiap KD pada mapel terpilih, dipetakan ke
+     *   skala ordinal 0–4 agar bisa dibandingkan secara visual.
+     * - `riwayat`: theta akhir tiap tryout yang sudah selesai, terurut waktu.
+     *
+     * @param  Collection<int, array{kd: KompetensiDasar, theta: float|null, label: string}>  $baris
+     * @return array<string, array<string, array<int, mixed>>>
+     */
+    private function grafik(User $peserta, Collection $mapels, Collection $baris): array
+    {
+        $terlacak = TrackingMapel::query()
+            ->where('user_id', $peserta->getKey())
+            ->get()
+            ->keyBy('mapel_id');
+
+        return [
+            'radar' => [
+                'labels' => $mapels->pluck('nama')->values()->all(),
+                'theta' => $mapels
+                    ->map(fn (Mapel $m): ?float => $terlacak->get($m->getKey())?->theta_estimasi)
+                    ->values()
+                    ->all(),
+            ],
+            'level' => [
+                'labels' => $baris->pluck('kd.kode_kompetensi')->values()->all(),
+                'nilai' => $baris
+                    ->map(fn (array $b): int => $this->kompetensi->urut(
+                        $this->kompetensi->levelFor($b['theta']),
+                    ))
+                    ->values()
+                    ->all(),
+                'level' => $baris->pluck('label')->values()->all(),
+            ],
+            'riwayat' => $this->riwayatTryout($peserta),
+        ];
+    }
+
+    /**
+     * Riwayat theta akhir per tryout yang sudah selesai, diurutkan dari yang
+     * paling lama agar grafik garisnya terbaca sebagai perkembangan waktu.
+     *
+     * @return array{labels: array<int, string>, theta: array<int, float>}
+     */
+    private function riwayatTryout(User $peserta): array
+    {
+        $riwayat = HasilTryout::query()
+            ->where('user_id', $peserta->getKey())
+            ->orderBy('selesai_pada')
+            ->get(['theta_final', 'selesai_pada']);
+
+        return [
+            'labels' => $riwayat
+                ->map(fn (HasilTryout $hasil): string => $hasil->selesai_pada->format('d/m/Y'))
+                ->values()
+                ->all(),
+            'theta' => $riwayat->pluck('theta_final')->values()->all(),
+        ];
     }
 }

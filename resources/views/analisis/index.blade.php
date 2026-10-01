@@ -122,4 +122,57 @@
             </div>
         </section>
     @endif
+
+    @php
+        $adaRiwayat = $grafik['riwayat']['labels'] !== [];
+    @endphp
+
+    <section class="card mt-5 p-6">
+        <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            Grafik perkembangan
+        </h2>
+
+        <div class="mt-4 grid gap-6 lg:grid-cols-2">
+            <figure>
+                <figcaption class="label">Theta per mapel</figcaption>
+                <div class="mt-2 h-64">
+                    <canvas data-grafik="radar"
+                        aria-label="Grafik radar perbandingan theta antar mapel"
+                        role="img"></canvas>
+                </div>
+            </figure>
+
+            @if ($mapel !== null)
+                <figure>
+                    <figcaption class="label">
+                        Level per kompetensi dasar — {{ $mapel->nama }}
+                    </figcaption>
+                    <div class="mt-2 h-64">
+                        <canvas data-grafik="level"
+                            aria-label="Grafik batang perbandingan level tiap kompetensi dasar"
+                            role="img"></canvas>
+                    </div>
+                </figure>
+            @endif
+
+            <figure @class(['lg:col-span-2' => $mapel === null || ! $adaRiwayat])>
+                <figcaption class="label">Perkembangan theta tryout</figcaption>
+
+                @if ($adaRiwayat)
+                    <div class="mt-2 h-64">
+                        <canvas data-grafik="riwayat"
+                            aria-label="Grafik garis perkembangan theta dari waktu ke waktu"
+                            role="img"></canvas>
+                    </div>
+                @else
+                    <p class="mt-2 text-sm text-slate-400">
+                        Belum ada tryout yang selesai. Grafik ini muncul setelah
+                        Anda menyelesaikan tryout pertama.
+                    </p>
+                @endif
+            </figure>
+        </div>
+    </section>
+
+    <script type="application/json" id="grafik-analisis">@json($grafik)</script>
 </x-layouts.app>

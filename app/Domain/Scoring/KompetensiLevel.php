@@ -23,6 +23,20 @@ class KompetensiLevel
     ];
 
     /**
+     * Nilai ordinal tiap level, dipakai sebagai sumbu-y grafik batang halaman
+     * Analisis Kompetensi (3.9 butir 3) agar lima kategori bisa dibandingkan.
+     *
+     * @var array<string, int>
+     */
+    private const URUTAN = [
+        self::BELUM_TERIDENTIFIKASI => 0,
+        self::PERLU_BIMBINGAN => 1,
+        self::DASAR => 2,
+        self::MENENGAH => 3,
+        self::MAHIR => 4,
+    ];
+
+    /**
      * Kalimat ajakan latihan per level, dipakai halaman Analisis Kompetensi (3.9).
      *
      * @var array<string, string>
@@ -66,6 +80,15 @@ class KompetensiLevel
     public function label(string $level): string
     {
         return self::LABELS[$level] ?? $level;
+    }
+
+    /**
+     * Posisi level pada skala 0–4. Level yang tak dikenal dianggap belum
+     * teridentifikasi.
+     */
+    public function urut(string $level): int
+    {
+        return self::URUTAN[$level] ?? self::URUTAN[self::BELUM_TERIDENTIFIKASI];
     }
 
     public function rekomendasi(string $level): string

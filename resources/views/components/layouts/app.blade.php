@@ -1,6 +1,15 @@
-@props(['title' => 'Dashboard'])
+@props([
+    'title' => 'Dashboard',
+    /**
+     * Proteksi konten 7.10; default aktif untuk peserta dan tidak pernah untuk
+     * admin supaya WYSIWYG-nya tetap bisa menyalin dan menyeleksi teks.
+     */
+    'proteksi' => null,
+])
 
 @php
+    $lindungiKonten = $proteksi ?? (auth()->user()?->isPeserta() ?? false);
+
     $nav = [
         ['label' => 'Dashboard', 'route' => 'dashboard'],
         ['label' => 'Tryout', 'route' => 'tryout.index'],
@@ -27,7 +36,7 @@
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="flex min-h-full flex-col">
+<body @class(['flex min-h-full flex-col', 'terlindungi' => $lindungiKonten])>
     <header class="bg-ink text-white">
         <div class="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4">
             <a href="{{ route('dashboard') }}" class="shrink-0 text-lg font-extrabold tracking-tight">

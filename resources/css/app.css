@@ -87,4 +87,56 @@
     .rail-soal[data-aktif='1'] {
         @apply ring-2 ring-ink ring-offset-1;
     }
+
+    /* Editor konten kaya (Fase 8, DESIGN §4.2). */
+    .wysiwyg-toolbar {
+        @apply flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 border-slate-300 bg-slate-50 px-1.5 py-1;
+    }
+    .wysiwyg-toolbar button {
+        @apply inline-flex h-7 min-w-7 items-center justify-center rounded px-1.5 text-sm text-slate-600 transition hover:bg-slate-200 focus:ring-2 focus:ring-ink/25 focus:outline-none;
+    }
+    .wysiwyg-toolbar button.is-aktif {
+        @apply bg-ink text-white;
+    }
+    .wysiwyg-pemisah {
+        @apply mx-1 h-4 w-px bg-slate-300;
+    }
+    .wysiwyg-kolom-wadah {
+        @apply min-h-28 rounded-b-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800;
+    }
+    .wysiwyg-kolom-wadah .tiptap {
+        @apply min-h-24 focus:outline-none;
+    }
+    .wysiwyg-kolom-wadah .tiptap pre {
+        @apply overflow-x-auto rounded bg-slate-900 px-3 py-2 text-sm text-slate-100;
+    }
+    .wysiwyg-kolom-wadah .tiptap blockquote {
+        @apply border-l-4 border-slate-300 pl-3 text-slate-600 italic;
+    }
+    .wysiwyg-kolom-wadah .tiptap img {
+        @apply my-2 max-h-64 rounded border border-slate-200;
+    }
+    .wysiwyg-preview {
+        @apply mt-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800;
+    }
+    /* Ekspresi KaTeX yang sintaksnya salah: teks mentah tetap tampil (§6.13). */
+    .rumus-galat {
+        @apply rounded bg-rose-50 px-1 font-mono text-rose-700;
+    }
+    .rumus-galat-pesan {
+        @apply ml-1 align-middle text-xs text-rose-600;
+    }
+
+    /* Proteksi konten peserta (Fase 8, DESIGN §7.10): teks soal tidak bisa
+       diseleksi sehingga lebih sulit disalin. */
+    .terlindungi {
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    /* Kolom isian tetap boleh diseleksi supaya mengetik jawaban tidak
+       terganggu — proteksinya hanya untuk tampilan soalnya. */
+    .terlindungi :where(input, textarea, select, [contenteditable='true']) {
+        user-select: text;
+        -webkit-user-select: text;
+    }
 }

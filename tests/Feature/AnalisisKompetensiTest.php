@@ -1,9 +1,11 @@
 <?php
 
 use App\Domain\Scoring\KompetensiLevel;
+use App\Models\HasilTryout;
 use App\Models\Mapel;
 use App\Models\Percobaan;
 use App\Models\User;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 beforeEach(function () {
@@ -36,6 +38,28 @@ function latihSemuaBenar(TestCase $t, User $peserta, Mapel $mapel): void
         route('latihan.jawab', $percobaan),
         [...payloadSemuaBenar($aktif['soal']), 'aksi' => 'selesai']
     );
+}
+
+/**
+ * Menarik payload JSON tiga grafik analisis dari hasil render halaman.
+ *
+ * @return array<string, array<string, array<int, mixed>>>
+ */
+function dataGrafik(TestResponse $halaman): array
+{
+    $ada = preg_match(
+        '/<script type="application\/json" id="grafik-analisis">(.*?)<\/script>/s',
+        $halaman->getContent(),
+        $cocok,
+    );
+
+    expect($ada)->toBe(1);
+
+    $data = json_decode($cocok[1], true);
+
+    expect(is_array($data))->toBeTrue();
+
+    return $data;
 }
 
 it('mengalihkan tamu ke halaman login', function () {
@@ -113,4 +137,64 @@ it('meringkas tracking mapel di bagian atas halaman analisis', function () {
         ->assertSee('Ringkasan peta kompetensi')
         ->assertSee('Jumlah tryout')
         ->assertSee((new KompetensiLevel)->label($baris->level_kompetensi));
+});
+
+it('menyiapkan data grafik radar theta per mapel', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
+
+    $grafik = dataGrafik($this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk());
+
+    expect($grafik['radar']['labels'])->toContain($mapel->nama)
+        ->and($grafik['radar']['theta'])->toHaveCount(count($grafik['radar']['labels']))
+        ->and(array_filter(
+            $grafik['radar']['theta'],
+            fn ($theta): bool => $theta !== null,
+        ))->not->toBeEmpty();
+});
+
+it('menyiapkan data grafik batang level per KD terpilih', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
+
+    $kd = $mapel->kompetensiDasars()->orderBy('kode_kompetensi')->first();
+
+    $grafik = dataGrafik($this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk());
+
+    // Latihan tadi 100% benar, jadi setidaknya satu KD sudah Mahir (urutan 4).
+    expect($grafik['level']['labels'])->toContain($kd->kode_kompetensi)
+        ->and($grafik['level']['nilai'])->not->toBeEmpty()
+        ->and(min($grafik['level']['nilai']))->toBeGreaterThanOrEqual(0)
+        ->and(max($grafik['level']['nilai']))->toBeLessThanOrEqual(4)
+        ->and($grafik['level']['nilai'])->toContain(4)
+        ->and($grafik['level']['level'])->toContain((new KompetensiLevel)->label(KompetensiLevel::MAHIR));
+});
+
+it('menyiapkan data grafik garis riwayat nilai tryout', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
+
+    $halaman = fn () => $this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk();
+
+    $kosong = dataGrafik($halaman());
+    expect($kosong['riwayat']['labels'])->toBeEmpty()
+        ->and($kosong['riwayat']['theta'])->toBeEmpty();
+
+    HasilTryout::factory()->for($peserta)->create(['theta_final' => 1.25]);
+
+    $terisi = dataGrafik($halaman());
+    expect($terisi['riwayat']['theta'])->toBe([1.25])
+        ->and($terisi['riwayat']['labels'])->toHaveCount(1);
 });
