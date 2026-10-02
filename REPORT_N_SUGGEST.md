@@ -17,9 +17,12 @@
   **Selesai 2026-09-28.** Tidak ada data yang hilang — `old()` bekerja benar. Form baru hanya me-render **satu** baris opsi kosong, sehingga submit pertama selalu gagal `min:5`; baris 2–5 yang ditambahkan lewat "+ Tambah Opsi" memang kosong, sedangkan baris 1 memakai kembali nilai `old()` yang ada. Efeknya persis seperti yang dilaporkan: "opsi 1 ingat, opsi 2 ke akhir kosong", dan submit kedua berhasil setelah diisi ulang.
   Perbaikan: form soal manual dan form kurasi kini me-render baris sampai jumlah minimum sekaligus (lihat saran pertama), jadi submit pertama tidak pernah gagal karena form masih kosong.
   Diperbaiki juga bug laten yang ditemukan sambil menelusuri: `addRow()` memakai jumlah baris sebagai indeks tanpa pernah menata ulang indeks setelah baris dihapus, sehingga `opsi_jawaban[N]` bisa terduplikasi dan sebagian isian hilang diam-diam. Ditambah `reindexRows()` yang menata ulang indeks field, `urutan`, dan nilai radio setiap kali baris ditambah atau dihapus.
-- (?) Kompetensi Dasar tidak terpilih saat generate soal dari AI (kemungkinan besar dari AI, tidak sering terjadi)
+- (?) Kompetensi Dasar kadang tidak terpilih saat generate soal dari AI (kemungkinan besar dari AI, tidak sering terjadi)
 - (?) Distribusi KD pada soal-soal kurang merata (hanya sekitar 40% dari total KD dipilih)
-- (PENTING) Rate limit? Baru generate 1 paket soal dan setengah paket lagi sudah habis
+- (PENTING) Rate limit saat generate ~45 soal dalam sehari, padahal perlu ~150 soal dalam satu hari per minggu
+- Menu Latihan & Analisis muncul di dashboard admin
+- PG Kategori tidak sesuai ekspektasi, seharusnya seperti di gambar @contoh-pg-kategori.png
+- Chart rusak di mobile (overflow dari div yang membungkusnya)
 
 ## Suggestion
 - ~~Populate opsi jawaban sesuai jumlah minimalnya (misalnya pilihan ganda (5), maka akan generate 5 opsi jawaban yang masih kosong)~~
@@ -28,8 +31,21 @@
   **Selesai 2026-09-28.** `datalist` kini hanya berisi kode KD. Input teks menerima kode saja, dan deskripsi KD lengkap (bukan `Str::limit(..., 60)` seperti sebelumnya) tampil di bawahnya dalam teks kecil, beserta materi pokok bila ada. Pemetaan kode → id dikirim sebagai blok `<script type="application/json">` karena `dataset` pada `<option>` di dalam `datalist` tidak didukung seragam antarbrowser. Sekarang kode KD juga unik per mapel, jadi datalist kode saja sudah cukup aman.
 - ~~Pindahkan manajemen soal sama seperti kasus KD, terikat (dikelompokkan) sesuai mapel daripada berdiri sendiri~~
   **Selesai 2026-09-28.** Rute `admin/soal/*` diganti `admin/mapel/{mapel}/soal/*` dengan `->scoped()`, sehingga soal dari mapel lain otomatis 404 dan `kompetensi_dasar_id` divalidasi hanya boleh milik mapel tersebut. Halaman soal (index/tambah/edit) pindah ke `admin/mapel/soal/` dengan link kembali dan subjudul mapel, dan tiap baris di daftar mapel mendapat tombol "Kelola Soal (N)" dari `Mapel::soals()` (`HasManyThrough` lewat KD). Item navigasi "Soal" dan kartu "Soal" di dashboard dihapus supaya tidak ada dua pintu masuk. Rute lama dihapus tanpa redirect.
+- ~~Gunakan icon (pakai Lucide Icons) di bagian yang diperlukan, khususnya navbar mobile~~
+  **Selesai 2026-10-02.** Dipakai SVG inline, bukan pakai Lucide: ketujuh ikon ini adalah seluruh kebutuhan ikon aplikasi, jadi menambah dependensi hanya untuk itu tidak sebanding dengan bobotnya. Komponen baru `<x-icon>` menyimpan ketujuh jalurnya pada viewBox 24×24 dengan `stroke="currentColor"`, sehingga ikon otomatis ikut berwarna emas di tab aktif tanpa aturan warna tambahan.
+  Ikon dipasang di **tab bar bawah saja**, menumpuk di atas label (empat tab selebar 90px tidak cukup untuk keduanya berjalan mendatar). Menu desktop tetap teks apa adanya, dan `aria-hidden="true"` dipasang karena label menu sudah menjadi nama aksesibel tautan.
+  Tambahan yang muncul saat pengujian: `overflow-x-auto` pada tab admin menampilkan bilah gulir 15px, sehingga bar naik dari 61px menjadi 76px dan melewati ruang 72px yang dipesan `<main>`. Bilah gulirnya disembunyikan lewat `.tabbar-scroll`; petunjuk gulirnya sendiri tetap terbaca dari tab ketujuh yang terpotong di tepi layar.
+  Ditutup tes: setiap tautan di tab bar wajib memuat ikon sah (`viewBox="0 0 24 24"`, `aria-hidden="true"`, dan setidaknya satu elemen goresan) — 4 untuk peserta, 7 untuk admin — sementara navigasi desktop dipastikan tetap tanpa `<svg>` sama sekali.
+- Pindahkan navigasi soal ke bagian bawah
+- Stop info dump ke pengguna, khususnya siswa, tampilkan hanya yang perlu diketahui. Misalnya di KD, mereka tak perlu tahu kode KDnya, cukup tahu deskripsi KD. Lakukan untuk semua kasus sejenis
+- Tambahkan grafik aktivitas belajar (streak kalender mirip github contribution graph) atau komponen/grafik/data lain yang membantu
+- Tambahkan tombol aksi 'Belajar' di KD, tampilkan yang paling penting dengan cara yang eye-catching
+- Kurangi penggunaan tabel di UI mobile (kecuali untuk PG Kategori), ganti dengan card atau komponen sejenis
+- UI cukup 'gelap' untuk aplikasi yang seharusnya memicu semangat belajar, mungkin perlu redesign?
+- Saat siswa mendaftar, arahkan ke sebuah halaman untuk menentukan mapel pilihan yang akan diambil. Nantinya, mapel yang terpilih inilah yang akan ditrack, tidak semuanya. Namun, bisa juga diganti di pengaturan (edit profil)
 
 ## Catatan Tambahan
 - Minimal pernyataan `pg_kategori` dinaikkan dari 2 menjadi 3 (menurut laporan harusnya 3; aturan server sebenarnya masih `min:2`). Berlaku di `SoalController`, `validateKurasi()` di `GeneratePaketController`, `SoalSkemaValidator`, dan `PromptBuilder`. Migration `lengkapi_pernyataan_pg_kategori` menambahkan baris placeholder untuk soal lama yang masih kurang, dan dapat dibalik. Pada database dev **tidak ada** soal yang perlu diperbaiki manual (soal `pg_kategori` yang ada sudah punya 3 dan 4 pernyataan).
 - `AiFake` ikut ditambah satu pernyataan supaya fixture `pg_kategori`-nya tidak lagi dibuang validator.
-- Belum diperbaiki (di luar lingkup): di `GeneratePaketController::validateKurasi()` aturan `'required_with:{$prefix}.pernyataan_kategori'` ditulis dengan tanda kutip tunggal, sehingga `{$prefix}` tidak diinterpolasi dan aturan tersebut tidak pernah aktif. Efeknya selama ini tidak terasa karena form kurasi memaksa `required` langsung di input, tetapi tetap sebaiknya dibetulkan.
+- ~~Belum diperbaiki (di luar lingkup): di `GeneratePaketController::validateKurasi()` aturan `'required_with:{$prefix}.pernyataan_kategori'` ditulis dengan tanda kutip tunggal, sehingga `{$prefix}` tidak diinterpolasi dan aturan tersebut tidak pernah aktif. Efeknya selama ini tidak terasa karena form kurasi memaksa `required` langsung di input, tetapi tetap sebaiknya dibetulkan.~~
+  **Selesai 2026-10-02 di `00a30a9` (Fase 9); diverifikasi ulang 2026-10-02.** Keempat aturan `required_with` di `validateKurasi()` kini memakai tanda kutip ganda sehingga `{$prefix}` ikut diinterpolasi, dan pencarian `'required_with:{$` di seluruh `app/` tidak menemukan apa pun lagi.

@@ -32,6 +32,34 @@ function menuPeserta(): array
     return ['dashboard', 'tryout.index', 'latihan.index', 'analisis.index'];
 }
 
+/**
+ * Seluruh tautan yang ada di dalam potongan HTML, dipakai untuk memastikan
+ * setiap menu — bukan sekadar tab bar secara keseluruhan — membawa ikonnya.
+ *
+ * @return array<int, string>
+ */
+function potonganTautan(string $html): array
+{
+    preg_match_all('/<a\s[^>]*>.*?<\/a>/s', $html, $cocok);
+
+    return $cocok[0];
+}
+
+/**
+ * Ikon dianggap sah bila memuat viewBox, penanda aksesibilitas, dan setidaknya
+ * satu elemen goresan — menangkap ikon yang sengaja dikosongkan atau lupa
+ * diberi `aria-hidden`.
+ */
+function punyaIkonSah(string $tautan): bool
+{
+    $adaGoresan = str_contains($tautan, '<path') || str_contains($tautan, '<rect');
+
+    return str_contains($tautan, '<svg')
+        && str_contains($tautan, 'viewBox="0 0 24 24"')
+        && str_contains($tautan, 'aria-hidden="true"')
+        && $adaGoresan;
+}
+
 it('tab bar bawah memuat seluruh menu peserta di setiap halaman peserta', function () {
     $peserta = User::factory()->peserta()->create();
 
@@ -89,4 +117,47 @@ it('tab bar admin memuat menu administrasi', function () {
         ->toContain(route('admin.mapel.index'))
         ->toContain(route('admin.paket-soal.index'))
         ->toContain(route('admin.paket-tryout.index'));
+});
+
+it('setiap menu di tab bar bawah memuat ikon SVG inline yang sah', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $tabBar = potonganTabBar(
+        $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent()
+    );
+
+    $tautan = potonganTautan($tabBar);
+
+    expect($tautan)->toHaveCount(count(menuPeserta()));
+
+    foreach ($tautan as $linkMenu) {
+        expect(punyaIkonSah($linkMenu))->toBeTrue();
+    }
+});
+
+it('tab bar admin memuat ikon pada seluruh tujuh menu', function () {
+    $admin = User::factory()->admin()->create();
+
+    $tabBar = potonganTabBar(
+        $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->getContent()
+    );
+
+    $tautan = potonganTautan($tabBar);
+
+    expect($tautan)->toHaveCount(7);
+
+    foreach ($tautan as $linkMenu) {
+        expect(punyaIkonSah($linkMenu))->toBeTrue();
+    }
+});
+
+it('ikon tidak bocor ke navigasi desktop', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $navDesktop = potonganNavDesktop(
+        $this->actingAs($peserta)->get(route('tryout.index'))->assertOk()->getContent()
+    );
+
+    expect($navDesktop)->not->toBe('')
+        ->and($navDesktop)->not->toContain('<svg');
 });

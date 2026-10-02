@@ -17,17 +17,17 @@
     $lindungiKonten = $proteksi ?? (auth()->user()?->isPeserta() ?? false);
 
     $nav = [
-        ['label' => 'Dashboard', 'route' => 'dashboard'],
-        ['label' => 'Tryout', 'route' => 'tryout.index'],
-        ['label' => 'Latihan', 'route' => 'latihan.index'],
-        ['label' => 'Analisis', 'route' => 'analisis.index'],
+        ['label' => 'Dashboard', 'route' => 'dashboard', 'ikon' => 'dashboard'],
+        ['label' => 'Tryout', 'route' => 'tryout.index', 'ikon' => 'tryout'],
+        ['label' => 'Latihan', 'route' => 'latihan.index', 'ikon' => 'latihan'],
+        ['label' => 'Analisis', 'route' => 'analisis.index', 'ikon' => 'analisis'],
     ];
 
     if (auth()->check() && auth()->user()->isAdmin()) {
         $nav = array_merge($nav, [
-            ['label' => 'Mapel', 'route' => 'admin.mapel.index'],
-            ['label' => 'Paket Soal', 'route' => 'admin.paket-soal.index'],
-            ['label' => 'Paket Tryout', 'route' => 'admin.paket-tryout.index'],
+            ['label' => 'Mapel', 'route' => 'admin.mapel.index', 'ikon' => 'mapel'],
+            ['label' => 'Paket Soal', 'route' => 'admin.paket-soal.index', 'ikon' => 'paket-soal'],
+            ['label' => 'Paket Tryout', 'route' => 'admin.paket-tryout.index', 'ikon' => 'paket-tryout'],
         ]);
     }
 @endphp
@@ -92,20 +92,24 @@
 
         <nav id="tabbar-bawah" aria-label="Navigasi bawah"
             class="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink pb-[env(safe-area-inset-bottom)] md:hidden">
-            <div @class(['flex', $rapat ? 'overflow-x-auto' : 'justify-between'])>
+            <div @class(['flex', 'tabbar-scroll overflow-x-auto' => $rapat, 'justify-between' => ! $rapat])>
                 @foreach ($nav as $item)
                     @php($aktif = request()->routeIs($item['route'].'*'))
 
+                    {{-- Ikon di atas label, bukan di sampingnya: empat tab selebar
+                         90px tidak cukup untuk keduanya berjalan mendatar. Label
+                         tetap ikut dirender sebagai nama aksesibel tautan. --}}
                     <a href="{{ route($item['route']) }}"
                         @if ($aktif) aria-current="page" @endif
                         @class([
-                            'py-3.5 text-center text-xs font-medium transition sm:text-sm',
+                            'flex flex-col items-center justify-center gap-1 whitespace-nowrap py-2.5 text-center text-xs font-medium transition sm:text-sm',
                             'shrink-0 px-4' => $rapat,
                             'min-w-0 flex-1 px-1' => ! $rapat,
                             'bg-white/10 text-gold' => $aktif,
                             'text-slate-300 hover:bg-white/5 hover:text-white' => ! $aktif,
                         ])>
-                        {{ $item['label'] }}
+                        <x-icon :name="$item['ikon']" />
+                        <span>{{ $item['label'] }}</span>
                     </a>
                 @endforeach
             </div>

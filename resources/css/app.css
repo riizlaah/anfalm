@@ -92,6 +92,17 @@
         @apply ring-2 ring-ink ring-offset-1;
     }
 
+    /* Baris tab bawah (Fase 10): menu admin yang jumlahnya tujuh digeser
+       mendatar, tapi bilah gulir bawaan browser menyedot 15px tinggi sehingga
+       tab bar melewati ruang yang dipesan <main>. Petunjuk gulirnya sudah
+       terbaca dari tab ketujuh yang terpotong di tepi layar. */
+    .tabbar-scroll {
+        scrollbar-width: none;
+    }
+    .tabbar-scroll::-webkit-scrollbar {
+        display: none;
+    }
+
     /* Editor konten kaya (Fase 8, DESIGN §4.2). */
     .wysiwyg-toolbar {
         @apply flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 border-slate-300 bg-slate-50 px-1.5 py-1;
