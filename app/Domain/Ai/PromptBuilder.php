@@ -16,6 +16,10 @@ class PromptBuilder
 
     /**
      * @param  list<array{kode: string, deskripsi: string, materi_pokok?: string|null}>  $kompetensiDasars
+     * @param  array<string, int>|null  $targetPerKd  kode KD => target soal untuk
+     *                                                part ini; dihitung `PenjadwalKd`. Bila kosong/null, jumlah soal dibagi
+     *                                                merata ke semua KD. KD berkuota nol tidak dicantumkan, supaya prompt
+     *                                                tidak meminta AI mengabaikan KD-nya sendiri.
      */
     public function build(
         array $kompetensiDasars,
@@ -23,6 +27,7 @@ class PromptBuilder
         int $jumlahSoal,
         string $tingkatKesulitan,
         ?string $referensi = null,
+        ?array $targetPerKd = null,
     ): string {
         if ($jumlahSoal < 1) {
             throw new InvalidArgumentException('Jumlah soal minimal 1.');
@@ -36,14 +41,27 @@ class PromptBuilder
             ? $tingkatKesulitan
             : self::TINGKAT_CAMPURAN;
 
-        $distribusi = $this->distribusiMerata($jumlahSoal, count($kompetensiDasars));
+        $target = $targetPerKd ?? array_combine(
+            array_column($kompetensiDasars, 'kode'),
+            $this->distribusiMerata($jumlahSoal, count($kompetensiDasars)),
+        );
 
         $kdLines = [];
-        foreach ($kompetensiDasars as $i => $kd) {
+        foreach ($kompetensiDasars as $kd) {
+            $targetKd = (int) ($target[$kd['kode']] ?? 0);
+
+            if ($targetKd < 1) {
+                continue;
+            }
+
             $materi = ! empty($kd['materi_pokok'])
                 ? "\n      Materi pokok: {$kd['materi_pokok']}"
                 : '';
-            $kdLines[] = "      KD {$kd['kode']} - {$kd['deskripsi']}{$materi} (target: {$distribusi[$i]} soal)";
+            $kdLines[] = "      KD {$kd['kode']} - {$kd['deskripsi']}{$materi} (target: {$targetKd} soal)";
+        }
+
+        if ($kdLines === []) {
+            throw new InvalidArgumentException('Target soal per KD tidak menugaskan soal apa pun.');
         }
 
         $referensiBlok = ($referensi !== null && trim($referensi) !== '')

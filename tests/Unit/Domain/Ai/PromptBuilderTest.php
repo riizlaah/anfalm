@@ -56,3 +56,47 @@ it('menolak jumlah soal kurang dari 1 dan daftar KD kosong', function () {
     expect(fn () => $builder->build([], 'Mat', 5, 'campuran'))
         ->toThrow(InvalidArgumentException::class);
 });
+
+it('memakai target dari penjadwal alih-alih membagi merata sendiri', function () {
+    $kds = [
+        ['kode' => '3.1', 'deskripsi' => 'Bilangan berpangkat'],
+        ['kode' => '3.2', 'deskripsi' => 'Bentuk akar'],
+        ['kode' => '3.3', 'deskripsi' => 'Logaritma'],
+        ['kode' => '3.4', 'deskripsi' => 'Barisan'],
+    ];
+
+    $prompt = (new PromptBuilder)->build($kds, 'Matematika', 6, 'campuran', null, [
+        '3.1' => 3,
+        '3.2' => 1,
+        '3.3' => 1,
+        '3.4' => 1,
+    ]);
+
+    expect($prompt)
+        ->toContain('Buatkan 6 soal')
+        ->toContain('KD 3.1 - Bilangan berpangkat (target: 3 soal)')
+        ->toContain('KD 3.2 - Bentuk akar (target: 1 soal)')
+        ->toContain('KD 3.3 - Logaritma (target: 1 soal)')
+        ->toContain('KD 3.4 - Barisan (target: 1 soal)');
+});
+
+it('menggugurkan KD yang tidak menerima kuota pada part ini', function () {
+    $kds = [
+        ['kode' => '1.1', 'deskripsi' => 'KD depan'],
+        ['kode' => '1.2', 'deskripsi' => 'KD ekor'],
+    ];
+
+    $prompt = (new PromptBuilder)->build($kds, 'Informatika', 4, 'campuran', null, ['1.1' => 4]);
+
+    expect($prompt)
+        ->toContain('KD 1.1 - KD depan (target: 4 soal)')
+        ->and($prompt)->not->toContain('KD 1.2 - KD ekor')
+        ->and($prompt)->not->toContain('target: 0 soal');
+});
+
+it('menolak peta target yang tidak menugaskan soal apa pun', function () {
+    $kds = [['kode' => '3.1', 'deskripsi' => 'KD A']];
+
+    expect(fn () => (new PromptBuilder)->build($kds, 'Matematika', 5, 'campuran', null, []))
+        ->toThrow(InvalidArgumentException::class);
+});

@@ -6,6 +6,7 @@ use App\Domain\Ai\AiProvider;
 use App\Domain\Ai\AiProviderException;
 use App\Domain\Ai\JsonOutputException;
 use App\Domain\Ai\JsonRepairService;
+use App\Domain\Ai\PenjadwalKd;
 use App\Domain\Ai\PromptBuilder;
 use App\Domain\Ai\SoalSkemaException;
 use App\Domain\Ai\SoalSkemaValidator;
@@ -100,16 +101,35 @@ class GeneratePaketController extends Controller
         $jumlahBagian = min(self::SOAL_PER_PART, $target - count($parts['daftar_soal']));
         $referensi = trim((string) ($validated['referensi'] ?? ''));
 
+        // Kunci: kode ternormalisasi (untuk mencocokkan jawaban AI), nilai: kode
+        // persis seperti di database (untuk ditampilkan ke AI dan halaman kurasi).
+        $kodeKd = $kds->mapWithKeys(fn (KompetensiDasar $kd): array => [
+            $this->normalisasiKodeKd($kd->kode_kompetensi) => $kd->kode_kompetensi,
+        ])->all();
+
+        $jadwal = (new PenjadwalKd)->targetPart(
+            $target,
+            array_keys($kodeKd),
+            $this->kdTerpakai($parts['daftar_soal']),
+            $jumlahBagian,
+        );
+
+        $kodePart = [];
+        $targetPerKd = [];
+
+        foreach ($jadwal as $baris) {
+            $kode = $kodeKd[$baris['kode']];
+            $kodePart[] = $kode;
+            $targetPerKd[$kode] = $baris['target'];
+        }
+
         $prompt = (new PromptBuilder)->build(
-            $kds->map(fn (KompetensiDasar $kd): array => [
-                'kode' => $kd->kode_kompetensi,
-                'deskripsi' => $kd->deskripsi,
-                'materi_pokok' => $kd->materi_pokok,
-            ])->values()->all(),
+            $this->kdsUntukPart($kds, $kodePart),
             $mapel->nama,
             $jumlahBagian,
             $validated['tingkat_kesulitan'],
             $referensi !== '' ? $referensi : null,
+            $targetPerKd,
         );
 
         try {
@@ -492,9 +512,68 @@ class GeneratePaketController extends Controller
      */
     private function kdsUntukMapel(array $kompetensiDasarIds, Mapel $mapel): Collection
     {
+        // Urutan kode dipakai sebagai pengikat seri di PenjadwalKd, jadi wajib
+        // deterministik agar jadwal yang sama bisa direproduksi tiap part.
         return KompetensiDasar::whereIn('id', $kompetensiDasarIds)
             ->where('mapel_id', $mapel->getKey())
+            ->orderBy('kode_kompetensi')
             ->get();
+    }
+
+    /**
+     * Kode KD dibakukan agar kecocokan tidak gugur hanya karena beda huruf
+     * besar-kecil, spasi ganda, atau awalan "KD" yang sering ditulis model.
+     */
+    private function normalisasiKodeKd(string $kode): string
+    {
+        $kode = trim((string) preg_replace('/\s+/u', ' ', $kode));
+        $kode = (string) preg_replace('/^kd[\s.:\-_]*/iu', '', $kode);
+
+        return mb_strtoupper(trim($kode));
+    }
+
+    /**
+     * Jumlah soal yang benar-benar terkumpul per kode KD. Dihitung dari isi
+     * draft, bukan dari jumlah yang diminta ke AI, karena yield per part bisa
+     * kurang dari yang diminta.
+     *
+     * @param  array<int, array<string, mixed>>  $daftarSoal
+     * @return array<string, int>
+     */
+    private function kdTerpakai(array $daftarSoal): array
+    {
+        $terpakai = [];
+
+        foreach ($daftarSoal as $soal) {
+            $kode = $this->normalisasiKodeKd((string) ($soal['kompetensi_dasar_kode'] ?? ''));
+
+            if ($kode !== '') {
+                $terpakai[$kode] = ($terpakai[$kode] ?? 0) + 1;
+            }
+        }
+
+        return $terpakai;
+    }
+
+    /**
+     * Subset KD yang mendapat kuota pada part ini, urutannya tetap mengikuti
+     * `$kds` supaya prompt menyusun daftar KD dengan cara yang sama.
+     *
+     * @param  Collection<int, KompetensiDasar>  $kds
+     * @param  array<int, string>  $kodePart  kode KD persis seperti di database
+     * @return list<array{kode: string, deskripsi: string, materi_pokok: string|null}>
+     */
+    private function kdsUntukPart(Collection $kds, array $kodePart): array
+    {
+        return $kds
+            ->filter(fn (KompetensiDasar $kd): bool => in_array($kd->kode_kompetensi, $kodePart, true))
+            ->map(fn (KompetensiDasar $kd): array => [
+                'kode' => $kd->kode_kompetensi,
+                'deskripsi' => $kd->deskripsi,
+                'materi_pokok' => $kd->materi_pokok,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

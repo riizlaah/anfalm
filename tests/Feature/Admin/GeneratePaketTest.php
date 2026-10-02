@@ -673,6 +673,98 @@ it('id soal sementara unik setelah beberapa part digabung', function () {
         ->and($ids[11])->toBe('S012');
 });
 
+it('distribusi KD tersebar ke seluruh KD sepanjang part generate', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create(['nama' => 'Informatika']);
+
+    $kds = collect(range(1, 10))->map(fn (int $n): KompetensiDasar => KompetensiDasar::factory()->create([
+        'mapel_id' => $mapel->id,
+        'kode_kompetensi' => '3.'.$n,
+        'deskripsi' => 'KD nomor '.$n,
+    ]));
+
+    // AI tiruan yang menuruti target per KD di prompt, sehingga alur akumulasi
+    // antar part sama seperti AI asli yang mengikuti instruksi.
+    $perekam = new class implements AiProvider
+    {
+        /** @var array<int, string> */
+        public array $prompt = [];
+
+        public function generate(string $prompt): string
+        {
+            $this->prompt[] = $prompt;
+
+            preg_match('/Buatkan (\d+) soal/u', $prompt, $diminta);
+            preg_match_all('/KD ([0-9][0-9.]*) - .*?\(target: (\d+) soal\)/su', $prompt, $jadwal, PREG_SET_ORDER);
+
+            $template = AiFake::fixture()['daftar_soal'];
+            $daftarSoal = [];
+            $nomor = 0;
+
+            foreach ($jadwal as $baris) {
+                for ($n = 0; $n < (int) $baris[2]; $n++) {
+                    $soal = $template[$nomor % count($template)];
+                    $soal['id_soal_sementara'] = 'S'.($nomor + 1);
+                    $soal['pertanyaan'] = 'Pertanyaan nomor '.($nomor + 1).' untuk KD '.$baris[1].'?';
+                    $soal['kompetensi_dasar'] = ['kode' => $baris[1], 'deskripsi' => 'KD nomor '.$baris[1]];
+                    $daftarSoal[] = $soal;
+                    $nomor++;
+                }
+            }
+
+            $payload = AiFake::fixture();
+            $payload['metadata']['jumlah_soal'] = count($daftarSoal);
+            $payload['daftar_soal'] = $daftarSoal;
+
+            return json_encode($payload);
+        }
+    };
+
+    $this->app->instance(AiProvider::class, $perekam);
+
+    $payload = [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => $kds->pluck('id')->all(),
+        'jumlah_soal' => 30,
+        'tingkat_kesulitan' => 'campuran',
+        'run' => 'run-1',
+    ];
+
+    $respons = null;
+
+    for ($part = 1; $part <= 20; $part++) {
+        $respons = $this->actingAs($admin)
+            ->postJson('/admin/paket-soal/generate', $payload + ['part' => $part])
+            ->assertOk();
+
+        if ($respons->json('selesai')) {
+            break;
+        }
+    }
+
+    expect($respons->json('selesai'))->toBeTrue()
+        ->and($perekam->prompt)->toHaveCount(5);
+
+    $kodeTerpanggil = [];
+
+    foreach ($perekam->prompt as $prompt) {
+        // Prompt tidak boleh menyuruh AI mengabaikan KD-nya sendiri, dan jumlah
+        // target per KD harus persis sama dengan jumlah soal yang diminta.
+        expect($prompt)->not->toContain('target: 0 soal');
+
+        preg_match('/Buatkan (\d+) soal/u', $prompt, $diminta);
+        preg_match_all('/\(target: (\d+) soal\)/u', $prompt, $target);
+
+        expect(array_sum(array_map('intval', $target[1])))->toBe((int) $diminta[1]);
+
+        preg_match_all('/KD ([0-9][0-9.]*) - /u', $prompt, $cocok);
+        $kodeTerpanggil = array_merge($kodeTerpanggil, $cocok[1]);
+    }
+
+    expect(array_values(array_unique($kodeTerpanggil)))
+        ->toEqualCanonicalizing($kds->pluck('kode_kompetensi')->values()->all());
+});
+
 it('soal yang dibuang otomatis diberi nomor part agar tidak ambigu', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create();

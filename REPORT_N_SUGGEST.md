@@ -18,7 +18,10 @@
   Perbaikan: form soal manual dan form kurasi kini me-render baris sampai jumlah minimum sekaligus (lihat saran pertama), jadi submit pertama tidak pernah gagal karena form masih kosong.
   Diperbaiki juga bug laten yang ditemukan sambil menelusuri: `addRow()` memakai jumlah baris sebagai indeks tanpa pernah menata ulang indeks setelah baris dihapus, sehingga `opsi_jawaban[N]` bisa terduplikasi dan sebagian isian hilang diam-diam. Ditambah `reindexRows()` yang menata ulang indeks field, `urutan`, dan nilai radio setiap kali baris ditambah atau dihapus.
 - (?) Kompetensi Dasar kadang tidak terpilih saat generate soal dari AI (kemungkinan besar dari AI, tidak sering terjadi)
-- (?) Distribusi KD pada soal-soal kurang merata (hanya sekitar 40% dari total KD dipilih)
+- ~~(?) Distribusi KD pada soal-soal kurang merata (hanya sekitar 40% dari total KD dipilih)~~
+  **Selesai 2026-10-03.** Akar masalah: `PromptBuilder` membagi jumlah soal satu part (6) ke seluruh KD terpilih, sehingga 10 KD hanya menghasilkan `[1,1,1,1,1,1,0,0,0,0]` — KD ekor selalu berhak `target: 0 soal`. Karena tiap part menghitung ulang dari nol dan tidak ada offset antar part, part 1..n selalu menyasar enam KD pertama menurut `kode_kompetensi`, sehingga sisanya tidak pernah diminta sama sekali.
+  Perbaikan: kelas baru `App\Domain\Ai\PenjadwalKd` menghitung kuota dari **total paket**, lalu menyisihkannya part demi part berdasarkan soal yang benar-benar sudah terkumpul (`kdTerpakai()`), dibagi satu soal bergiliran supaya satu part menyebar ke banyak KD. `PromptBuilder` kini menerima target per KD dan menggugurkan KD berkuota nol; `kdsUntukMapel()` diberi `orderBy('kode_kompetensi')` agar jadwal deterministik.
+  Tertutup test: `PenjadwalKdTest` (12 test — gabungan seluruh part menutup distribusi global persis, bahkan ketika yield per part kurang) dan test `GeneratePaketTest` yang memakai AI tiruan menuruti prompt: 10 KD tercakup penuh, tidak ada `target: 0`, dan jumlah target tiap part persis `Buatkan N soal`.
 - (PENTING) Rate limit saat generate ~45 soal dalam sehari, padahal perlu ~150 soal dalam satu hari per minggu
 - Menu Latihan & Analisis muncul di dashboard admin
 - PG Kategori tidak sesuai ekspektasi, seharusnya seperti di gambar @contoh-pg-kategori.png
