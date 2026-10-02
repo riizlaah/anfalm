@@ -185,3 +185,20 @@ Aturan umum TDD di semua fase:
 
 **Kriteria Selesai:**
 - Seluruh `php artisan test` hijau; tidak ada query N+1 di halaman utama; DESIGN.md sinkron.
+
+---
+
+## Fase 10 — Mobile-first untuk Peserta
+
+**Goal:** Halaman peserta benar-benar bisa dipakai di HP, bukan hanya "muat di layar kecil". Pengguna mayoritas mobile.
+
+**Deliverables:**
+- **Navigasi (10.1):** bottom tab bar khusus viewport `< md` berisi menu bagian peserta, dengan `safe-area-inset-bottom` dan active state mengikuti route. Nav desktop `md:flex` tidak berubah. Tab bar disembunyikan di halaman pengerjaan soal (`percobaan/kerja`) supaya tidak mengganggu fokus dan timer.
+- **Opsi soal tidak meluber (10.2):** lepas `whitespace-nowrap` dari `.check` sehingga opsi panjang (terbukti 1258px di dalam kartu 288px) ikut wrap.
+- **Kartu tryout (10.3):** judul dan grup tombol menumpuk vertikal di mobile; grup tombol kehilangan `shrink-0` agar "Mulai Ulang" + "Lanjutkan Tryout" turun baris alih-alih menambah scroll horizontal.
+- **Zoom iOS & target sentuh (10.4):** kontrol form `max-md:text-base` (16px, menghentikan auto-zoom Safari), `.btn`, tombol header, `.rail-soal`, dan baris `.check` dinaikkan ke area tap yang layak — semuanya lewat varian `max-md:` agar tampilan desktop tidak berubah.
+
+**Kriteria Selesai:**
+- Test navigasi mobile hijau: tab bar ada di seluruh halaman peserta, nav desktop utuh, tab bar absen di halaman pengerjaan.
+- Pengukuran browser 360×780: `scrollWidth === clientWidth` di seluruh halaman peserta; input 16px; `.btn`, tombol header, dan link tab bar 44px (rail-soal dan baris opsi 40px).
+- `php artisan test --compact` hijau; `vendor/bin/pint --dirty` bersih; `npm run build` dijalankan.

@@ -19,7 +19,10 @@
             @endphp
 
             <article class="card p-5">
-                <div class="flex flex-wrap items-start justify-between gap-4">
+                {{-- `md:` dipakai supaya sejajar dengan ambang nav (md:flex) — di
+                     antara 640–767px baris masih menumpuk, karena grup tombol
+                     butuh ±390px dan judul sempat terdesak bila dipaksa sejajar. --}}
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div class="min-w-0">
                         <h2 class="text-lg font-semibold text-ink">{{ $paketTryout->nama_paket }}</h2>
 
@@ -34,7 +37,7 @@
                         </p>
                     </div>
 
-                    <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <div class="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
                         <a href="{{ route('tryout.leaderboard', $paketTryout) }}" class="btn btn-ghost">Leaderboard</a>
 
                         @if ($adaHasil)

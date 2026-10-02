@@ -15,7 +15,7 @@
     @param array{judul: string, isi: string, tombol: string} $konfirmasi
     @param array{label: string, aksi: string}|null $simpan
 --}}
-<x-layouts.app :title="$title">
+<x-layouts.app :title="$title" :tabbar="false">
     @php
         $batasAkhir = $percobaan->batas_waktu_menit !== null && $percobaan->waktu_mulai !== null
             ? $percobaan->waktu_mulai->copy()->addMinutes($percobaan->batas_waktu_menit)

@@ -22,7 +22,7 @@
 
 @layer components {
     .btn {
-        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus:ring-2 focus:ring-ink/25 focus:outline-none;
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus:ring-2 focus:ring-ink/25 focus:outline-none max-md:min-h-11;
     }
     .btn-primary {
         @apply bg-ink text-white hover:bg-ink-soft;
@@ -33,10 +33,12 @@
     .btn-danger {
         @apply border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50;
     }
+    /* `max-md:text-base` menahan Safari iOS meng-zoom sendiri saat field
+       difokuskan — font di bawah 16px memicu zoom pada layar sempit. */
     .input,
     .select,
     .textarea {
-        @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-ink focus:ring-2 focus:ring-ink/15 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400;
+        @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-ink focus:ring-2 focus:ring-ink/15 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 max-md:text-base;
     }
     .label {
         @apply mb-1 block text-sm font-medium text-slate-700;
@@ -50,8 +52,10 @@
     .page-title {
         @apply text-2xl font-bold tracking-tight text-ink;
     }
+    /* Opsi soal panjang (terukur 1258px di dalam kartu 288px) harus ikut wrap;
+       `max-w-full` menahan label agar tidak melebar saat jadi item flex. */
     .check {
-        @apply flex shrink-0 items-center gap-1.5 text-sm whitespace-nowrap;
+        @apply flex max-w-full shrink-0 items-start gap-1.5 text-sm max-md:py-2.5;
     }
     .hint {
         @apply mt-2 text-xs text-slate-500;
@@ -76,7 +80,7 @@
         background-color: rgb(15 23 42 / 0.55);
     }
     .rail-soal {
-        @apply inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold transition focus:ring-2 focus:ring-ink/40 focus:outline-none;
+        @apply inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold transition focus:ring-2 focus:ring-ink/40 focus:outline-none max-md:h-10 max-md:w-10;
     }
     .rail-soal[data-terjawab='1'] {
         @apply bg-emerald-600 text-white;

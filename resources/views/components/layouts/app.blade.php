@@ -5,6 +5,12 @@
      * admin supaya WYSIWYG-nya tetap bisa menyalin dan menyeleksi teks.
      */
     'proteksi' => null,
+    /**
+     * Tab bar bawah untuk viewport kecil (Fase 10). Dimatikan di halaman
+     * pengerjaan soal supaya tidak menutupi timer dan tidak memancing ketukan
+     * tak sengaja di tengah ujian.
+     */
+    'tabbar' => true,
 ])
 
 @php
@@ -43,7 +49,7 @@
                 Anfa<span class="text-gold">lm</span>
             </a>
 
-            <nav class="hidden items-center gap-1 text-sm font-medium md:flex">
+            <nav aria-label="Navigasi utama" class="hidden items-center gap-1 text-sm font-medium md:flex">
                 @foreach ($nav as $item)
                     <a href="{{ route($item['route']) }}"
                         @class([
@@ -62,7 +68,7 @@
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit"
-                        class="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-white/10">
+                        class="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 max-md:min-h-11">
                         Keluar
                     </button>
                 </form>
@@ -70,8 +76,40 @@
         </div>
     </header>
 
-    <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-10">
+    <main @class([
+        'mx-auto w-full max-w-6xl flex-1 px-4 pt-8 sm:pt-10',
+        'pb-[calc(4.5rem_+_env(safe-area-inset-bottom))] md:pb-10' => $tabbar,
+        'pb-8 sm:pb-10' => ! $tabbar,
+    ])>
         {{ $slot }}
     </main>
+
+    @if ($tabbar)
+        {{-- Nav khusus viewport kecil: menu desktop disembunyikan `md:flex`, jadi
+             tanpa baris ini peserta di HP tidak punya jalan keluar sama sekali.
+             Lebih dari empat menu (admin) digeser mendatar, bukan dipadatkan. --}}
+        @php($rapat = count($nav) > 4)
+
+        <nav id="tabbar-bawah" aria-label="Navigasi bawah"
+            class="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink pb-[env(safe-area-inset-bottom)] md:hidden">
+            <div @class(['flex', $rapat ? 'overflow-x-auto' : 'justify-between'])>
+                @foreach ($nav as $item)
+                    @php($aktif = request()->routeIs($item['route'].'*'))
+
+                    <a href="{{ route($item['route']) }}"
+                        @if ($aktif) aria-current="page" @endif
+                        @class([
+                            'py-3.5 text-center text-xs font-medium transition sm:text-sm',
+                            'shrink-0 px-4' => $rapat,
+                            'min-w-0 flex-1 px-1' => ! $rapat,
+                            'bg-white/10 text-gold' => $aktif,
+                            'text-slate-300 hover:bg-white/5 hover:text-white' => ! $aktif,
+                        ])>
+                        {{ $item['label'] }}
+                    </a>
+                @endforeach
+            </div>
+        </nav>
+    @endif
 </body>
 </html>
