@@ -30,9 +30,14 @@ class TryoutController extends Controller
             ->orderBy('nama_paket')
             ->get();
 
+        // Percobaan latihan tidak punya paket tryout, dan paket yang dihapus
+        // admin juga menyisakan null (nullOnDelete) — `flip()` menolak null
+        // sehingga keduanya harus disaring sebelum halaman ini dirender.
         $berjalan = Percobaan::query()
             ->where('user_id', $user->getKey())
             ->where('status', Percobaan::STATUS_BERJALAN)
+            ->where('jenis', Percobaan::JENIS_TRYOUT)
+            ->whereNotNull('paket_tryout_id')
             ->pluck('paket_tryout_id')
             ->flip();
 

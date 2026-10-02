@@ -4,6 +4,7 @@ use App\Domain\Percobaan\PercobaanService;
 use App\Domain\Scoring\KompetensiLevel;
 use App\Http\Controllers\TryoutController;
 use App\Models\HasilTryout;
+use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
 use App\Models\Percobaan;
@@ -27,6 +28,29 @@ it('menampilkan daftar paket tryout yang tersedia', function () {
         ->get(route('tryout.index'))
         ->assertOk()
         ->assertSee($paket->nama_paket);
+});
+
+it('tetap menampilkan daftar tryout selama ada latihan yang belum selesai', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = Mapel::query()->whereNull('deleted_at')->orderBy('id')->firstOrFail();
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 3,
+        'timer' => 'stopwatch',
+    ]);
+
+    // Latihan menyisakan percobaan berjalan tanpa paket tryout, sehingga
+    // kumpulan `paket_tryout_id` berisi null dan `flip()` melempar error.
+    $latihan = Percobaan::sole();
+
+    expect($latihan->jenis)->toBe(Percobaan::JENIS_LATIHAN)
+        ->and($latihan->paket_tryout_id)->toBeNull();
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.index'))
+        ->assertOk()
+        ->assertSee(PaketTryout::firstOrFail()->nama_paket);
 });
 
 it('membuat percobaan berjalan berisi daftar soal tiap mapel sesuai paket', function () {
