@@ -80,7 +80,7 @@ Aturan umum TDD di semua fase:
 **Deliverables:**
 - `Mapel` (3.1): kode unik, tingkat, jenis, `is_pkk`.
 - `KompetensiDasar` (3.2): unik per (mapel_id, kode_kompetensi); single source of truth.
-- `Soal` (3.3): tipe pg/pg_kompleks/pg_kategori, WYSIWYG konten, parameter IRT dengan default & peringatan (6.1), `daftar_kategori` untuk pg_kategori; opsi & pernyataan_kategori; min 2 / max 5.
+- `Soal` (3.3): tipe pg/pg_kompleks/pg_kategori, WYSIWYG konten, parameter IRT dengan default & peringatan (6.1), `daftar_kategori` untuk pg_kategori; opsi (min 5 / max 8) & pernyataan_kategori (min 3 / max 5).
 - Soft delete + **blokir hapus permanen** bila data sudah dipakai (paket/tryout/riwayat); edit soal aman karena `is_benar` sudah snapshot di riwayat.
 
 **Kriteria Selesai:**
@@ -163,7 +163,7 @@ Aturan umum TDD di semua fase:
 **Deliverables:**
 - Komponen form soal: **TipTap** (wrapper Alpine) + preview **KaTeX** (`\( ... \)`, `\[ ... \]`).
 - Upload gambar: kompresi WebP client-side (Canvas, maks 500 KB) → local disk (siap S3).
-- **Sanitasi HTMLPurifier** di sisi server, whitelist markup KaTeX; DOMPurify di client (6.12, 6.13 fallback teks mentah).
+- **Sanitasi `symfony/html-sanitizer`** di sisi server, whitelist markup KaTeX; DOMPurify di client (6.12, 6.13 fallback teks mentah).
 - Halaman: dashboard admin/peserta, manager mapel/KD/soal/paket, kurasi AI, player tryout, latihan, analisis kompetensi (Chart.js), leaderboard.
 - Proteksi konten peserta: `user-select:none`, blok klik-kanan & shortcut copy — **hanya di view peserta**, bukan editor admin (7.10).
 

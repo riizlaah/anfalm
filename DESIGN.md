@@ -116,14 +116,15 @@ SMA/SMK:  450 + 100 × θ (di-clamp 200–700)
    - Admin menuliskan kode KaTeX di dalam editor, dan akan dirender di preview.
 5. **Upload gambar** (opsional): gambar pendukung untuk soal (diagram, grafik, ilustrasi).
    - Gambar akan dikompres otomatis ke WebP (maks 500 KB) di browser (Canvas API) dan disimpan di storage lokal aplikasi (`public` disk Laravel).
-6. **Isi opsi jawaban** (minimal 2, maksimal 5) dengan WYSIWYG Editor yang sama.
+6. **Isi opsi jawaban** (minimal 5, maksimal 8) dengan WYSIWYG Editor yang sama.
    - Untuk **PG**: tentukan tepat **1** opsi `is_benar: true`.
    - Untuk **PG Kompleks**: tentukan **minimal 2** opsi `is_benar: true` (soal dengan jumlah benar ≤ 1 ditolak — lihat edge 6.15).
-   - Untuk **PG Kategori**: tidak menggunakan opsi jawaban, tetapi pernyataan-kategori; admin mendefinisikan daftar kategori (`daftar_kategori` JSON) di tingkat soal, lalu per-pernyataan dikelompokkan ke salah satu kategori tersebut.
+   - Untuk **PG Kategori**: tidak menggunakan opsi jawaban, tetapi pernyataan-kategori (**minimal 3, maksimal 5**) dengan WYSIWYG Editor yang sama; admin mendefinisikan daftar kategori (`daftar_kategori` JSON) di tingkat soal, lalu per-pernyataan dikelompokkan ke salah satu kategori tersebut.
 7. **Isi pembahasan** dengan WYSIWYG Editor (support teks, gambar, KaTeX).
 8. **Isi parameter IRT (a, b, c):**
    - Admin bisa input manual (berdasarkan pengalaman).
    - Atau gunakan nilai default: `a=1.0, b=0.0, c=0.25`.
+   - Selama ketiganya masih memakai nilai default, form menampilkan peringatan *"Parameter IRT masih default, disarankan untuk dikurasi"* (edge 6.1).
 9. Klik "Simpan".
 
 ---
@@ -334,262 +335,305 @@ Untuk mendukung konten yang kaya (teks format, gambar, dan ekspresi matematika),
 
 ---
 
-## 5. SKEMA DATABASE (KONSEPTUAL — SUPABASE)
+## 5. SKEMA DATABASE (MySQL FINAL)
 
-> **Catatan:** Skrip SQL di bawah merupakan desain konseptual dengan Supabase/PostgreSQL. Implementasi aktual menggunakan **Laravel + MySQL** (lihat bagian 5.1 dan `database/migrations/`).
+Potret aktual tabel MySQL yang dibangun oleh migrasi Laravel di
+`database/migrations/`. DDL di bawah dihasilkan dari basis data pengembangan
+lewat `mariadb-dump --no-data`, sehingga mengikuti skema yang benar-benar
+dijalankan — bukan sketsa yang berjalan sendiri dari implementasinya. Tabel
+infrastruktur bawaan Laravel (`cache`, `cache_locks`, `sessions`, `jobs`,
+`job_batches`, `failed_jobs`, `migrations`, `password_reset_tokens`) tidak
+dicantumkan karena tidak menyimpan data domain.
 
 ```sql
--- ============================================
--- 1. TABEL USERS (Pakai Supabase Auth)
--- ============================================
--- Supabase sudah menyediakan auth.users
--- Kita tambahkan tabel profil untuk role
-CREATE TABLE public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    nama_lengkap VARCHAR(100) NOT NULL,
-    sekolah VARCHAR(100),
-    tingkat VARCHAR(20) CHECK (tingkat IN ('SD', 'SMP', 'SMA', 'SMK')),
-    jurusan VARCHAR(50), -- khusus SMK
-    role VARCHAR(20) DEFAULT 'peserta' CHECK (role IN ('admin', 'peserta')),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
+CREATE TABLE users (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  nama_lengkap varchar(100) NOT NULL,
+  email varchar(255) NOT NULL,
+  email_verified_at timestamp NULL DEFAULT NULL,
+  password varchar(255) NOT NULL,
+  sekolah varchar(100) DEFAULT NULL,
+  tingkat enum('SD','SMP','SMA','SMK') DEFAULT NULL,
+  jurusan varchar(50) DEFAULT NULL,
+  role enum('admin','peserta') NOT NULL DEFAULT 'peserta',
+  session_token varchar(64) DEFAULT NULL,
+  remember_token varchar(100) DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY users_email_unique (email)
+) ENGINE=InnoDB;
 
--- Trigger untuk auto-create profil saat user daftar
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.profiles (id, nama_lengkap, role)
-    VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'nama_lengkap', 'User'), 'peserta');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+CREATE TABLE mapel (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  kode varchar(20) NOT NULL,
+  kode_unik varchar(20) GENERATED ALWAYS AS (if(deleted_at is null,kode,NULL)) STORED,
+  nama varchar(100) NOT NULL,
+  tingkat enum('SD','SMP','SMA','SMK','all') NOT NULL DEFAULT 'all',
+  jenis enum('wajib','pilihan_umum','pilihan_kejuruan') NOT NULL,
+  is_pkk tinyint(1) NOT NULL DEFAULT 0,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  deleted_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY mapel_kode_unik_unique (kode_unik)
+) ENGINE=InnoDB;
 
-CREATE TRIGGER on_auth_user_created
-AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE TABLE kompetensi_dasar (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  mapel_id bigint(20) unsigned NOT NULL,
+  kode_kompetensi varchar(50) NOT NULL,
+  kode_unik varchar(50) GENERATED ALWAYS AS (if(deleted_at is null,kode_kompetensi,NULL)) STORED,
+  deskripsi text NOT NULL,
+  materi_pokok varchar(255) DEFAULT NULL,
+  level_kognitif enum('pengetahuan_dan_pemahaman','penerapan','penalaran') NOT NULL,
+  batasan text DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  deleted_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY kompetensi_dasar_mapel_id_kode_unik_unique (mapel_id,kode_unik),
+  CONSTRAINT kompetensi_dasar_mapel_id_foreign FOREIGN KEY (mapel_id) REFERENCES mapel (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 2. TABEL MAPEL
--- ============================================
-CREATE TABLE public.mapel (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    kode VARCHAR(20) UNIQUE NOT NULL,
-    nama VARCHAR(100) NOT NULL,
-    tingkat VARCHAR(20) CHECK (tingkat IN ('SD', 'SMP', 'SMA', 'SMK', 'all')),
-    jenis VARCHAR(20) CHECK (jenis IN ('wajib', 'pilihan_umum', 'pilihan_kejuruan')),
-    created_at TIMESTAMP DEFAULT NOW()
-);
+CREATE TABLE soal (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  kompetensi_dasar_id bigint(20) unsigned NOT NULL,
+  tipe_soal enum('pg','pg_kompleks','pg_kategori') NOT NULL,
+  pertanyaan text NOT NULL,
+  gambar_url varchar(255) DEFAULT NULL,
+  pembahasan text DEFAULT NULL,
+  daftar_kategori longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(daftar_kategori)),
+  a_diskriminasi decimal(5,3) NOT NULL DEFAULT 1.000,
+  b_kesulitan decimal(5,3) NOT NULL DEFAULT 0.000,
+  c_tebakan decimal(5,3) NOT NULL DEFAULT 0.250,
+  created_by bigint(20) unsigned DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  deleted_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY soal_created_by_foreign (created_by),
+  KEY soal_kompetensi_dasar_id_index (kompetensi_dasar_id),
+  CONSTRAINT soal_created_by_foreign FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT soal_kompetensi_dasar_id_foreign FOREIGN KEY (kompetensi_dasar_id) REFERENCES kompetensi_dasar (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 3. TABEL KOMPETENSI DASAR
--- ============================================
-CREATE TABLE public.kompetensi_dasar (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    mapel_id UUID REFERENCES public.mapel(id) ON DELETE CASCADE,
-    kode_kompetensi VARCHAR(50) NOT NULL,
-    deskripsi TEXT NOT NULL,
-    materi_pokok VARCHAR(255),
-    level_kognitif VARCHAR(50) CHECK (level_kognitif IN ('pengetahuan', 'pemahaman', 'penerapan', 'penalaran')),
-    batasan TEXT, -- batasan materi/topik yang diujikan
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(mapel_id, kode_kompetensi)
-);
+CREATE TABLE opsi_jawaban (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  soal_id bigint(20) unsigned NOT NULL,
+  teks_opsi text NOT NULL,
+  is_benar tinyint(1) NOT NULL DEFAULT 0,
+  urutan int(11) DEFAULT NULL,
+  a_diskriminasi decimal(5,3) DEFAULT NULL,
+  b_kesulitan decimal(5,3) DEFAULT NULL,
+  c_tebakan decimal(5,3) DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY opsi_jawaban_soal_id_index (soal_id),
+  CONSTRAINT opsi_jawaban_soal_id_foreign FOREIGN KEY (soal_id) REFERENCES soal (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 4. TABEL SOAL (DENGAN PARAMETER IRT)
--- ============================================
-CREATE TABLE public.soal (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    kompetensi_dasar_id UUID REFERENCES public.kompetensi_dasar(id) ON DELETE CASCADE,
-    tipe_soal VARCHAR(20) CHECK (tipe_soal IN ('pg', 'pg_kompleks', 'pg_kategori')),
-    pertanyaan TEXT NOT NULL, -- HTML dari WYSIWYG
-    gambar_url VARCHAR(255) NULL, -- gambar tambahan (opsional)
-    pembahasan TEXT NULL, -- HTML dari WYSIWYG
-    
-    -- PARAMETER IRT (3PL)
-    a_diskriminasi DECIMAL(5,3) NOT NULL DEFAULT 1.0,
-    b_kesulitan DECIMAL(5,3) NOT NULL DEFAULT 0.0,
-    c_tebakan DECIMAL(5,3) NOT NULL DEFAULT 0.25,
-    
-    created_by UUID REFERENCES public.profiles(id),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
+CREATE TABLE pernyataan_kategori (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  soal_id bigint(20) unsigned NOT NULL,
+  teks_pernyataan text NOT NULL,
+  kategori_benar varchar(50) NOT NULL,
+  a_diskriminasi decimal(5,3) DEFAULT NULL,
+  b_kesulitan decimal(5,3) DEFAULT NULL,
+  c_tebakan decimal(5,3) DEFAULT NULL,
+  urutan int(11) DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY pernyataan_kategori_soal_id_index (soal_id),
+  CONSTRAINT pernyataan_kategori_soal_id_foreign FOREIGN KEY (soal_id) REFERENCES soal (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 5. TABEL OPSI JAWABAN
--- ============================================
-CREATE TABLE public.opsi_jawaban (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    soal_id UUID REFERENCES public.soal(id) ON DELETE CASCADE,
-    teks_opsi TEXT NOT NULL, -- HTML dari WYSIWYG
-    is_benar BOOLEAN DEFAULT FALSE,
-    urutan INTEGER,
-    a_diskriminasi DECIMAL(5,3) NULL,
-    b_kesulitan DECIMAL(5,3) NULL,
-    c_tebakan DECIMAL(5,3) NULL
-);
+CREATE TABLE paket_soal (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  nama_paket varchar(255) NOT NULL,
+  deskripsi text DEFAULT NULL,
+  mapel_id bigint(20) unsigned NOT NULL,
+  created_by bigint(20) unsigned DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  deleted_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY paket_soal_created_by_foreign (created_by),
+  KEY paket_soal_mapel_id_index (mapel_id),
+  CONSTRAINT paket_soal_created_by_foreign FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT paket_soal_mapel_id_foreign FOREIGN KEY (mapel_id) REFERENCES mapel (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 6. TABEL PERNYATAAN KATEGORI (PG KATEGORI)
--- ============================================
-CREATE TABLE public.pernyataan_kategori (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    soal_id UUID REFERENCES public.soal(id) ON DELETE CASCADE,
-    teks_pernyataan TEXT NOT NULL, -- HTML dari WYSIWYG
-    kategori_benar VARCHAR(50) NOT NULL, -- 'Benar', 'Salah', 'Setuju', 'Tidak Setuju'
-    a_diskriminasi DECIMAL(5,3) NULL,
-    b_kesulitan DECIMAL(5,3) NULL,
-    c_tebakan DECIMAL(5,3) NULL,
-    urutan INTEGER
-);
+CREATE TABLE detail_paket_soal (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  paket_soal_id bigint(20) unsigned NOT NULL,
+  soal_id bigint(20) unsigned NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY detail_paket_soal_paket_soal_id_soal_id_unique (paket_soal_id,soal_id),
+  KEY detail_paket_soal_soal_id_index (soal_id),
+  CONSTRAINT detail_paket_soal_paket_soal_id_foreign FOREIGN KEY (paket_soal_id) REFERENCES paket_soal (id) ON DELETE CASCADE,
+  CONSTRAINT detail_paket_soal_soal_id_foreign FOREIGN KEY (soal_id) REFERENCES soal (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 7. TABEL PAKET SOAL
--- ============================================
-CREATE TABLE public.paket_soal (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nama_paket VARCHAR(255) NOT NULL,
-    deskripsi TEXT,
-    mapel_id UUID REFERENCES public.mapel(id),
-    created_by UUID REFERENCES public.profiles(id),
-    created_at TIMESTAMP DEFAULT NOW()
-);
+CREATE TABLE paket_tryout (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  nama_paket varchar(255) NOT NULL,
+  deskripsi text DEFAULT NULL,
+  tingkat enum('SD','SMP','SMA','SMK') NOT NULL DEFAULT 'SMK',
+  batas_waktu_menit int(11) NOT NULL,
+  mapel_wajib_1 bigint(20) unsigned DEFAULT NULL,
+  mapel_wajib_2 bigint(20) unsigned DEFAULT NULL,
+  mapel_wajib_3 bigint(20) unsigned DEFAULT NULL,
+  mapel_pilihan_1 bigint(20) unsigned DEFAULT NULL,
+  mapel_pilihan_2 bigint(20) unsigned DEFAULT NULL,
+  paket_soal_wajib_1_id bigint(20) unsigned DEFAULT NULL,
+  paket_soal_wajib_2_id bigint(20) unsigned DEFAULT NULL,
+  paket_soal_wajib_3_id bigint(20) unsigned DEFAULT NULL,
+  paket_soal_pilihan_1_id bigint(20) unsigned DEFAULT NULL,
+  paket_soal_pilihan_2_id bigint(20) unsigned DEFAULT NULL,
+  created_by bigint(20) unsigned DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  deleted_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY paket_tryout_mapel_wajib_1_foreign (mapel_wajib_1),
+  KEY paket_tryout_mapel_wajib_2_foreign (mapel_wajib_2),
+  KEY paket_tryout_mapel_wajib_3_foreign (mapel_wajib_3),
+  KEY paket_tryout_mapel_pilihan_1_foreign (mapel_pilihan_1),
+  KEY paket_tryout_mapel_pilihan_2_foreign (mapel_pilihan_2),
+  KEY paket_tryout_paket_soal_wajib_1_id_foreign (paket_soal_wajib_1_id),
+  KEY paket_tryout_paket_soal_wajib_2_id_foreign (paket_soal_wajib_2_id),
+  KEY paket_tryout_paket_soal_wajib_3_id_foreign (paket_soal_wajib_3_id),
+  KEY paket_tryout_paket_soal_pilihan_1_id_foreign (paket_soal_pilihan_1_id),
+  KEY paket_tryout_paket_soal_pilihan_2_id_foreign (paket_soal_pilihan_2_id),
+  KEY paket_tryout_created_by_foreign (created_by),
+  CONSTRAINT paket_tryout_created_by_foreign FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_mapel_pilihan_1_foreign FOREIGN KEY (mapel_pilihan_1) REFERENCES mapel (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_mapel_pilihan_2_foreign FOREIGN KEY (mapel_pilihan_2) REFERENCES mapel (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_mapel_wajib_1_foreign FOREIGN KEY (mapel_wajib_1) REFERENCES mapel (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_mapel_wajib_2_foreign FOREIGN KEY (mapel_wajib_2) REFERENCES mapel (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_mapel_wajib_3_foreign FOREIGN KEY (mapel_wajib_3) REFERENCES mapel (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_paket_soal_pilihan_1_id_foreign FOREIGN KEY (paket_soal_pilihan_1_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_paket_soal_pilihan_2_id_foreign FOREIGN KEY (paket_soal_pilihan_2_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_paket_soal_wajib_1_id_foreign FOREIGN KEY (paket_soal_wajib_1_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_paket_soal_wajib_2_id_foreign FOREIGN KEY (paket_soal_wajib_2_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
+  CONSTRAINT paket_tryout_paket_soal_wajib_3_id_foreign FOREIGN KEY (paket_soal_wajib_3_id) REFERENCES paket_soal (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
 
-CREATE TABLE public.detail_paket_soal (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    paket_soal_id UUID REFERENCES public.paket_soal(id) ON DELETE CASCADE,
-    soal_id UUID REFERENCES public.soal(id) ON DELETE CASCADE,
-    UNIQUE(paket_soal_id, soal_id)
-);
+CREATE TABLE percobaan (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint(20) unsigned NOT NULL,
+  jenis enum('tryout','latihan') NOT NULL,
+  paket_tryout_id bigint(20) unsigned DEFAULT NULL,
+  mapel_id bigint(20) unsigned DEFAULT NULL,
+  jumlah_soal int(11) DEFAULT NULL,
+  batas_waktu_menit int(11) DEFAULT NULL,
+  status enum('berjalan','selesai','dibatalkan') NOT NULL DEFAULT 'berjalan',
+  daftar_soal longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(daftar_soal)),
+  posisi_soal int(11) NOT NULL DEFAULT 0,
+  urutan_mapel int(11) NOT NULL DEFAULT 0,
+  waktu_mulai timestamp NULL DEFAULT NULL,
+  waktu_selesai timestamp NULL DEFAULT NULL,
+  durasi_detik int(11) DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY percobaan_mapel_id_foreign (mapel_id),
+  KEY percobaan_user_id_index (user_id),
+  KEY percobaan_user_id_status_index (user_id,status),
+  KEY percobaan_paket_tryout_id_index (paket_tryout_id),
+  CONSTRAINT percobaan_mapel_id_foreign FOREIGN KEY (mapel_id) REFERENCES mapel (id) ON DELETE SET NULL,
+  CONSTRAINT percobaan_paket_tryout_id_foreign FOREIGN KEY (paket_tryout_id) REFERENCES paket_tryout (id) ON DELETE SET NULL,
+  CONSTRAINT percobaan_user_id_foreign FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 8. TABEL PAKET TRYOUT
--- ============================================
-CREATE TABLE public.paket_tryout (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nama_paket VARCHAR(255) NOT NULL,
-    deskripsi TEXT,
-    tingkat VARCHAR(20) DEFAULT 'SMK',
-    
-    -- 3 Mapel Wajib
-    mapel_wajib_1 UUID REFERENCES public.mapel(id),
-    mapel_wajib_2 UUID REFERENCES public.mapel(id),
-    mapel_wajib_3 UUID REFERENCES public.mapel(id),
-    
-    -- 2 Mapel Pilihan
-    mapel_pilihan_1 UUID REFERENCES public.mapel(id),
-    mapel_pilihan_2 UUID REFERENCES public.mapel(id),
-    
-    -- Paket Soal untuk masing-masing mapel
-    paket_soal_wajib_1_id UUID REFERENCES public.paket_soal(id),
-    paket_soal_wajib_2_id UUID REFERENCES public.paket_soal(id),
-    paket_soal_wajib_3_id UUID REFERENCES public.paket_soal(id),
-    paket_soal_pilihan_1_id UUID REFERENCES public.paket_soal(id),
-    paket_soal_pilihan_2_id UUID REFERENCES public.paket_soal(id),
-    
-    created_by UUID REFERENCES public.profiles(id),
-    created_at TIMESTAMP DEFAULT NOW()
-);
+CREATE TABLE riwayat_pengerjaan (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint(20) unsigned NOT NULL,
+  percobaan_id bigint(20) unsigned NOT NULL,
+  soal_id bigint(20) unsigned NOT NULL,
+  paket_tryout_id bigint(20) unsigned DEFAULT NULL,
+  jawaban_user longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(jawaban_user)),
+  is_benar tinyint(1) NOT NULL DEFAULT 0,
+  mode enum('tryout','latihan') NOT NULL,
+  waktu_mulai timestamp NULL DEFAULT NULL,
+  waktu_selesai timestamp NULL DEFAULT NULL,
+  durasi_detik int(11) DEFAULT NULL,
+  theta_est_moment decimal(5,3) DEFAULT NULL,
+  skor_irt decimal(5,3) DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY riwayat_pengerjaan_user_id_index (user_id),
+  KEY riwayat_pengerjaan_percobaan_id_index (percobaan_id),
+  KEY riwayat_pengerjaan_soal_id_index (soal_id),
+  KEY riwayat_pengerjaan_paket_tryout_id_index (paket_tryout_id),
+  CONSTRAINT riwayat_pengerjaan_paket_tryout_id_foreign FOREIGN KEY (paket_tryout_id) REFERENCES paket_tryout (id) ON DELETE SET NULL,
+  CONSTRAINT riwayat_pengerjaan_percobaan_id_foreign FOREIGN KEY (percobaan_id) REFERENCES percobaan (id) ON DELETE CASCADE,
+  CONSTRAINT riwayat_pengerjaan_soal_id_foreign FOREIGN KEY (soal_id) REFERENCES soal (id) ON DELETE CASCADE,
+  CONSTRAINT riwayat_pengerjaan_user_id_foreign FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 9. TABEL RIWAYAT PENGERJAAN
--- ============================================
-CREATE TABLE public.riwayat_pengerjaan (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    soal_id UUID REFERENCES public.soal(id) ON DELETE CASCADE,
-    paket_tryout_id UUID REFERENCES public.paket_tryout(id) NULL,
-    
-    jawaban_user JSONB NOT NULL, -- {'opsi': 'A'} atau {'opsi': ['A','C']}
-    is_benar BOOLEAN NOT NULL,
-    mode VARCHAR(20) CHECK (mode IN ('tryout', 'latihan')),
-    
-    waktu_mulai TIMESTAMP DEFAULT NOW(),
-    waktu_selesai TIMESTAMP NULL,
-    durasi_detik INTEGER NULL,
-    
-    -- Hasil IRT per soal (diisi setelah selesai)
-    theta_est_moment DECIMAL(5,3) NULL,
-    skor_irt DECIMAL(5,3) NULL,
-    
-    created_at TIMESTAMP DEFAULT NOW()
-);
+CREATE TABLE hasil_tryout (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint(20) unsigned NOT NULL,
+  paket_tryout_id bigint(20) unsigned NOT NULL,
+  theta_final decimal(5,3) NOT NULL,
+  standard_error decimal(5,3) DEFAULT NULL,
+  skor_irt_total decimal(5,3) NOT NULL,
+  skor_konversi int(11) DEFAULT NULL,
+  jumlah_benar int(11) DEFAULT NULL,
+  jumlah_salah int(11) DEFAULT NULL,
+  total_soal int(11) DEFAULT NULL,
+  durasi_total int(11) DEFAULT NULL,
+  selesai_pada timestamp NOT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY hasil_tryout_user_id_paket_tryout_id_unique (user_id,paket_tryout_id),
+  KEY hasil_tryout_user_id_index (user_id),
+  KEY hasil_tryout_paket_tryout_id_index (paket_tryout_id),
+  CONSTRAINT hasil_tryout_paket_tryout_id_foreign FOREIGN KEY (paket_tryout_id) REFERENCES paket_tryout (id) ON DELETE CASCADE,
+  CONSTRAINT hasil_tryout_user_id_foreign FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 10. TABEL HASIL TRYOUT
--- ============================================
-CREATE TABLE public.hasil_tryout (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    paket_tryout_id UUID REFERENCES public.paket_tryout(id) ON DELETE CASCADE,
-    
-    theta_final DECIMAL(5,3) NOT NULL,
-    standard_error DECIMAL(5,3),
-    skor_irt_total DECIMAL(5,3) NOT NULL,
-    skor_konversi INTEGER, -- 0-100 atau 200-700 sesuai tingkat
-    
-    jumlah_benar INTEGER,
-    jumlah_salah INTEGER,
-    total_soal INTEGER,
-    durasi_total INTEGER,
-    selesai_pada TIMESTAMP DEFAULT NOW(),
-    
-    UNIQUE(user_id, paket_tryout_id)
-);
+CREATE TABLE tracking_kompetensi (
+  user_id bigint(20) unsigned NOT NULL,
+  kompetensi_dasar_id bigint(20) unsigned NOT NULL,
+  total_soal_dikerjakan int(11) NOT NULL DEFAULT 0,
+  total_benar int(11) NOT NULL DEFAULT 0,
+  persentase_benar decimal(5,2) NOT NULL DEFAULT 0.00,
+  theta_estimasi decimal(5,3) DEFAULT NULL,
+  theta_se decimal(5,3) DEFAULT NULL,
+  last_updated timestamp NULL DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (user_id,kompetensi_dasar_id),
+  KEY tracking_kompetensi_kompetensi_dasar_id_index (kompetensi_dasar_id),
+  CONSTRAINT tracking_kompetensi_kompetensi_dasar_id_foreign FOREIGN KEY (kompetensi_dasar_id) REFERENCES kompetensi_dasar (id) ON DELETE CASCADE,
+  CONSTRAINT tracking_kompetensi_user_id_foreign FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- ============================================
--- 11. TABEL TRACKING KOMPETENSI (PER KD)
--- ============================================
-CREATE TABLE public.tracking_kompetensi (
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    kompetensi_dasar_id UUID REFERENCES public.kompetensi_dasar(id) ON DELETE CASCADE,
-    
-    total_soal_dikerjakan INTEGER DEFAULT 0,
-    total_benar INTEGER DEFAULT 0,
-    persentase_benar DECIMAL(5,2) DEFAULT 0,
-    
-    theta_estimasi DECIMAL(5,3) DEFAULT 0,
-    theta_se DECIMAL(5,3) NULL,
-    
-    last_updated TIMESTAMP DEFAULT NOW(),
-    
-    PRIMARY KEY (user_id, kompetensi_dasar_id)
-);
-
--- ============================================
--- 12. TABEL TRACKING MAPEL
--- ============================================
-CREATE TABLE public.tracking_mapel (
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    mapel_id UUID REFERENCES public.mapel(id) ON DELETE CASCADE,
-    
-    theta_estimasi DECIMAL(5,3) DEFAULT 0,
-    level_kompetensi VARCHAR(20),
-    total_tryout_diikuti INTEGER DEFAULT 0,
-    rata_rata_skor_irt DECIMAL(5,3),
-    
-    last_updated TIMESTAMP DEFAULT NOW(),
-    
-    PRIMARY KEY (user_id, mapel_id)
-);
-
--- ============================================
--- 13. INDEXES UNTUK PERFORMANCE
--- ============================================
-CREATE INDEX idx_soal_kd ON public.soal(kompetensi_dasar_id);
-CREATE INDEX idx_riwayat_user ON public.riwayat_pengerjaan(user_id);
-CREATE INDEX idx_hasil_tryout_user ON public.hasil_tryout(user_id);
-CREATE INDEX idx_tracking_kompetensi_user ON public.tracking_kompetensi(user_id);
-CREATE INDEX idx_tracking_mapel_user ON public.tracking_mapel(user_id);
+CREATE TABLE tracking_mapel (
+  user_id bigint(20) unsigned NOT NULL,
+  mapel_id bigint(20) unsigned NOT NULL,
+  theta_estimasi decimal(5,3) DEFAULT NULL,
+  level_kompetensi varchar(30) DEFAULT NULL,
+  total_tryout_diikuti int(11) NOT NULL DEFAULT 0,
+  rata_rata_skor_irt decimal(5,3) DEFAULT NULL,
+  last_updated timestamp NULL DEFAULT NULL,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (user_id,mapel_id),
+  KEY tracking_mapel_mapel_id_index (mapel_id),
+  CONSTRAINT tracking_mapel_mapel_id_foreign FOREIGN KEY (mapel_id) REFERENCES mapel (id) ON DELETE CASCADE,
+  CONSTRAINT tracking_mapel_user_id_foreign FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 ```
 
 ### 5.1 Catatan Implementasi (Laravel + MySQL)
-Implementasi aktual menggunakan **Laravel 13 + MySQL/MariaDB** dengan pendekatan TDD (Pest). Berikut ringkasan perbedaan dari skema konseptual Supabase di atas:
+Implementasi aktual menggunakan **Laravel 13 + MySQL/MariaDB** dengan pendekatan TDD (Pest). Catatan di bawah melengkapi DDL di atas — hal-hal yang tidak terbaca dari struktur tabel saja:
 
-- **Primary Key:** BIGINT auto-increment (bukan UUID) pada seluruh tabel domain.
-- **Autentikasi:** Menggunakan Laravel auth (`auth:web`); tidak ada Supabase Auth. Tabel `users` memuat langsung profil dasar (`nama_lengkap`, `sekolah`, `tingkat`, `jurusan`, `role`, `session_token`).
+- **Primary Key:** BIGINT auto-increment pada seluruh tabel domain.
+- **Autentikasi:** Menggunakan Laravel auth (`auth:web`); tabel `users` memuat langsung profil dasar (`nama_lengkap`, `sekolah`, `tingkat`, `jurusan`, `role`, `session_token`).
 - **Soft Delete + Blokir Hapus Permanen:** Kolom `deleted_at` pada `mapel`, `kompetensi_dasar`, `soal`, `paket_soal`, dan `paket_tryout`. Hapus permanen diblokir jika data sudah memiliki dependensi.
 - **Mapel:** Menambahkan kolom `is_pkk` (boolean, default `false`) untuk identifikasi Proyek Kreatif & Kewirausahaan (digunakan dalam validasi aturan SMK §3.6).
 - **Soal:** Kolom `daftar_kategori` (JSON) menyimpan daftar kategori yang tersedia untuk tipe `pg_kategori` di tingkat soal (bukan per-paket).
@@ -602,6 +646,35 @@ Implementasi aktual menggunakan **Laravel 13 + MySQL/MariaDB** dengan pendekatan
 - **Session:** Menggunakan `SESSION_DRIVER=database` (tabel `sessions`); satu-sesi-per-akun diimplementasikan via kolom `users.session_token` + middleware kustom.
 
 > Seluruh migrasi Laravel tersedia di `database/migrations/`. Jalankan `php artisan migrate:fresh` untuk membangun ulang skema dari awal.
+
+### 5.2 Indeks untuk Pola Query Utama
+
+Diverifikasi lewat `EXPLAIN` pada basis data pengembangan — seluruh pola query
+utama memakai indeksnya, tanpa full scan:
+
+| Pola query | Tipe akses | Indeks yang terpakai |
+|---|---|---|
+| Soal per KD | `ref` | `soal_kompetensi_dasar_id_index` |
+| Riwayat per user | `ref` | `riwayat_pengerjaan_user_id_index` |
+| Riwayat per percobaan | `ref` | `riwayat_pengerjaan_percobaan_id_index` |
+| Hasil per user | `ref` | `hasil_tryout_user_id_paket_tryout_id_unique` |
+| Tracking per KD | `ref` | PRIMARY `(user_id, kompetensi_dasar_id)` |
+| Tracking per mapel | `ref` | PRIMARY `(user_id, mapel_id)` |
+| Opsi per soal (eager load) | `range` | `opsi_jawaban_soal_id_index` |
+| Detail per paket soal | `ref` | `detail_paket_soal_paket_soal_id_soal_id_unique` (index-only) |
+
+`UNIQUE(user_id, paket_tryout_id)` pada `hasil_tryout` sekaligus berfungsi
+sebagai indeks lookup per user karena `user_id` berada di urutan pertama — sama
+seperti PRIMARY KEY komposit pada kedua tabel `tracking_*`.
+
+Satu-satunya query yang masih `Using filesort` adalah peringkat leaderboard
+(§3.10): `WHERE paket_tryout_id = ? ORDER BY skor_konversi DESC, durasi_total,
+selesai_pada`. Indeks `hasil_tryout.paket_tryout_id` sudah dipakai untuk
+menyaring, lalu MySQL mengurutkan hasilnya di memori. Karena jumlah baris per
+paket tryout dibatasi oleh peserta yang menyelesaikan paket itu, filesort
+tersebut dibiarkan — indeks komposit dengan arah campuran
+(`skor_konversi DESC, durasi_total ASC, selesai_pada ASC`) hanya menambah biaya
+tulis tanpa berarti pada skala ini.
 
 ---
 
@@ -716,8 +789,8 @@ Aturan pembuatan soal:
 1. Setiap soal harus memiliki:
    - tipe_soal: "pg" (Pilihan Ganda), "pg_kompleks" (lebih dari 1 jawaban benar), atau "pg_kategori" (pernyataan dikategorikan ke kustom)
    - pertanyaan yang jelas dan tidak ambigu (bisa mengandung ekspresi matematika dalam format LaTeX)
-   - opsi_jawaban: minimal 2, maksimal 5 (hanya untuk tipe "pg" dan "pg_kompleks")
-   - pernyataan_kategori: minimal 2 pernyataan (hanya untuk tipe "pg_kategori", lihat aturan khusus di bawah)
+   - opsi_jawaban: tepat 5 opsi (hanya untuk tipe "pg" dan "pg_kompleks")
+   - pernyataan_kategori: minimal 3 pernyataan (hanya untuk tipe "pg_kategori", lihat aturan khusus di bawah)
    - jawaban benar yang jelas
    - pembahasan yang edukatif dan mudah dipahami (bisa mengandung ekspresi matematika)
    - kompetensi_dasar yang sesuai dengan salah satu KD yang diberikan
@@ -725,7 +798,7 @@ Aturan pembuatan soal:
 2. Aturan khusus per tipe soal:
    a. **PG (Pilihan Ganda):**
       - Hanya 1 opsi yang `is_benar: true`.
-      - Minimal 2 opsi, maksimal 5 opsi.
+      - Tepat 5 opsi.
 
    b. **PG Kompleks:**
       - Minimal 2 opsi yang `is_benar: true` (boleh semua opsi benar).
@@ -739,7 +812,7 @@ Aturan pembuatan soal:
         (contoh: "Benar/Salah", "Setuju/Tidak Setuju", "Fakta/Opini", "Kuat/Lemah", dll).
       - Field `kategori_pg_kategori` di metadata berisi daftar kategori yang tersedia untuk seluruh paket.
         Setiap pernyataan harus menggunakan salah satu kategori dari daftar tersebut.
-      - Minimal 2 pernyataan, maksimal 5 pernyataan.
+      - Minimal 3 pernyataan, maksimal 5 pernyataan.
       - Setiap pernyataan memiliki `parameter_irt` sendiri (a, b, c per pernyataan).
 
 3. Untuk parameter IRT (a, b, c):
@@ -766,6 +839,10 @@ Aturan pembuatan soal:
    JANGAN tambahkan teks di luar JSON.
    JANGAN gunakan markdown code block.
 ```
+
+> Naskah yang benar-benar dikirim ke model dibangun di `app/Domain/Ai/PromptBuilder.php`.
+> Blok di atas adalah potret ilustratif — bila ada perbedaan angka atau aturan,
+> `PromptBuilder` yang berlaku (dan sudah diuji).
 
 ### 7.2 Skema JSON Output AI
 
@@ -1009,9 +1086,11 @@ Sistem menerapkan proteksi dasar:
 4. Saat ditampilkan ke peserta, sistem merender ulang menggunakan KaTeX.
 
 ### 7.12 Bagaimana Cara Upload Gambar di WYSIWYG Editor?
-1. Admin mengklik ikon "Insert Image" di toolbar editor.
-2. Muncul popup dengan 2 opsi:
-   - **Upload dari lokal:** Pilih file gambar → sistem upload ke Supabase Storage → otomatis insert URL ke editor.
-   - **Masukkan URL:** Tempel URL gambar → insert ke editor.
-3. Gambar akan ditampilkan di editor sebagai preview.
-4. Saat disimpan, gambar direferensikan melalui URL di konten HTML.
+1. Admin mengklik tombol "Sisipkan gambar" di bawah toolbar editor lalu memilih file.
+2. Sebelum dikirim, file dikompres di browser lewat Canvas API ke WebP dengan anggaran 500 KB (fallback JPEG bila WebP tidak didukung) — lihat edge 6.6.
+3. Komponen Livewire `Wysiwyg` memvalidasi bahwa file benar-benar gambar berformat JPG/PNG/WebP dan maksimal 500 KB, lalu menyimpannya ke disk publik pada direktori `gambar-soal/`.
+4. URL hasil simpan disisipkan ke editor sebagai elemen `<img>` dan tampil sebagai preview.
+5. Saat disimpan, gambar direferensikan melalui URL di konten HTML.
+
+> Opsi **masukkan URL** tanpa unggah (langkah 2 pada rancangan awal) belum
+> diimplementasikan; jalur unggah berkaslah yang berlaku sekarang.

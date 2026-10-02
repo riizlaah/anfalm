@@ -358,6 +358,37 @@ it('parameter IRT divalidasi rentangnya', function () {
     ]))->assertSessionHasErrors(['a_diskriminasi', 'b_kesulitan', 'c_tebakan']);
 });
 
+it('form soal memeringatkan ketika parameter IRT masih default (edge 6.1)', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.create', $mapel))
+        ->assertOk()
+        ->assertSee('Parameter IRT masih default, disarankan untuk dikurasi');
+});
+
+it('peringatan parameter IRT hilang setelah ketiganya dikurasi (edge 6.1)', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->getKey()]);
+
+    $soalDefault = Soal::factory()->create(['kompetensi_dasar_id' => $kd->getKey()]);
+    $soalKurasi = Soal::factory()->create([
+        'kompetensi_dasar_id' => $kd->getKey(),
+        'a_diskriminasi' => 1.4,
+        'b_kesulitan' => -0.8,
+        'c_tebakan' => 0.2,
+    ]);
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.edit', [$mapel, $soalDefault]))
+        ->assertOk()
+        ->assertSee('Parameter IRT masih default, disarankan untuk dikurasi');
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.edit', [$mapel, $soalKurasi]))
+        ->assertOk()
+        ->assertDontSee('Parameter IRT masih default');
+});
+
 it('form tambah soal sudah menampilkan jumlah baris minimum', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create();

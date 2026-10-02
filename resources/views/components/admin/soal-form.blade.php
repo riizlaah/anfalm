@@ -15,6 +15,15 @@
     $tipeSelected = old('tipe_soal', $soal?->tipe_soal ?? 'pg');
     $daftarKategori = array_values(old('daftar_kategori', $soal?->daftar_kategori ?? []));
 
+    // Parameter IRT bawaan database (DESIGN 6.1). Selama ketiganya belum
+    // disentuh, form memeringatkan admin supaya parameter dikurasi.
+    $irtBawaan = ['a_diskriminasi' => 1.0, 'b_kesulitan' => 0.0, 'c_tebakan' => 0.25];
+    $irtMasihDefault = collect($irtBawaan)->every(function (float $bawaan, string $kolom) use ($soal): bool {
+        $isi = old($kolom, $soal?->{$kolom});
+
+        return $isi === null || $isi === '' || (float) $isi === $bawaan;
+    });
+
     $opsiRows = array_pad($opsiRows, max(count($opsiRows), $MIN_OPSI), []);
     $pernyataanRows = array_pad($pernyataanRows, max(count($pernyataanRows), $MIN_PERNYATAAN), []);
     $daftarKategori = array_pad($daftarKategori, max(count($daftarKategori), $MIN_KATEGORI), '');
@@ -96,6 +105,10 @@
                 value="{{ old('c_tebakan', $soal?->c_tebakan ?? 0.25) }}" class="input">
         </label>
     </div>
+
+    @if ($irtMasihDefault)
+        <p class="hint mt-3 text-amber-700">Parameter IRT masih default, disarankan untuk dikurasi.</p>
+    @endif
 
     <section data-for-tipe="pg pg_kompleks" class="mt-6 border-t border-slate-200 pt-5">
         <h2 class="mb-3 text-base font-semibold text-ink">Opsi Jawaban</h2>

@@ -455,6 +455,30 @@ it('simpan kurasi menolak PG Kategori yang menyertakan opsi jawaban', function (
         ->assertSessionHasErrors('daftar_soal.2.opsi_jawaban');
 });
 
+it('simpan kurasi menolak opsi yang kehilangan teks_opsi', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    seedAiDraft($mapel);
+
+    unset($payload['daftar_soal'][0]['opsi_jawaban'][2]['teks_opsi']);
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors('daftar_soal.0.opsi_jawaban.2.teks_opsi');
+});
+
+it('simpan kurasi menolak pernyataan yang kehilangan kategori_benar', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    seedAiDraft($mapel);
+
+    unset($payload['daftar_soal'][2]['pernyataan_kategori'][1]['kategori_benar']);
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors('daftar_soal.2.pernyataan_kategori.1.kategori_benar');
+});
+
 it('simpan kurasi menolak ketika semua soal dihapus', function () {
     $admin = User::factory()->admin()->create();
     [$mapel, $kd31, $kd32] = setupKurasiMapel();

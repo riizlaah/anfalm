@@ -90,7 +90,7 @@
                                     @break
                             @endswitch
                         </td>
-                        <td class="px-4 py-3">{{ $soal->tipe_soal === 'pg_kategori' ? $soal->pernyataanKategori()->count().' pernyataan' : $soal->opsiJawaban()->count().' opsi' }}</td>
+                        <td class="px-4 py-3">{{ $soal->tipe_soal === 'pg_kategori' ? $soal->pernyataanKategori->count().' pernyataan' : $soal->opsiJawaban->count().' opsi' }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
                                 <a href="{{ route('admin.mapel.soal.edit', [$mapel, $soal]) }}" class="btn btn-ghost px-2.5 py-1 text-xs">Edit</a>
