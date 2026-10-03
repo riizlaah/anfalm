@@ -2,8 +2,11 @@
 
 use App\Domain\Scoring\KompetensiLevel;
 use App\Models\HasilTryout;
+use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\Percobaan;
+use App\Models\Soal;
+use App\Models\TrackingKompetensi;
 use App\Models\User;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -61,6 +64,87 @@ function dataGrafik(TestResponse $halaman): array
 
     return $data;
 }
+
+/**
+ * Kartu KD yang disorot sebagai fokus belajar berikutnya, kosong bila tidak ada.
+ */
+function kartuFokusKd(string $html): string
+{
+    preg_match('/<article[^>]*data-fokus[^>]*>.*?<\/article>/s', $html, $cocok);
+
+    return $cocok[0] ?? '';
+}
+
+it('tiap KD yang punya soal mendapat tombol Belajar untuk latihan pada KD itu', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    $kdTanpaSoal = KompetensiDasar::factory()->create([
+        'mapel_id' => $mapel->getKey(),
+        'kode_kompetensi' => '9.9',
+        'deskripsi' => 'KD sementara yang belum punya soal',
+    ]);
+
+    $html = $this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk()
+        ->getContent();
+
+    preg_match_all('/<form[^>]*action="[^"]*latihan\/mulai"[^>]*>.*?<\/form>/s', $html, $formulir);
+    preg_match_all('/<button[^>]*type="submit"[^>]*>Belajar<\/button>/', $html, $tombol);
+    preg_match_all('/name="kompetensi_dasar_id" value="(\d+)"/', $html, $kdForm);
+    preg_match_all('/name="mapel_id" value="(\d+)"/', $html, $mapelForm);
+    preg_match_all('/name="timer" value="(\w+)"/', $html, $timer);
+
+    $kdBersoal = Soal::whereIn(
+        'kompetensi_dasar_id',
+        $mapel->kompetensiDasars()->pluck('id')
+    )->pluck('kompetensi_dasar_id')->unique()->count();
+
+    expect($kdBersoal)->toBeGreaterThan(0)
+        ->and($formulir[0])->toHaveCount($kdBersoal)
+        ->and($tombol[0])->toHaveCount($kdBersoal)
+        ->and(array_unique($kdForm[1]))->toHaveCount($kdBersoal)
+        ->and(array_unique($mapelForm[1]))->toBe([(string) $mapel->getKey()])
+        ->and(array_unique($timer[1]))->toBe(['stopwatch']);
+
+    expect($kdForm[1])->not->toContain((string) $kdTanpaSoal->getKey());
+});
+
+it('menyorot tepat satu KD sebagai fokus belajar berikutnya', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
+
+    // Dijamin ada satu KD yang belum tersentuh supaya selalu ada kandidat fokus.
+    $kdBelumDilatih = KompetensiDasar::factory()->create([
+        'mapel_id' => $mapel->getKey(),
+        'kode_kompetensi' => '9.8',
+        'deskripsi' => 'KD yang tidak pernah dilatih',
+    ]);
+    Soal::factory()->create(['kompetensi_dasar_id' => $kdBelumDilatih->getKey()]);
+
+    $html = $this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk()
+        ->getContent();
+
+    $fokus = kartuFokusKd($html);
+
+    $pernahDilatih = TrackingKompetensi::where('user_id', $peserta->getKey())
+        ->pluck('kompetensi_dasar_id');
+
+    $belumDilatih = $mapel->kompetensiDasars()
+        ->whereNotIn('id', $pernahDilatih)
+        ->pluck('kode_kompetensi');
+
+    expect(substr_count($html, 'data-fokus'))->toBe(1)
+        ->and($fokus)->not->toBe('')
+        ->and($belumDilatih)->not->toBeEmpty()
+        ->and($belumDilatih->contains(fn (string $kode): bool => str_contains($fokus, $kode)))
+        ->toBeTrue();
+});
 
 it('mengalihkan tamu ke halaman login', function () {
     $this->get(route('analisis.index'))->assertRedirect(route('login'));

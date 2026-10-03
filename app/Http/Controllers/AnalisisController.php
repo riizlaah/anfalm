@@ -6,6 +6,7 @@ use App\Domain\Scoring\KompetensiLevel;
 use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
 use App\Models\Mapel;
+use App\Models\Soal;
 use App\Models\TrackingKompetensi;
 use App\Models\TrackingMapel;
 use App\Models\User;
@@ -61,11 +62,15 @@ class AnalisisController extends Controller
     }
 
     /**
-     * Baris tabel analisis untuk tiap KD pada `$mapel`. KD yang belum pernah
+     * Baris analisis untuk tiap KD pada `$mapel`. KD yang belum pernah
      * dijawab tetap tampil, lengkap dengan level "Belum Teridentifikasi" dan
      * rekomendasi latihan awal.
      *
-     * @return Collection<int, array{kd: KompetensiDasar, dikerjakan: int, benar: int, persentase: float, theta: float|null, label: string, rekomendasi: string}>
+     * `jumlahSoal` dipakai halaman untuk menahan tombol Belajar pada KD yang
+     * belum punya soal — memunculkannya hanya berujung pada pesan galat
+     * "Mapel ini belum punya soal" setelah diklik.
+     *
+     * @return Collection<int, array{kd: KompetensiDasar, dikerjakan: int, benar: int, persentase: float, theta: float|null, label: string, rekomendasi: string, urut: int, jumlahSoal: int, fokus: bool}>
      */
     private function barisPerKd(User $peserta, Mapel $mapel): Collection
     {
@@ -79,9 +84,16 @@ class AnalisisController extends Controller
             ->get()
             ->keyBy('kompetensi_dasar_id');
 
-        return $kds->map(function (KompetensiDasar $kd) use ($terlacak): array {
+        $jumlahSoal = Soal::query()
+            ->whereIn('kompetensi_dasar_id', $kds->pluck('id'))
+            ->groupBy('kompetensi_dasar_id')
+            ->selectRaw('kompetensi_dasar_id, COUNT(*) as jumlah')
+            ->pluck('jumlah', 'kompetensi_dasar_id');
+
+        $baris = $kds->map(function (KompetensiDasar $kd) use ($terlacak, $jumlahSoal): array {
             $data = $terlacak->get($kd->getKey());
             $theta = $data?->theta_estimasi;
+            $level = $this->kompetensi->levelFor($theta);
 
             return [
                 'kd' => $kd,
@@ -89,9 +101,47 @@ class AnalisisController extends Controller
                 'benar' => (int) ($data?->total_benar ?? 0),
                 'persentase' => (float) ($data?->persentase_benar ?? 0),
                 'theta' => $theta,
-                'label' => $this->kompetensi->label($this->kompetensi->levelFor($theta)),
+                'label' => $this->kompetensi->label($level),
                 'rekomendasi' => $this->kompetensi->rekomendasiFor($theta),
+                'urut' => $this->kompetensi->urut($level),
+                'jumlahSoal' => (int) ($jumlahSoal[$kd->getKey()] ?? 0),
+                'fokus' => false,
             ];
+        });
+
+        return $this->tetapkanFokus($baris);
+    }
+
+    /**
+     * Menandai tepat satu KD sebagai fokus belajar berikutnya: level terendah,
+     * lalu yang paling sedikit dikerjakan, lalu kode terkecil supaya hasilnya
+     * deterministik. KD tanpa soal tidak pernah terpilih karena tombol Belajar
+     * tidak ditampilkan untuknya.
+     *
+     * @param  Collection<int, array{kd: KompetensiDasar, urut: int, dikerjakan: int, jumlahSoal: int, fokus: bool}>  $baris
+     * @return Collection<int, array{kd: KompetensiDasar, dikerjakan: int, benar: int, persentase: float, theta: float|null, label: string, rekomendasi: string, urut: int, jumlahSoal: int, fokus: bool}>
+     */
+    private function tetapkanFokus(Collection $baris): Collection
+    {
+        $kandidat = $baris->filter(fn (array $b): bool => $b['jumlahSoal'] > 0);
+
+        $fokus = $kandidat->sortBy([
+            fn (array $a, array $b): int => $a['urut'] <=> $b['urut'],
+            fn (array $a, array $b): int => $a['dikerjakan'] <=> $b['dikerjakan'],
+            fn (array $a, array $b): int => strcmp(
+                (string) $a['kd']->kode_kompetensi,
+                (string) $b['kd']->kode_kompetensi,
+            ),
+        ])->first();
+
+        if ($fokus === null) {
+            return $baris;
+        }
+
+        return $baris->map(function (array $b) use ($fokus): array {
+            $b['fokus'] = $b['kd']->getKey() === $fokus['kd']->getKey();
+
+            return $b;
         });
     }
 

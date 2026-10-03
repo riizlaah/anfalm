@@ -65,7 +65,14 @@
 - Pindahkan navigasi soal ke bagian bawah
 - Stop info dump ke pengguna, khususnya siswa, tampilkan hanya yang perlu diketahui. Misalnya di KD, mereka tak perlu tahu kode KDnya, cukup tahu deskripsi KD. Lakukan untuk semua kasus sejenis
 - Tambahkan grafik aktivitas belajar (streak kalender mirip github contribution graph) atau komponen/grafik/data lain yang membantu
-- Tambahkan tombol aksi 'Belajar' di KD, tampilkan yang paling penting dengan cara yang eye-catching
+- ~~Tambahkan tombol aksi 'Belajar' di KD, tampilkan yang paling penting dengan cara yang eye-catching~~
+  **Selesai 2026-10-03.** Daftar KD di `/analisis-kompetensi` semula berupa tabel lima kolom (KD, Level, Persentase, Theta, Rekomendasi) tanpa satu pun tindakan — peserta bisa melihat kelemahannya tetapi tidak punya jalan untuk memperbaikinya.
+  Perbaikan:
+  1. **Tabel diganti grid kartu** (`sm:2 kolom`, `lg:3 kolom`), satu kartu per KD memuat kode, lencana level, deskripsi, persentase, theta, rekomendasi, dan tombol Belajar. Ini sekaligus menghapus satu tabel yang harus digulir mendatar di layar 360px.
+  2. **Tombol Belajar** mengirim POST ke `latihan/mulai` membawa `mapel_id`, `kompetensi_dasar_id`, `jumlah_soal` (maksimal 10, dibatasi jumlah soal KD itu), dan `timer=stopwatch` — satu ketukan langsung memulai latihan terfokus pada KD tersebut, bukan pada mapel secara acak. Tombolnya diberi `aria-label` berisi kode + deskripsi karena ada sembilan tombol dengan label identik.
+  3. **KD tanpa soal tidak mendapat tombol.** Tanpa penyaringan ini peserta bisa menekan tombol yang selalu berujung pada pesan galat "Mapel ini belum punya soal untuk pilihan itu."
+  4. **Satu KD disorot sebagai "Fokus berikutnya"**: dipilih dari level ordinal terendah (`KompetensiLevel::urut`), lalu `dikerjakan` paling sedikit, lalu kode terkecil supaya deterministik. Kartunya memakai lencana amber, label "Fokus berikutnya", dan tombol terisi (`btn btn-primary`); kartu lain memakai `btn btn-ghost`.
+  Tertutup test: 2 test baru — tombol muncul tepat sebanyak KD yang punya soal (dan tidak muncul untuk KD tanpa soal, lengkap dengan field tersembunyinya), serta `data-fokus` muncul persis satu kali dan selalu berada pada KD yang belum pernah dilatih. Diverifikasi visual di 1280px dan 360px (tanpa scroll mendatar).
 - Kurangi penggunaan tabel di UI mobile (kecuali untuk PG Kategori), ganti dengan card atau komponen sejenis
 - UI cukup 'gelap' untuk aplikasi yang seharusnya memicu semangat belajar, mungkin perlu redesign?
 - Saat siswa mendaftar, arahkan ke sebuah halaman untuk menentukan mapel pilihan yang akan diambil. Nantinya, mapel yang terpilih inilah yang akan ditrack, tidak semuanya. Namun, bisa juga diganti di pengaturan (edit profil)

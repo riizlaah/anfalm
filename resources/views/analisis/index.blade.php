@@ -75,50 +75,57 @@
                 belum teridentifikasi.
             </p>
 
-            <div class="mt-4 overflow-x-auto">
-                <table class="w-full text-left text-sm">
-                    <thead class="text-xs tracking-wide text-slate-500 uppercase">
-                        <tr class="border-b border-slate-200">
-                            <th class="py-2 pr-4 font-medium">Kompetensi dasar</th>
-                            <th class="py-2 pr-4 font-medium">Level</th>
-                            <th class="py-2 pr-4 font-medium">Persentase</th>
-                            <th class="py-2 pr-4 font-medium">Theta</th>
-                            <th class="py-2 font-medium">Rekomendasi</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @forelse ($baris as $barisKd)
-                            <tr>
-                                <td class="py-2 pr-4 text-slate-700">
-                                    {{ $barisKd['kd']->kode_kompetensi }} — {{ $barisKd['kd']->deskripsi }}
-                                </td>
-                                <td class="py-2 pr-4 font-medium whitespace-nowrap text-ink">
-                                    {{ $barisKd['label'] }}
-                                </td>
-                                <td class="py-2 pr-4 text-slate-700">
-                                    {{ $barisKd['persentase'] }}%
-                                    <span class="block text-xs text-slate-400">
-                                        {{ $barisKd['benar'] }}/{{ $barisKd['dikerjakan'] }} soal
-                                    </span>
-                                </td>
-                                <td class="py-2 pr-4 text-slate-700">
-                                    {{ $barisKd['theta'] !== null
-                                        ? number_format((float) $barisKd['theta'], 3)
-                                        : '—' }}
-                                </td>
-                                <td class="py-2 text-slate-600">
-                                    {{ $barisKd['rekomendasi'] }}
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" class="py-4 text-center text-slate-400">
-                                    Belum ada data kompetensi dasar untuk mapel ini.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+            {{-- Kartu, bukan tabel: di layar 360px lima kolom angka harus
+                 digulir mendatar sementara satu kartu muat apa adanya. Satu
+                 kartu — yang levelnya paling rendah — disorot sebagai langkah
+                 berikutnya. --}}
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                @forelse ($baris as $item)
+                    <article @class([
+                        'flex flex-col rounded-xl border p-4',
+                        'border-amber-300 bg-amber-50 ring-1 ring-amber-300' => $item['fokus'],
+                        'border-slate-200 bg-white' => ! $item['fokus'],
+                    ]) @if ($item['fokus']) data-fokus="1" @endif>
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="text-xs text-slate-500">{{ $item['kd']->kode_kompetensi }}</span>
+                            <span class="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-ink">
+                                {{ $item['label'] }}
+                            </span>
+                        </div>
+
+                        <p class="mt-2 text-sm text-slate-700">{{ $item['kd']->deskripsi }}</p>
+
+                        <p class="mt-3 text-xs text-slate-500">
+                            {{ $item['persentase'] }}% benar · {{ $item['benar'] }}/{{ $item['dikerjakan'] }} soal
+                        </p>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Theta {{ $item['theta'] !== null ? number_format((float) $item['theta'], 3) : '—' }}
+                        </p>
+
+                        <p class="mt-2 text-xs text-slate-600">{{ $item['rekomendasi'] }}</p>
+
+                        @if ($item['fokus'])
+                            <p class="mt-3 text-xs font-semibold text-amber-700">Fokus berikutnya</p>
+                        @endif
+
+                        <div class="mt-auto pt-3">
+                            @if ($item['jumlahSoal'] > 0)
+                                <form method="POST" action="{{ route('latihan.mulai') }}">
+                                    @csrf
+                                    <input type="hidden" name="mapel_id" value="{{ $mapel->getKey() }}">
+                                    <input type="hidden" name="kompetensi_dasar_id" value="{{ $item['kd']->getKey() }}">
+                                    <input type="hidden" name="jumlah_soal" value="{{ min(10, $item['jumlahSoal']) }}">
+                                    <input type="hidden" name="timer" value="stopwatch">
+                                    <button type="submit" class="{{ ($item['fokus'] ? 'btn btn-primary' : 'btn btn-ghost') }} w-full" aria-label="Belajar {{ $item['kd']->kode_kompetensi }} — {{ $item['kd']->deskripsi }}">Belajar</button>
+                                </form>
+                            @endif
+                        </div>
+                    </article>
+                @empty
+                    <p class="py-4 text-center text-slate-400 sm:col-span-2 lg:col-span-3">
+                        Belum ada data kompetensi dasar untuk mapel ini.
+                    </p>
+                @endforelse
             </div>
         </section>
     @endif
