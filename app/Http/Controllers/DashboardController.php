@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Aktivitas\KalenderAktivitas;
+use App\Models\HasilTryout;
+use App\Models\PaketTryout;
 use App\Models\Percobaan;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -22,7 +24,46 @@ class DashboardController extends Controller
             ? $kalender->susun($this->jumlahAktivitasPerTanggal($user), now())
             : null;
 
-        return view('dashboard', ['aktivitas' => $aktivitas]);
+        // Alasan yang sama: admin tidak mengerjakan tryout, jadi informasi
+        // tryout pun tidak dikirim. Kartu itu hanya punya arti bagi peserta
+        // yang bisa mengerjakannya.
+        $tryoutTerbaru = $user->isPeserta()
+            ? $this->tryoutTerbaru($user)
+            : null;
+
+        return view('dashboard', [
+            'aktivitas' => $aktivitas,
+            'tryoutTerbaru' => $tryoutTerbaru,
+        ]);
+    }
+
+    /**
+     * Paket tryout terbaru beserta hasil peserta ini pada paket itu.
+     *
+     * "Terbaru" dibaca dari id, bukan dari urutan nama seperti halaman daftar
+     * tryout: yang dicari adalah paket yang paling baru dibuat admin, dan
+     * urutan abjad sama sekali tidak berkaitan dengan kapan ia dibuat.
+     * `hasil` bernilai null ketika peserta belum mengerjakannya — perbedaan
+     * itulah yang mengubah isi kartu di tampilan.
+     *
+     * @return array{paket: ?PaketTryout, hasil: ?HasilTryout}
+     */
+    private function tryoutTerbaru(User $user): array
+    {
+        $paket = PaketTryout::query()
+            ->with(['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'])
+            ->latest('id')
+            ->first();
+
+        return [
+            'paket' => $paket,
+            'hasil' => $paket === null
+                ? null
+                : HasilTryout::query()
+                    ->where('user_id', $user->getKey())
+                    ->where('paket_tryout_id', $paket->getKey())
+                    ->first(),
+        ];
     }
 
     /**
