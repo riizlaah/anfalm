@@ -22,7 +22,7 @@
 
     @if ($ringkasan !== null)
         <section class="card mt-5 p-6">
-            <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            <h2 class="card-title">
                 Ringkasan peta kompetensi
             </h2>
 
@@ -65,7 +65,7 @@
 
     @if ($mapel !== null)
         <section class="card mt-5 p-6">
-            <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            <h2 class="card-title">
                 Analisis per kompetensi dasar — {{ $mapel->nama }}
             </h2>
 
@@ -138,7 +138,7 @@
     @endphp
 
     <section class="card mt-5 p-6">
-        <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        <h2 class="card-title">
             Grafik perkembangan
         </h2>
 

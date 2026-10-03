@@ -17,7 +17,7 @@
 
 @if ($terisi->isNotEmpty())
     <section class="mt-5">
-        <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pembahasan</h2>
+        <h2 class="card-title">Pembahasan</h2>
 
         <div class="mt-3 space-y-4">
             @foreach ($terisi as $index => $baris)

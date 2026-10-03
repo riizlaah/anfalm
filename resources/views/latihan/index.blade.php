@@ -5,7 +5,7 @@
 
     @if ($berjalan->isNotEmpty())
         <section class="card mt-5 p-5">
-            <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Latihan berlangsung</h2>
+            <h2 class="card-title">Latihan berlangsung</h2>
 
             <ul class="mt-3 space-y-2">
                 @foreach ($berjalan as $latihan)

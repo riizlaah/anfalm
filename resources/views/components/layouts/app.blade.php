@@ -45,9 +45,13 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body @class(['flex min-h-full flex-col', 'terlindungi' => $lindungiKonten])>
-    <header class="bg-ink text-white">
+    {{-- Chrome terang (butir "UI cukup gelap"): navy tidak lagi dipakai sebagai
+         permukaan yang menutupi layar, hanya sebagai aksen — lencana merek dan
+         pil menu aktif. Emas tetap di atas navy sehingga kontrasnya terjaga. --}}
+    <header class="border-b border-slate-200 bg-white">
         <div class="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4">
-            <a href="{{ route('dashboard') }}" class="shrink-0 text-lg font-extrabold tracking-tight">
+            <a href="{{ route('dashboard') }}"
+                class="shrink-0 rounded-lg bg-ink px-2.5 py-1 text-lg font-extrabold tracking-tight text-white">
                 Anfa<span class="text-gold">lm</span>
             </a>
 
@@ -55,8 +59,8 @@
                 @foreach ($nav as $item)
                     <a href="{{ route($item['route']) }}"
                         @class([
-                            'rounded-md px-3 py-1.5 transition',
-                            request()->routeIs($item['route'].'*') ? 'bg-white/10 text-white' : 'text-slate-200 hover:bg-white/10 hover:text-white',
+                            'rounded-lg px-3 py-1.5 transition',
+                            request()->routeIs($item['route'].'*') ? 'bg-ink text-gold' : 'text-slate-600 hover:bg-slate-100 hover:text-ink',
                         ])>
                         {{ $item['label'] }}
                     </a>
@@ -64,13 +68,13 @@
             </nav>
 
             <div class="flex items-center gap-3">
-                <span class="hidden text-sm text-slate-300 sm:block">{{ auth()->user()->nama_lengkap }}</span>
+                <span class="hidden text-sm text-slate-600 sm:block">{{ auth()->user()->nama_lengkap }}</span>
                 <span
-                    class="rounded-full border border-white/15 px-2.5 py-0.5 text-xs font-semibold text-slate-200">{{ auth()->user()->isAdmin() ? 'Admin' : 'Peserta' }}</span>
+                    class="rounded-full border border-slate-300 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{{ auth()->user()->isAdmin() ? 'Admin' : 'Peserta' }}</span>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit"
-                        class="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 max-md:min-h-11">
+                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 max-md:min-h-11">
                         Keluar
                     </button>
                 </form>
@@ -93,7 +97,7 @@
         @php($rapat = count($nav) > 4)
 
         <nav id="tabbar-bawah" aria-label="Navigasi bawah"
-            class="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink pb-[env(safe-area-inset-bottom)] md:hidden">
+            class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
             <div @class(['flex', 'tabbar-scroll overflow-x-auto' => $rapat, 'justify-between' => ! $rapat])>
                 @foreach ($nav as $item)
                     @php($aktif = request()->routeIs($item['route'].'*'))
@@ -104,11 +108,11 @@
                     <a href="{{ route($item['route']) }}"
                         @if ($aktif) aria-current="page" @endif
                         @class([
-                            'flex flex-col items-center justify-center gap-1 whitespace-nowrap py-2.5 text-center text-xs font-medium transition sm:text-sm',
+                            'mx-1 flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-lg py-2.5 text-center text-xs font-medium transition sm:text-sm',
                             'shrink-0 px-4' => $rapat,
                             'min-w-0 flex-1 px-1' => ! $rapat,
-                            'bg-white/10 text-gold' => $aktif,
-                            'text-slate-300 hover:bg-white/5 hover:text-white' => ! $aktif,
+                            'bg-ink text-gold' => $aktif,
+                            'text-slate-500 hover:bg-slate-100 hover:text-ink' => ! $aktif,
                         ])>
                         <x-icon :name="$item['ikon']" />
                         <span>{{ $item['label'] }}</span>

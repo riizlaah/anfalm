@@ -26,10 +26,10 @@
     $labelHari = ['Sen', '', 'Rab', '', 'Jum', '', 'Min'];
 @endphp
 
-<section {{ $attributes->merge(['class' => 'card mt-5 p-6']) }}>
+<section {{ $attributes->merge(['class' => 'card p-6']) }}>
     <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
-            <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            <h2 class="card-title">
                 Streak belajar
             </h2>
 

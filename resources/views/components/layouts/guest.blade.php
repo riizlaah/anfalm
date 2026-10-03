@@ -13,7 +13,10 @@
 <body class="flex min-h-full flex-col">
     <header class="border-b border-slate-200 bg-white/80 backdrop-blur">
         <div class="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">
-            <a href="{{ url('/') }}" class="text-xl font-extrabold tracking-tight text-ink">
+            {{-- Lencana merek yang sama seperti layout aplikasi dan halaman masuk
+                 supaya wordmark tidak berubah bentuk antarhalaman. --}}
+            <a href="{{ url('/') }}"
+                class="rounded-lg bg-ink px-2.5 py-1 text-xl font-extrabold tracking-tight text-white">
                 Anfa<span class="text-gold">lm</span>
             </a>
 

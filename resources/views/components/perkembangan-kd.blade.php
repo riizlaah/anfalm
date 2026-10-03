@@ -9,7 +9,7 @@
     @param array<int, array{kd: \App\Models\KompetensiDasar, jumlah: int, benar: int, theta: ?float, level: string, label: string}> $baris
 --}}
 <section class="card mt-5 p-6">
-    <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+    <h2 class="card-title">
         Level kompetensi per KD
     </h2>
 

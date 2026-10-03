@@ -43,14 +43,26 @@
     .label {
         @apply mb-1 block text-sm font-medium text-slate-700;
     }
+    /* Radius kartu disatukan ke `rounded-2xl` (sebelumnya campur `xl` dan
+       `2xl`) supaya permukaan terasa lebih ramah tanpa membedakan kartu satu
+       sama lain; kontrol tetap `rounded-lg` agar jelas bukan permukaan. */
     .card {
-        @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+        @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
     }
     .link {
         @apply font-semibold text-ink underline underline-offset-2;
     }
     .page-title {
         @apply text-2xl font-bold tracking-tight text-ink;
+    }
+    /* Judul blok di dalam kartu. Tangga tipografinya: 12px label kecil,
+       16px judul kartu, 24px judul halaman, 36px angka sorotan. Judul kartu
+       sengaja pakai bobot teks, bukan huruf kapital 12px seperti sebelumnya:
+       kapital sekecil itu sulit dibaca di layar sempit dan ukurannya sama
+       persis dengan keterangan di bawahnya sehingga tidak menandai tingkat
+       apa pun. */
+    .card-title {
+        @apply text-base font-semibold text-ink;
     }
     /* Opsi soal panjang (terukur 1258px di dalam kartu 288px) harus ikut wrap;
        `max-w-full` menahan label agar tidak melebar saat jadi item flex. */
@@ -74,7 +86,7 @@
     .dialog {
         width: min(32rem, calc(100vw - 2rem));
         max-height: calc(100vh - 4rem);
-        @apply m-auto overflow-hidden rounded-xl border border-slate-200 bg-white p-0 text-slate-800 shadow-xl;
+        @apply m-auto overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 text-slate-800 shadow-xl;
     }
     .dialog::backdrop {
         background-color: rgb(15 23 42 / 0.55);
