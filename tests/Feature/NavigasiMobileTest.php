@@ -116,7 +116,8 @@ it('tab bar admin memuat menu administrasi', function () {
     expect($tabBar)->not->toBe('')
         ->toContain(route('admin.mapel.index'))
         ->toContain(route('admin.paket-soal.index'))
-        ->toContain(route('admin.paket-tryout.index'));
+        ->toContain(route('admin.paket-tryout.index'))
+        ->toContain(route('admin.user.index'));
 });
 
 it('setiap menu di tab bar bawah memuat ikon SVG inline yang sah', function () {
@@ -170,8 +171,8 @@ it('tab bar admin memuat ikon pada seluruh menu', function () {
 
     $tautan = potonganTautan($tabBar);
 
-    // Dashboard, Tryout, Mapel, Paket Soal, Paket Tryout, Profil.
-    expect($tautan)->toHaveCount(6);
+    // Dashboard, Tryout, Mapel, Paket Soal, Paket Tryout, Pengguna, Profil.
+    expect($tautan)->toHaveCount(7);
 
     foreach ($tautan as $linkMenu) {
         expect(punyaIkonSah($linkMenu))->toBeTrue();

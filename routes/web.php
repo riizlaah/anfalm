@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\MapelController;
 use App\Http\Controllers\Admin\PaketSoalController;
 use App\Http\Controllers\Admin\PaketTryoutController;
 use App\Http\Controllers\Admin\SoalController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AnalisisController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -80,4 +81,9 @@ Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {
     Route::resource('admin/paket-tryout', PaketTryoutController::class)
         ->except(['show'])
         ->names('admin.paket-tryout');
+    Route::post('admin/user/{user}/reset-password', [UserController::class, 'resetPassword'])
+        ->name('admin.user.reset-password');
+    Route::resource('admin/user', UserController::class)
+        ->only(['index', 'edit', 'update'])
+        ->names('admin.user');
 });

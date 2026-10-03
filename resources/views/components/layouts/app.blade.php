@@ -28,6 +28,7 @@
         $nav[] = ['label' => 'Mapel', 'route' => 'admin.mapel.index', 'ikon' => 'mapel'];
         $nav[] = ['label' => 'Paket Soal', 'route' => 'admin.paket-soal.index', 'ikon' => 'paket-soal'];
         $nav[] = ['label' => 'Paket Tryout', 'route' => 'admin.paket-tryout.index', 'ikon' => 'paket-tryout'];
+        $nav[] = ['label' => 'Pengguna', 'route' => 'admin.user.index', 'ikon' => 'pengguna'];
     } else {
         $nav[] = ['label' => 'Latihan', 'route' => 'latihan.index', 'ikon' => 'latihan'];
         $nav[] = ['label' => 'Analisis', 'route' => 'analisis.index', 'ikon' => 'analisis'];
