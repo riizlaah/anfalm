@@ -11,10 +11,6 @@
 
         <dl class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
-                <dt class="text-xs text-slate-500">Theta (IRT)</dt>
-                <dd class="text-lg font-semibold text-ink">{{ number_format((float) $hasil->theta_final, 2) }}</dd>
-            </div>
-            <div>
                 <dt class="text-xs text-slate-500">Jawaban benar</dt>
                 <dd class="text-lg font-semibold text-ink">{{ $hasil->jumlah_benar }}</dd>
             </div>
@@ -29,12 +25,6 @@
             <div>
                 <dt class="text-xs text-slate-500">Skor IRT total</dt>
                 <dd class="text-lg font-semibold text-ink">{{ number_format((float) $hasil->skor_irt_total, 2) }}</dd>
-            </div>
-            <div>
-                <dt class="text-xs text-slate-500">Galat baku</dt>
-                <dd class="text-lg font-semibold text-ink">
-                    {{ $hasil->standard_error !== null ? number_format((float) $hasil->standard_error, 2) : '—' }}
-                </dd>
             </div>
             <div>
                 <dt class="text-xs text-slate-500">Durasi</dt>

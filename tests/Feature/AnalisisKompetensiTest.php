@@ -135,14 +135,16 @@ it('menyorot tepat satu KD sebagai fokus belajar berikutnya', function () {
     $pernahDilatih = TrackingKompetensi::where('user_id', $peserta->getKey())
         ->pluck('kompetensi_dasar_id');
 
+    // Kartu tidak lagi memuat kode KD (Fase 14), jadi identitasnya di halaman
+    // adalah deskripsinya.
     $belumDilatih = $mapel->kompetensiDasars()
         ->whereNotIn('id', $pernahDilatih)
-        ->pluck('kode_kompetensi');
+        ->pluck('deskripsi');
 
     expect(substr_count($html, 'data-fokus'))->toBe(1)
         ->and($fokus)->not->toBe('')
         ->and($belumDilatih)->not->toBeEmpty()
-        ->and($belumDilatih->contains(fn (string $kode): bool => str_contains($fokus, $kode)))
+        ->and($belumDilatih->contains(fn (string $deskripsi): bool => str_contains($fokus, $deskripsi)))
         ->toBeTrue();
 });
 
@@ -163,7 +165,7 @@ it('menampilkan dropdown mapel dan analisis per KD setelah peserta berlatih', fu
         ->assertOk()
         ->assertSee('Analisis Kompetensi')
         ->assertSee('name="mapel_id"', false)
-        ->assertSee($kd->kode_kompetensi)
+        ->assertSee($kd->deskripsi)
         ->assertSee((new KompetensiLevel)->label(KompetensiLevel::MAHIR))
         ->assertSee('100')
         ->assertSee((new KompetensiLevel)->rekomendasi(KompetensiLevel::MAHIR));
@@ -183,6 +185,31 @@ it('menampilkan theta dengan tiga desimal pada tabel analisis', function () {
         ->assertSee(number_format((float) $theta, 3, '.', ''));
 });
 
+it('menyembunyikan kode KD dari halaman analisis siswa', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
+
+    $kd = $mapel->kompetensiDasars()->orderBy('kode_kompetensi')->first();
+
+    $halaman = $this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk()
+        ->getContent();
+
+    // Tag <script dibuang dulu: payload #grafik-analisis masih memuat kode KD
+    // sebagai label sumbu grafik batang — grafik tak muat memuat deskripsi
+    // penuh — dan label itu memang tidak terlihat oleh peserta. Yang dinilai
+    // hanya yang benar-benar dibaca mata.
+    $tampilan = (string) preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $halaman);
+
+    expect($kd->kode_kompetensi)->not->toBeEmpty()
+        ->and($kd->deskripsi)->not->toBeEmpty()
+        ->and($tampilan)->not->toContain($kd->kode_kompetensi)
+        ->and($tampilan)->toContain($kd->deskripsi);
+});
+
 it('menandai KD yang belum pernah dikerjakan sebagai belum teridentifikasi', function () {
     $peserta = User::factory()->peserta()->create();
 
@@ -199,7 +226,7 @@ it('menandai KD yang belum pernah dikerjakan sebagai belum teridentifikasi', fun
     $this->actingAs($peserta)
         ->get(route('analisis.index', ['mapel_id' => $mapelKosong->getKey()]))
         ->assertOk()
-        ->assertSee($kd->kode_kompetensi)
+        ->assertSee($kd->deskripsi)
         ->assertSee((new KompetensiLevel)->label(KompetensiLevel::BELUM_TERIDENTIFIKASI))
         ->assertSee((new KompetensiLevel)->rekomendasi(KompetensiLevel::BELUM_TERIDENTIFIKASI));
 });

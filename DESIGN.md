@@ -268,7 +268,7 @@ SMA/SMK:  450 + 100 × θ (di-clamp 200–700)
 **Alur:**
 1. Peserta → "Analisis Kompetensi".
 2. Pilih mapel (dari dropdown) → Lihat data per KD:
-   - **Nama KD** + kode.
+   - **Nama KD** (deskripsi saja — kode KD adalah identitas internal dan tidak ditampilkan ke peserta, sesuai laporan "stop info dump").
    - **Level Kompetensi:**
      - Mahir: theta ≥ 1.5
      - Menengah: 0.5 ≤ theta < 1.5

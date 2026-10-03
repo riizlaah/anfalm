@@ -29,7 +29,7 @@
                 @forelse ($baris as $barisKd)
                     <tr>
                         <td class="py-2 pr-4 text-slate-700">
-                            {{ $barisKd['kd']->kode_kompetensi }} — {{ $barisKd['kd']->deskripsi }}
+                            {{ $barisKd['kd']->deskripsi }}
                         </td>
                         <td class="py-2 pr-4 text-slate-700">{{ $barisKd['jumlah'] }}</td>
                         <td class="py-2 pr-4 text-slate-700">{{ $barisKd['benar'] }}</td>

@@ -86,12 +86,15 @@
                         'border-amber-300 bg-amber-50 ring-1 ring-amber-300' => $item['fokus'],
                         'border-slate-200 bg-white' => ! $item['fokus'],
                     ]) @if ($item['fokus']) data-fokus="1" @endif>
-                        <div class="flex items-start justify-between gap-2">
-                            <span class="text-xs text-slate-500">{{ $item['kd']->kode_kompetensi }}</span>
-                            <span class="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-ink">
-                                {{ $item['label'] }}
-                            </span>
-                        </div>
+                        {{--
+                            Hanya lencana level. Kode KD adalah identitas internal
+                            yang tidak menjelaskan apa pun bagi peserta; deskripsi
+                            di bawahnya yang menjelaskan isi kompetensi itu, jadi
+                            kode sengaja tidak dipertemukan lagi di sini.
+                        --}}
+                        <span class="self-start rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-ink">
+                            {{ $item['label'] }}
+                        </span>
 
                         <p class="mt-2 text-sm text-slate-700">{{ $item['kd']->deskripsi }}</p>
 
@@ -116,7 +119,7 @@
                                     <input type="hidden" name="kompetensi_dasar_id" value="{{ $item['kd']->getKey() }}">
                                     <input type="hidden" name="jumlah_soal" value="{{ min(10, $item['jumlahSoal']) }}">
                                     <input type="hidden" name="timer" value="stopwatch">
-                                    <button type="submit" class="{{ ($item['fokus'] ? 'btn btn-primary' : 'btn btn-ghost') }} w-full" aria-label="Belajar {{ $item['kd']->kode_kompetensi }} — {{ $item['kd']->deskripsi }}">Belajar</button>
+                                    <button type="submit" class="{{ ($item['fokus'] ? 'btn btn-primary' : 'btn btn-ghost') }} w-full" aria-label="Belajar: {{ $item['kd']->deskripsi }}">Belajar</button>
                                 </form>
                             @endif
                         </div>

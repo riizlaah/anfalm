@@ -47,7 +47,9 @@ class LatihanController extends Controller
                 ->get(['id', 'kode_kompetensi', 'deskripsi'])
                 ->map(fn ($kd): array => [
                     'id' => $kd->id,
-                    'label' => "{$kd->kode_kompetensi} — {$kd->deskripsi}",
+                    // Deskripsi saja: kode KD adalah identitas internal, peserta
+                    // mengenali kompetensi dari isinya bukan dari nomornya.
+                    'label' => $kd->deskripsi,
                 ])
                 ->all(),
         ]);

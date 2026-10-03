@@ -292,6 +292,39 @@ it('menampilkan level kompetensi per KD di halaman hasil tryout', function () {
         ->assertSee('Belum Teridentifikasi');
 });
 
+it('menyembunyikan kode KD dan statistik internal psikometrik dari halaman hasil', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+
+    $percobaan->update(['urutan_mapel' => 4]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']));
+
+    $kd = $terakhir['soal']->first()->kompetensiDasar;
+
+    $halaman = (string) $this->actingAs($peserta)
+        ->get(route('tryout.hasil', $paket))
+        ->assertOk()
+        ->getContent();
+
+    $tampilan = (string) preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $halaman);
+
+    // Galat baku dan theta mentah adalah statistik psikometrik yang tak pernah
+    // dijelaskan di mana pun dan tak bisa ditindaklanjuti peserta; kode KD pun
+    // demikian — deskripsinya yang menjelaskan isi kompetensi. Skor IRT tetap
+    // tampil karena itulah kolomnya di leaderboard.
+    expect($kd->deskripsi)->not->toBeEmpty()
+        ->and($tampilan)->not->toContain('Galat baku')
+        ->not->toContain('Theta (IRT)')
+        ->not->toContain($kd->kode_kompetensi)
+        ->toContain($kd->deskripsi)
+        ->toContain('Skor IRT total');
+});
+
 it('menandai kompetensi dasar yang belum pernah dijawab sebagai belum teridentifikasi', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
