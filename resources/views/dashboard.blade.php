@@ -1,4 +1,4 @@
-<x-layouts.app title="Dashboard">
+<x-layouts.app :title="'Dashboard'">
     <section class="card max-w-3xl p-6 sm:p-8">
         <h1 class="page-title">Halo, {{ auth()->user()->nama_lengkap }}!</h1>
 
@@ -13,4 +13,12 @@
             </p>
         @endif
     </section>
+
+    @if ($aktivitas !== null)
+        <x-streak-aktivitas
+            class="max-w-3xl"
+            :streak="$aktivitas['streak']"
+            :hari-aktif="$aktivitas['hari_aktif']"
+            :minggu="$aktivitas['minggu']" />
+    @endif
 </x-layouts.app>
