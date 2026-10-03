@@ -100,12 +100,19 @@
              Lebih dari empat menu digeser mendatar, bukan dipadatkan — dan
              `px-2` (bukan `px-4`) adalah harga yang dibayar supaya lima menu
              peserta masih muat utuh di 360px: dengan padding ganda, "Profil"
-             terdorong 67px keluar layar dan tidak pernah terlihat. --}}
+             terdorong 67px keluar layar dan tidak pernah terlihat.
+
+             `justify-between` berlaku untuk kedua keadaan, bukan hanya yang
+             lega. Tanpanya item `shrink-0` menempel ke kiri dan menyisakan
+             ruang kosong di tepi kanan bar (kelima menu isi 332px dalam
+             kontainer 345px). Saat konten justru melebihi kontainer — seperti
+             tab bar admin — ruang gratisnya nol, sehingga `space-between`
+             tidak berbuat apa pun dan bar tetap bergulir seperti biasa. --}}
         @php($rapat = count($nav) > 4)
 
         <nav id="tabbar-bawah" aria-label="Navigasi bawah"
             class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
-            <div @class(['flex', 'tabbar-scroll overflow-x-auto' => $rapat, 'justify-between' => ! $rapat])>
+            <div @class(['flex justify-between', 'tabbar-scroll overflow-x-auto' => $rapat])>
                 @foreach ($nav as $item)
                     @php($aktif = request()->routeIs($item['route'].'*'))
 
