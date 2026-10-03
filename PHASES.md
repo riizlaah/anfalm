@@ -12,7 +12,7 @@ Aturan umum TDD di semua fase:
 
 ## Fase 0 — Fondasi & Skema Database
 
-**Goal:** Base project Laravel yang sehat, terhubung MySQL/MariaDB, dengan skema database final (sesuai DESN.md §5 yang sudah dikonversi ke MySQL) seluruhnya tersedia sebagai migrations, dilengkapi factory & seeder, serta pipeline test yang hidup.
+**Goal:** Base project Laravel yang sehat, terhubung MySQL/MariaDB, dengan skema database final (sesuai DESIGN.md §5 yang sudah dikonversi ke MySQL) seluruhnya tersedia sebagai migrations, dilengkapi factory & seeder, serta pipeline test yang hidup.
 
 **Deliverables:**
 - Project Laravel di root repo dengan `.env` terkonfigurasi (DB `anfalm` untuk lokal, `anfalm_test` untuk test).
