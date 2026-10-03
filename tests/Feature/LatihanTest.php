@@ -27,6 +27,118 @@ function mapelLatihan(): array
     ];
 }
 
+/**
+ * Mapel berisi tepat satu soal pg_kategori dengan daftar pernyataan tertentu,
+ * sehingga halaman pengerjaan hanya menampilkan soal itu.
+ *
+ * @param  array<int, string>  $daftarPernyataan
+ * @return array{mapel: Mapel, soal: Soal}
+ */
+function mapelPernyataanMatriks(array $daftarPernyataan): array
+{
+    $mapel = Mapel::factory()->create(['nama' => 'Pernyataan Matriks']);
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->getKey()]);
+    $soal = Soal::factory()->pgKategori(['Benar', 'Salah'])->create([
+        'kompetensi_dasar_id' => $kd->getKey(),
+        'pertanyaan' => 'Pilih Benar atau Salah untuk tiap pernyataan.',
+    ]);
+
+    foreach ($daftarPernyataan as $index => $teks) {
+        $soal->pernyataanKategori()->create([
+            'teks_pernyataan' => $teks,
+            'kategori_benar' => $index === 1 ? 'Salah' : 'Benar',
+            'urutan' => $index + 1,
+        ]);
+    }
+
+    return ['mapel' => $mapel, 'soal' => $soal];
+}
+
+/**
+ * Blok tabel matriks PG Kategori, kosong bila halaman tidak memuatnya.
+ */
+function blokMatriksKategori(string $html): string
+{
+    preg_match('/<table[^>]*matriks-kategori[^>]*>.*?<\/table>/s', $html, $cocok);
+
+    return $cocok[0] ?? '';
+}
+
+it('pg_kategori dirender sebagai tabel matriks pernyataan kali kategori', function () {
+    $peserta = User::factory()->peserta()->create();
+    ['mapel' => $mapel, 'soal' => $soal] = mapelPernyataanMatriks([
+        'Perulangan digunakan untuk memeriksa setiap nilai dalam daftar nilai.',
+        'Nilai 75 masuk kategori Lulus',
+        'Pada akhir program, isi variabel jumlah_lulus adalah 3',
+    ]);
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 1,
+        'timer' => 'stopwatch',
+    ]);
+
+    $tabel = blokMatriksKategori(
+        $this->actingAs($peserta)
+            ->get(route('latihan.kerja', Percobaan::sole()))
+            ->assertOk()
+            ->getContent()
+    );
+
+    preg_match_all('/<tr[^>]*>/', $tabel, $baris);
+    preg_match_all('/type="radio"/', $tabel, $radio);
+    preg_match_all('/name="jawaban\[kategori\]\['.$soal->id.'\]\[(\d+)\]"/', $tabel, $nama);
+    preg_match_all('/value="(Benar|Salah)"/', $tabel, $nilai);
+
+    expect($tabel)->not->toBe('')
+        // Satu baris judul + tiga baris pernyataan.
+        ->and($baris[0])->toHaveCount(4)
+        // Satu radio per (pernyataan x kategori), bukan satu <select> boros tempat.
+        ->and($radio[0])->toHaveCount(6)
+        ->and(array_unique($nama[1]))->toHaveCount(3)
+        ->and(array_count_values($nilai[1]))->toEqualCanonicalizing(['Benar' => 3, 'Salah' => 3])
+        ->and($tabel)->toContain('Pernyataan')
+        ->and($tabel)->not->toContain('Pilih kategori');
+});
+
+it('hasil latihan menampilkan matriks pg_kategori beserta jawaban dan kuncinya', function () {
+    $peserta = User::factory()->peserta()->create();
+    ['mapel' => $mapel, 'soal' => $soal] = mapelPernyataanMatriks([
+        'Pernyataan pertama',
+        'Pernyataan kedua',
+        'Pernyataan ketiga',
+    ]);
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 1,
+        'timer' => 'stopwatch',
+    ]);
+
+    $pernyataan = $soal->pernyataanKategori()->orderBy('urutan')->get();
+
+    $this->actingAs($peserta)->post(route('latihan.jawab', Percobaan::sole()), [
+        'jawaban' => ['kategori' => [$soal->getKey() => $pernyataan->mapWithKeys(
+            fn ($baris) => [$baris->id => $baris->kategori_benar]
+        )->all()]],
+        'aksi' => 'selesai',
+    ])->assertRedirect(route('latihan.hasil', Percobaan::sole()));
+
+    $tabel = blokMatriksKategori(
+        $this->actingAs($peserta)
+            ->get(route('latihan.hasil', Percobaan::sole()))
+            ->assertOk()
+            ->getContent()
+    );
+
+    preg_match_all('/data-jawabanmu/', $tabel, $dipilih);
+    preg_match_all('/data-kunci/', $tabel, $kunci);
+
+    expect($tabel)->not->toBe('')
+        ->and($dipilih[0])->toHaveCount(3)
+        ->and($kunci[0])->toHaveCount(3);
+});
+
 it('mengalihkan tamu ke halaman login', function () {
     $this->get(route('latihan.index'))->assertRedirect(route('login'));
 });

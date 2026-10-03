@@ -45,15 +45,9 @@
                     </div>
 
                     @if ($soal->isPGKategori())
-                        <ul class="mt-3 space-y-1 text-sm">
-                            @foreach ($soal->pernyataanKategori as $pernyataan)
-                                <li class="text-slate-700">
-                                    <span class="font-medium" data-rumus><x-konten :isi="$pernyataan->teks_pernyataan" /></span><br>
-                                    Jawabanmu: {{ $terkirim['kategori'][$pernyataan->id] ?? '—' }}
-                                    · Kunci: {{ $pernyataan->kategori_benar }}
-                                </li>
-                            @endforeach
-                        </ul>
+                        {{-- Bentuk yang sama dengan halaman pengerjaan, diganti
+                             dari kontrol radio menjadi penanda jawaban/kunci. --}}
+                        <x-matriks-kategori :soal="$soal" :jawaban="$terkirim['kategori'] ?? []" tinjau />
                     @else
                         <ul class="mt-3 space-y-1 text-sm">
                             @foreach ($soal->opsiJawaban as $opsi)

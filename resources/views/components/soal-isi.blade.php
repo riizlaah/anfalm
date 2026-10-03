@@ -19,26 +19,9 @@
 </div>
 
 @if ($soal->isPGKategori())
-    <div class="mt-4 space-y-3">
-        @foreach ($soal->pernyataanKategori as $pernyataan)
-            <div>
-                {{-- div, bukan p: konten WYSIWYG berupa `<p>`, dan `<p>` bersarang
-                     akan ditutup paksa oleh parser HTML. --}}
-                <div class="text-sm text-slate-700" data-rumus><x-konten :isi="$pernyataan->teks_pernyataan" /></div>
-
-                <select name="jawaban[kategori][{{ $soal->id }}][{{ $pernyataan->id }}]"
-                    class="select mt-1 w-auto">
-                    <option value="">Pilih kategori…</option>
-                    @foreach ((array) $soal->daftar_kategori as $kategori)
-                        <option value="{{ $kategori }}"
-                            @selected(($jawabanSoal[$pernyataan->id] ?? null) === $kategori)>
-                            {{ $kategori }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-        @endforeach
-    </div>
+    {{-- Satu tabel matriks, bukan satu <select> per pernyataan: hemat ruang
+         vertikal dan langsung terlihat berapa baris yang belum dijawab. --}}
+    <x-matriks-kategori :soal="$soal" :jawaban="$jawabanSoal ?? []" />
 @else
     @php
         $opsiTerpilih = (array) $jawabanSoal;

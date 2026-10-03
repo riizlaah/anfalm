@@ -40,7 +40,14 @@
   **Selesai 2026-10-03.** `$nav` di `app.blade.php` dibangun dari satu array yang selalu diawali empat menu peserta, lalu admin tinggal menambah tiga menu administrasinya — sehingga admin berakhir dengan tujuh tab, dua di antaranya (`/latihan` dan `/analisis-kompetensi`) bukan pekerjaannya dan hanya membingungkan.
   Perbaikan: `$nav` kini bercabang per peran — Dashboard + Tryout dipakai bersama, lalu admin mendapat Mapel/Paket Soal/Paket Tryout dan peserta mendapat Latihan/Analisis. Tab bar bawah maupun nav desktop memakai `$nav` yang sama, jadi keduanya ikut berubah. Tab admin turun dari 7 menjadi 5.
   Keputusan: **rute tetap terbuka untuk admin.** Laporan hanya menyinggung tampilan menu, dan admin masih mungkin membuka latihan untuk menguji soal buatannya sendiri — memblokirnya akan menghilangkan perilaku yang selama ini ada tanpa diminta. Dua test baru menutup kedua sisi (admin tidak melihat keduanya, peserta tetap melihat) dan test jumlah ikon disesuaikan ke 5.
-- PG Kategori tidak sesuai ekspektasi, seharusnya seperti di gambar @contoh-pg-kategori.png
+- ~~PG Kategori tidak sesuai ekspektasi, seharusnya seperti di gambar @contoh-pg-kategori.png~~
+  **Selesai 2026-10-03.** Bentuk lamanya menumpuk satu `<select>` (`Pilih kategori…`) di bawah tiap pernyataan: tiap baris memakan tinggi penuh, tidak ada gambaran menyeluruh tentang berapa baris yang belum dijawab, dan tidak sama sekali dengan bentuk baku soal PG Kategori — satu matriks pernyataan × kategori.
+  Perbaikan: komponen baru `<x-matriks-kategori>` merender tabel `#` / `Pernyataan` / satu kolom per kategori (Benar, Salah) dengan satu radio per sel.
+  - **Nama field tidak berubah sama sekali** (`jawaban[kategori][soal][pernyataan]`), jadi pengiriman, penyimpanan, dan penskoran tidak tersentuh — hanya tampilannya. Radio dibungkus `<label>` selebar sel supaya target sentuh di HP tidak berhenti di 20px.
+  - Halaman hasil/pembahasan memakai komponen yang sama dalam mode tinjau: `●` menandai jawaban peserta dan `✓` menandai kunci jawaban, keduanya di sel yang sama — baris yang salah langsung terlihat tanpa perlu membaca teks "Jawabanmu … Kunci …".
+  - Kolom `#` dan padding kolom kategori dirapatkan agar kolom Pernyataan mendapat lebar maksimum di layar 360px.
+  Ini juga salah satu pengecualian tabel di mobile yang diminta pada saran "kurangi penggunaan tabel" — untuk PG Kategori tabel memang bentuk yang tepat.
+  Tertutup test: 2 test baru di `LatihanTest` — halaman pengerjaan memuat tepat 4 baris × 6 radio dalam grup yang benar tanpa satu pun `<select>`, dan halaman hasil memuat 3 penanda jawaban serta 3 penanda kunci. Keduanya diverifikasi visual di 360px dan 1280px.
 - Chart rusak di mobile (overflow dari div yang membungkusnya)
 
 ## Suggestion
