@@ -10,7 +10,7 @@ it('pendaftaran berhasil membuat akun ber-role peserta dan langsung login', func
         'password_confirmation' => 'rahasia123',
     ]);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect('/profil');
 
     $user = User::query()->where('email', 'ahmad@anfalm.test')->first();
     expect($user)->not->toBeNull()

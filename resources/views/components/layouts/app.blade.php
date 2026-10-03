@@ -32,6 +32,10 @@
         $nav[] = ['label' => 'Latihan', 'route' => 'latihan.index', 'ikon' => 'latihan'];
         $nav[] = ['label' => 'Analisis', 'route' => 'analisis.index', 'ikon' => 'analisis'];
     }
+
+    // Profil adalah tempat mengganti pilihan mapel (butir 96), jadi ia harus
+    // bisa dicapai dari mana pun, bukan hanya lewat tautan setelah pendaftaran.
+    $nav[] = ['label' => 'Profil', 'route' => 'profil.show', 'ikon' => 'profil'];
 @endphp
 
 <!DOCTYPE html>
@@ -93,7 +97,10 @@
     @if ($tabbar)
         {{-- Nav khusus viewport kecil: menu desktop disembunyikan `md:flex`, jadi
              tanpa baris ini peserta di HP tidak punya jalan keluar sama sekali.
-             Lebih dari empat menu (admin) digeser mendatar, bukan dipadatkan. --}}
+             Lebih dari empat menu digeser mendatar, bukan dipadatkan — dan
+             `px-2` (bukan `px-4`) adalah harga yang dibayar supaya lima menu
+             peserta masih muat utuh di 360px: dengan padding ganda, "Profil"
+             terdorong 67px keluar layar dan tidak pernah terlihat. --}}
         @php($rapat = count($nav) > 4)
 
         <nav id="tabbar-bawah" aria-label="Navigasi bawah"
@@ -109,7 +116,7 @@
                         @if ($aktif) aria-current="page" @endif
                         @class([
                             'mx-1 flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-lg py-2.5 text-center text-xs font-medium transition sm:text-sm',
-                            'shrink-0 px-4' => $rapat,
+                            'shrink-0 px-2' => $rapat,
                             'min-w-0 flex-1 px-1' => ! $rapat,
                             'bg-ink text-gold' => $aktif,
                             'text-slate-500 hover:bg-slate-100 hover:text-ink' => ! $aktif,

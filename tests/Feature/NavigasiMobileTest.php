@@ -29,7 +29,7 @@ function potonganNavDesktop(string $html): string
  */
 function menuPeserta(): array
 {
-    return ['dashboard', 'tryout.index', 'latihan.index', 'analisis.index'];
+    return ['dashboard', 'tryout.index', 'latihan.index', 'analisis.index', 'profil.show'];
 }
 
 /**
@@ -170,8 +170,8 @@ it('tab bar admin memuat ikon pada seluruh menu', function () {
 
     $tautan = potonganTautan($tabBar);
 
-    // Dashboard, Tryout, Mapel, Paket Soal, Paket Tryout.
-    expect($tautan)->toHaveCount(5);
+    // Dashboard, Tryout, Mapel, Paket Soal, Paket Tryout, Profil.
+    expect($tautan)->toHaveCount(6);
 
     foreach ($tautan as $linkMenu) {
         expect(punyaIkonSah($linkMenu))->toBeTrue();

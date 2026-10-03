@@ -29,10 +29,13 @@ class AnalisisController extends Controller
     {
         $peserta = $request->user();
 
-        $mapels = Mapel::query()
+        // Pilihan mapel peserta (butir 96) hanya menyaring *tampilan*: daftar
+        // radar dan pilihan dropdown memakai yang ini, sedangkan catatan theta
+        // di bawahnya tetap dihitung dari seluruh pengerjaannya di semua mapel.
+        $mapels = $peserta->mapelTampil(Mapel::query()
             ->whereNull('deleted_at')
             ->orderBy('kode')
-            ->get();
+            ->get());
 
         $mapel = $mapels->firstWhere('id', (int) $request->query('mapel_id'))
             ?? $mapels->first();

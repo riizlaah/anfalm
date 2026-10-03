@@ -34,10 +34,15 @@ class LatihanController extends Controller
 
     public function index(Request $request): View
     {
-        $mapels = Mapel::query()
+        // Pilihan mapel peserta (butir 96) menyaring *apa yang ditawarkan* di
+        // form ini saja. `mulai()` tetap menerima mapel mana pun yang masih
+        // ada, sehingga peserta yang mengerjakan mapel di luar pilihannya —
+        // atau yang baru saja mengganti pilihannya — tetap tercatat seperti
+        // biasa.
+        $mapels = $request->user()->mapelTampil(Mapel::query()
             ->whereNull('deleted_at')
             ->orderBy('kode')
-            ->get();
+            ->get());
 
         // Korelasi KD per mapel disertakan langsung supaya dropdown filter
         // bisa berganti tanpa endpoint tambahan.

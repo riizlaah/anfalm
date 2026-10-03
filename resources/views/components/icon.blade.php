@@ -1,7 +1,7 @@
 {{--
     Ikon SVG inline untuk tab bar bawah.
 
-    Tujuh ikon di bawah adalah seluruh kebutuhan ikon aplikasi, jadi memasang
+    Delapan ikon di bawah adalah seluruh kebutuhan ikon aplikasi, jadi memasang
     paket ikon eksternal hanya untuk itu tidak sebanding dengan bobotnya.
     Goresannya memakai `currentColor`, sehingga ikon ikut berwarna emas pada tab
     aktif dan putih pucat pada tab yang tidak aktif tanpa aturan warna tambahan.
@@ -28,6 +28,7 @@
         'mapel' => '<path d="M21.42 10.92a1 1 0 0 0-.02-1.84L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.83l8.57 3.91a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
         'paket-soal' => '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
         'paket-tryout' => '<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="m7.5 4.27 9 5.15"/>',
+        'profil' => '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     ];
 @endphp
 

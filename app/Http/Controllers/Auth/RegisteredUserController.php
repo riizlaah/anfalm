@@ -46,6 +46,9 @@ class RegisteredUserController extends Controller
         $request->session()->regenerate();
         $request->session()->put(EnsureSingleSession::SESSION_TOKEN_KEY, $user->session_token);
 
-        return redirect()->route('dashboard');
+        // Peserta baru belumlah memilih mapelnya, jadi dia diantar ke halaman
+        // profil lebih dulu — bukan ke Dashboard yang belum punya apa pun untuk
+        // ditampilkan baginya.
+        return redirect()->route('profil.show');
     }
 }
