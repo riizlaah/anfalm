@@ -63,6 +63,55 @@ it('validasi generate: jumlah soal maksimal 30', function () {
     ])->assertSessionHasErrors(['jumlah_soal']);
 });
 
+it('form generate memberi peringatan saat jumlah KD melebihi jumlah soal', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $ids = collect(range(1, 10))
+        ->map(fn (int $n): int => KompetensiDasar::factory()->create([
+            'mapel_id' => $mapel->id,
+            'kode_kompetensi' => '3.'.$n,
+        ])->id)
+        ->all();
+
+    session(['ai_generate_input' => [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => $ids,
+        'jumlah_soal' => 6,
+        'tingkat_kesulitan' => 'campuran',
+    ]]);
+
+    // 6 soal dibagi merata ke 10 KD: 6 KD dapat 1 soal, sisanya nol.
+    $html = $this->actingAs($admin)->get('/admin/paket-soal/generate')->assertOk()->getContent();
+
+    expect(blokPeringatanKd($html))
+        ->toContain('4 KD tidak akan mendapat soal')
+        ->not->toContain('hidden');
+});
+
+it('form generate tidak menampilkan peringatan bila jumlah soal memadai', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $ids = collect(range(1, 10))
+        ->map(fn (int $n): int => KompetensiDasar::factory()->create([
+            'mapel_id' => $mapel->id,
+            'kode_kompetensi' => '3.'.$n,
+        ])->id)
+        ->all();
+
+    session(['ai_generate_input' => [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => $ids,
+        'jumlah_soal' => 30,
+        'tingkat_kesulitan' => 'campuran',
+    ]]);
+
+    $html = $this->actingAs($admin)->get('/admin/paket-soal/generate')->assertOk()->getContent();
+
+    expect(blokPeringatanKd($html))
+        ->toContain('hidden')
+        ->not->toContain('KD tidak akan mendapat soal');
+});
+
 it('validasi generate: kompetensi dasar harus milik mapel yang dipilih', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create();
@@ -866,6 +915,17 @@ function kdTerpilih(string $blok): ?string
     preg_match('/<option value="(\d+)"[^>]*selected[^>]*>/su', $blok, $cocok);
 
     return $cocok[1] ?? null;
+}
+
+/**
+ * Blok peringatan jumlah KD vs jumlah soal, dipisahkan dari sumber JS di halaman
+ * yang memuat kalimat serupa.
+ */
+function blokPeringatanKd(string $html): string
+{
+    preg_match('/<p id="kd-soal-warning".*?<\/p>/su', $html, $cocok);
+
+    return $cocok[0] ?? '';
 }
 
 function setupKurasiMapel(): array

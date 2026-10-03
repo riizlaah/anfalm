@@ -42,12 +42,28 @@
                     @endforeach
                 @endforeach
             </div>
+
+            @php
+                $jumlahSoalAwal = (int) old('jumlah_soal', $generateInput['jumlah_soal'] ?? 15);
+                $kdTerpilihAwal = count(old('kompetensi_dasar_ids', $generateInput['kompetensi_dasar_ids'] ?? []));
+                // PenjadwalKd membagi soal merata; begitu jumlah soal kurang dari
+                // jumlah KD, sisa KD memang tidak mungkin menerima soal apa pun.
+                $kdTanpaSoal = max(0, $kdTerpilihAwal - $jumlahSoalAwal);
+            @endphp
+
+            {{-- Dihitung ulang oleh JS tiap jumlah KD atau jumlah soal berubah. --}}
+            <p id="kd-soal-warning" class="hint text-amber-700 @if ($kdTanpaSoal < 1) hidden @endif">
+                @if ($kdTanpaSoal > 0)
+                    {{ $kdTanpaSoal }} KD tidak akan mendapat soal karena jumlah soal hanya {{ $jumlahSoalAwal }}.
+                    Kurangi jumlah KD atau tambah jumlah soal.
+                @endif
+            </p>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label class="block">
                 <span class="label">Jumlah Soal (maksimum 30)</span>
-                <input type="number" name="jumlah_soal" min="1" max="30" class="input" required
+                <input type="number" id="jumlah-soal" name="jumlah_soal" min="1" max="30" class="input" required
                     value="{{ old('jumlah_soal', $generateInput['jumlah_soal'] ?? 15) }}">
             </label>
 
@@ -100,6 +116,8 @@
             const kdList = document.getElementById('kd-list');
             const kdHint = document.getElementById('kd-hint');
             const selectAll = document.getElementById('kd-select-all');
+            const jumlahSoalInput = document.getElementById('jumlah-soal');
+            const kdSoalWarning = document.getElementById('kd-soal-warning');
 
             function kdItems() {
                 return Array.from(kdList.querySelectorAll('.kd-item'));
@@ -142,6 +160,27 @@
                 selectAll.indeterminate = checked > 0 && checked < boxes.length;
             }
 
+            // PenjadwalKd tidak mungkin memberi soal pada KD berikut begitu
+            // jumlah soal kurang dari jumlah KD, jadi sisa KD diberi tahu sejak
+            // dini alih-alih baru ketahuan setelah generate selesai.
+            function updatePeringatanKd() {
+                const jumlahSoal = Number(jumlahSoalInput.value) || 0;
+                const tercentang = checkboxes().filter(function (box) { return box.checked; }).length;
+                const tanpaSoal = jumlahSoal > 0 ? Math.max(0, tercentang - jumlahSoal) : 0;
+
+                if (tanpaSoal > 0) {
+                    kdSoalWarning.textContent = tanpaSoal
+                        + ' KD tidak akan mendapat soal karena jumlah soal hanya '
+                        + jumlahSoal + '. Kurangi jumlah KD atau tambah jumlah soal.';
+                    kdSoalWarning.classList.remove('hidden');
+                } else {
+                    kdSoalWarning.textContent = '';
+                    kdSoalWarning.classList.add('hidden');
+                }
+            }
+
+            jumlahSoalInput.addEventListener('input', updatePeringatanKd);
+
             mapelSelect.addEventListener('change', function () {
                 const mapelId = mapelSelect.value;
 
@@ -152,21 +191,25 @@
 
                 filterKd();
                 updateSelectAllState();
+                updatePeringatanKd();
             });
 
             selectAll.addEventListener('change', function () {
                 checkboxes().forEach(function (box) { box.checked = selectAll.checked; });
                 updateSelectAllState();
+                updatePeringatanKd();
             });
 
             kdList.addEventListener('change', function (event) {
                 if (event.target.matches('input[type="checkbox"]')) {
                     updateSelectAllState();
+                    updatePeringatanKd();
                 }
             });
 
             filterKd();
             updateSelectAllState();
+            updatePeringatanKd();
 
             const form = document.getElementById('generate-form');
             const progress = document.getElementById('generate-progress');
