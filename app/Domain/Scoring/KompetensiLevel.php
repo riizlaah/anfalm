@@ -50,6 +50,41 @@ class KompetensiLevel
     ];
 
     /**
+     * Isi kartu latihan per mapel di dashboard (butir C2): ajakan yang
+     * ditulis dan label tombolnya.
+     *
+     * Berbeda dengan `REKOMENDASI` yang bicara tentang satu KD, kalimat di
+     * sini bicara tentang seluruh mapel dan berdiri sendiri di balik nama
+     * mapel — karena itu kalimatnya tidak diambil dari `REKOMENDASI` begitu
+     * saja: kalimat yang benar untuk satu kompetensi dasar ("KD ini") akan
+     * salah ketika dibaca di bawah judul "Matematika".
+     *
+     * @var array<string, array{ajakan: string, tombol: string}>
+     */
+    private const KARTU_LATIHAN = [
+        self::MAHIR => [
+            'ajakan' => 'Sudah Mahir. Latihan rutin di mapel ini menjaganya tetap demikian.',
+            'tombol' => 'Pertahankan',
+        ],
+        self::MENENGAH => [
+            'ajakan' => 'Tinggal selangkah lagi sebelum Mahir.',
+            'tombol' => 'Kejar Mahir',
+        ],
+        self::DASAR => [
+            'ajakan' => 'Dasarnya sudah terbentuk, tinggal diperkuat.',
+            'tombol' => 'Perkuat Dasar',
+        ],
+        self::PERLU_BIMBINGAN => [
+            'ajakan' => 'Masih Perlu Bimbingan. Bangun fondasinya lewat latihan rutin.',
+            'tombol' => 'Latih Sekarang',
+        ],
+        self::BELUM_TERIDENTIFIKASI => [
+            'ajakan' => 'Belum ada data. Latihan pertamamu akan mengisi papan ini.',
+            'tombol' => 'Mulai Latihan',
+        ],
+    ];
+
+    /**
      * Klasifikasi level kompetensi sesuai 7.5. Data kosong dianggap belum teridentifikasi.
      */
     public function levelFor(?float $theta): string
@@ -94,6 +129,20 @@ class KompetensiLevel
     public function rekomendasi(string $level): string
     {
         return self::REKOMENDASI[$level] ?? $level;
+    }
+
+    /**
+     * Isi kartu latihan di dashboard untuk satu level. Level yang tidak
+     * dikenal mengikuti `BELUM_TERIDENTIFIKASI`, bukan mengembalikan
+     * kuncinya sendiri — di sini kunci itu bocor ke layar sebagai kalimat
+     * yang tidak bisa dibaca peserta.
+     *
+     * @return array{ajakan: string, tombol: string}
+     */
+    public function kartuLatihan(string $level): array
+    {
+        return self::KARTU_LATIHAN[$level]
+            ?? self::KARTU_LATIHAN[self::BELUM_TERIDENTIFIKASI];
     }
 
     /**

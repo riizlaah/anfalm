@@ -125,4 +125,51 @@
             </div>
         </section>
     @endif
+
+    {{--
+        Kartu latihan juga hanya sampai ke peserta, seperti dua blok di atasnya.
+        Daftarnya `mapelTerpilih()` — wajib ∪ pilihan yang dipilih — bukan
+        `mapelTampil()`: aturan "kosong = semua" akan menumbuhkan sepuluh kartu
+        bagi peserta yang belum memilih apa pun, padahal blok ini merangkum yang
+        sedang ia kejar. Yang berbeda per kartu adalah level, ajakan, dan label
+        tombolnya; tujuannya satu dan sama, halaman latihan. Pill levelnya
+        memakai idiom yang sama dengan kode KD di halaman Analisis supaya
+        "sekilas baca" terasa di dua tempat.
+    --}}
+    @if ($kartuLatihan !== null && $kartuLatihan->isNotEmpty())
+        <section class="mt-8 max-w-5xl">
+            <h2 class="text-lg font-semibold text-ink">Latihan per mapel</h2>
+
+            <p class="mt-1 text-sm text-slate-600">
+                Level tiap mapel berasal dari latihan dan tryoutmu, dan ajakan
+                di bawahnya menyesuaikan level itu.
+            </p>
+
+            <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                @foreach ($kartuLatihan as $kartu)
+                    {{-- `flex flex-col` + `mt-auto` pada tombolnya: ajakan satu
+                         baris dan dua baris menghasilkan tinggi kartu yang sama
+                         (grid meregangkannya), tetapi tanpa dorongan itu tombol
+                         duduk tepat di bawah teksnya masing-masing dan barisan
+                         tombolnya tampak meleset. `mb-4` di paragraf menjaga
+                         jarak minimum tetap ada ketika kartu justru penuh. --}}
+                    <article class="card flex flex-col p-5" data-kartu-latihan>
+                        <div class="flex items-start justify-between gap-3">
+                            <h3 class="card-title min-w-0">{{ $kartu['mapel']->nama }}</h3>
+
+                            <span class="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-ink">
+                                {{ $kartu['label'] }}
+                            </span>
+                        </div>
+
+                        <p class="mt-2 mb-4 text-sm text-slate-600">{{ $kartu['ajakan'] }}</p>
+
+                        <a href="{{ route('latihan.index') }}" class="btn btn-primary mt-auto w-full">
+                            {{ $kartu['tombol'] }}
+                        </a>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
 </x-layouts.app>

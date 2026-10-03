@@ -73,3 +73,36 @@ it('theta null direkomendasikan seperti belum teridentifikasi', function () {
 it('rekomendasi untuk level tak dikenal mengembalikan input apa adanya', function () {
     expect($this->level->rekomendasi('bukan_level'))->toBe('bukan_level');
 });
+
+it('menyediakan isi kartu latihan dashboard yang berbeda per level', function () {
+    expect($this->level->kartuLatihan(KompetensiLevel::MAHIR))
+        ->toBe([
+            'ajakan' => 'Sudah Mahir. Latihan rutin di mapel ini menjaganya tetap demikian.',
+            'tombol' => 'Pertahankan',
+        ])
+        ->and($this->level->kartuLatihan(KompetensiLevel::MENENGAH))
+        ->toBe([
+            'ajakan' => 'Tinggal selangkah lagi sebelum Mahir.',
+            'tombol' => 'Kejar Mahir',
+        ])
+        ->and($this->level->kartuLatihan(KompetensiLevel::DASAR))
+        ->toBe([
+            'ajakan' => 'Dasarnya sudah terbentuk, tinggal diperkuat.',
+            'tombol' => 'Perkuat Dasar',
+        ])
+        ->and($this->level->kartuLatihan(KompetensiLevel::PERLU_BIMBINGAN))
+        ->toBe([
+            'ajakan' => 'Masih Perlu Bimbingan. Bangun fondasinya lewat latihan rutin.',
+            'tombol' => 'Latih Sekarang',
+        ])
+        ->and($this->level->kartuLatihan(KompetensiLevel::BELUM_TERIDENTIFIKASI))
+        ->toBe([
+            'ajakan' => 'Belum ada data. Latihan pertamamu akan mengisi papan ini.',
+            'tombol' => 'Mulai Latihan',
+        ]);
+});
+
+it('isi kartu latihan untuk level tak dikenal mengikuti belum teridentifikasi', function () {
+    expect($this->level->kartuLatihan('bukan_level'))
+        ->toBe($this->level->kartuLatihan(KompetensiLevel::BELUM_TERIDENTIFIKASI));
+});

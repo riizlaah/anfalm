@@ -1,8 +1,11 @@
 <?php
 
+use App\Domain\Scoring\KompetensiLevel;
 use App\Models\HasilTryout;
+use App\Models\Mapel;
 use App\Models\PaketTryout;
 use App\Models\Percobaan;
+use App\Models\TrackingMapel;
 use App\Models\User;
 
 beforeEach(function () {
@@ -29,6 +32,30 @@ function percobaanPada(User $peserta, int $mundurHari, int $jumlah = 1): void
 function selBertingkat(string $html, string $tanggal, int $tingkat): bool
 {
     return preg_match('/data-tanggal="'.$tanggal.'"\s+data-tingkat="'.$tingkat.'"/', $html) === 1;
+}
+
+/**
+ * Baris `tracking_mapel` yang ditulis persis seperti jalannya produksi:
+ * level diturunkan dari theta lewat `KompetensiLevel`, bukan diisi lepas
+ * dari theta yang disimpan — kalau tidak, tes bisa lulus dengan data yang
+ * tidak pernah bisa ada di aplikasi.
+ *
+ * `null` berarti peserta belum pernah mengerjakan mapel itu, jadi tidak ada
+ * baris yang dibuat sama sekali.
+ */
+function isiTrackingMapel(User $peserta, Mapel $mapel, ?float $theta): void
+{
+    if ($theta === null) {
+        return;
+    }
+
+    TrackingMapel::query()->create([
+        'user_id' => $peserta->getKey(),
+        'mapel_id' => $mapel->getKey(),
+        'theta_estimasi' => $theta,
+        'level_kompetensi' => (new KompetensiLevel)->levelFor($theta),
+        'last_updated' => now(),
+    ]);
 }
 
 it('menampilkan kalender aktivitas dengan streak hari beruntun di dashboard peserta', function () {
@@ -151,4 +178,77 @@ it('dashboard tidak menampilkan informasi tryout di admin', function () {
     expect($html)
         ->not->toContain('Tryout Fase 6 (uji coba)')
         ->not->toContain('Belum kamu selesaikan');
+});
+
+it('kartu latihan hanya menawarkan mapel wajib dan mapel pilihan yang dipilih', function () {
+    $this->travelTo('2026-10-03 10:00:00');
+
+    $peserta = User::factory()->peserta()->create();
+
+    // Seeder memberi tiga mapel wajib dan enam pilihan. Peserta hanya memilih
+    // satu pilihan, jadi kartunya harus berjumlah empat — bukan sembilan
+    // mapel yang ditawarkan halaman Latihan ketika pilihan masih kosong.
+    $peserta->mapelPilihan()->sync([
+        Mapel::query()->where('nama', 'Kimia')->sole()->getKey(),
+    ]);
+
+    $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
+
+    expect(substr_count($html, 'data-kartu-latihan'))->toBe(4)
+        ->and($html)
+        ->toContain('Matematika')
+        ->toContain('Kimia')
+        ->not->toContain('Fisika');
+});
+
+it('kartu latihan berhenti di mapel wajib ketika peserta belum memilih pilihan', function () {
+    $this->travelTo('2026-10-03 10:00:00');
+
+    $peserta = User::factory()->peserta()->create();
+
+    $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
+
+    expect(substr_count($html, 'data-kartu-latihan'))->toBe(3)
+        ->and($html)->not->toContain('Fisika');
+});
+
+it('kartu latihan menampilkan ajakan dan tombol yang berbeda menurut level', function () {
+    $this->travelTo('2026-10-03 10:00:00');
+
+    $peserta = User::factory()->peserta()->create();
+
+    // Tiga mapel wajib bawaan seeder diberi tiga theta yang menghasilkan tiga
+    // level berbeda, lalu dua mapel wajib tambahan melengkapi Dasar dan
+    // keadaan tanpa baris tracking sama sekali.
+    isiTrackingMapel($peserta, Mapel::query()->where('nama', 'Matematika')->sole(), 2.0);
+    isiTrackingMapel($peserta, Mapel::query()->where('nama', 'Bahasa Indonesia')->sole(), 1.0);
+    isiTrackingMapel($peserta, Mapel::query()->where('nama', 'Bahasa Inggris')->sole(), -1.0);
+
+    Mapel::factory()->wajib()->create(['nama' => 'Mapel Diberi Dasar']);
+    isiTrackingMapel($peserta, Mapel::query()->where('nama', 'Mapel Diberi Dasar')->sole(), 0.0);
+
+    Mapel::factory()->wajib()->create(['nama' => 'Mapel Tanpa Data']);
+
+    $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
+
+    // Label tombol adalah pembeda yang paling langsung terbaca: lima level
+    // harus menghasilkan lima ajakan yang berbeda, bukan satu tombol yang
+    // sama berkedok dengan kalimat berbeda.
+    expect($html)
+        ->toContain('Pertahankan')
+        ->toContain('Kejar Mahir')
+        ->toContain('Perkuat Dasar')
+        ->toContain('Latih Sekarang')
+        ->toContain('Mulai Latihan')
+        ->toContain('Belum Teridentifikasi');
+});
+
+it('dashboard tidak menampilkan kartu latihan di admin', function () {
+    $this->travelTo('2026-10-03 10:00:00');
+
+    $admin = User::factory()->admin()->create();
+
+    $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+
+    expect($html)->not->toContain('data-kartu-latihan');
 });

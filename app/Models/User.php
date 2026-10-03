@@ -113,22 +113,39 @@ class User extends Authenticatable
      *
      * Dua hal tetap dijaga. Peserta yang belum memilih apa pun — termasuk
      * seluruh akun yang lahir sebelum fitur ini ada — tetap melihat seluruh
-     * mapel, jadi tidak ada yang mendadak kehilangan isi halaman. Dan bila
-     * semua mapel pilihannya sudah dihapus admin, penyaringannya gugur dengan
-     * sendirinya karena relasi ikut menyaring baris terhapus, sehingga
-     * halaman tidak pernah berakhir tanpa isi — kecuali ada mapel wajib yang
-     * selalu menemani.
+     * mapel, jadi tidak ada yang mendadak kehilangan isi halaman. Karena itu
+     * aturan "kosong = semua" ada di `mapelTampil()` saja, sedangkan yang
+     * hanya ingin memakai wajib ∪ pilihan tanpa pengecualian itu memanggil
+     * `mapelTerpilih()`.
      *
      * @param  Collection<int, Mapel>  $mapels  seluruh mapel yang tidak dihapus
      * @return Collection<int, Mapel>
      */
     public function mapelTampil(Collection $mapels): Collection
     {
-        $pilihan = $this->mapelPilihan->pluck('id');
-
-        if ($pilihan->isEmpty()) {
+        if ($this->mapelPilihan->isEmpty()) {
             return $mapels;
         }
+
+        return $this->mapelTerpilih($mapels);
+    }
+
+    /**
+     * Seluruh mapel wajib beserta mapel pilihan yang dipilih peserta ini —
+     * tanpa fallback "kosong = semua" yang dimiliki `mapelTampil()`.
+     *
+     * Pemakainya adalah rangkuman di dashboard (butir C2): daftar itu
+     * merangkum yang sedang dikejar, jadi peserta yang belum memilih apa pun
+     * harusnya hanya melihat mapel wajibnya, bukan seluruh katalog mapel yang
+     * ditawarkan form latihan. Jumlahnya pun sekaligus terbatas dengan
+     * sendirinya — wajib selalu ada, pilihan maksimum dua.
+     *
+     * @param  Collection<int, Mapel>  $mapels  seluruh mapel yang tidak dihapus
+     * @return Collection<int, Mapel>
+     */
+    public function mapelTerpilih(Collection $mapels): Collection
+    {
+        $pilihan = $this->mapelPilihan->pluck('id');
 
         $wajib = $mapels
             ->filter(fn (Mapel $mapel): bool => $mapel->jenis === Mapel::JENIS_WAJIB)
