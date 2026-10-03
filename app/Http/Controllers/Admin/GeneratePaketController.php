@@ -32,7 +32,7 @@ class GeneratePaketController extends Controller
 {
     public const MAKSIMAL_SOAL = 30;
 
-    public const SOAL_PER_PART = 6;
+    public const SOAL_PER_PART = 12;
 
     public const TINGKAT_OPTIONS = ['mudah', 'sedang', 'sulit', 'campuran'];
 
@@ -42,8 +42,9 @@ class GeneratePaketController extends Controller
     {
         $mapels = Mapel::with('kompetensiDasars')->orderBy('nama')->get();
         $generateInput = session('ai_generate_input', []);
+        $soalPerPart = self::SOAL_PER_PART;
 
-        return view('admin.paket-soal.generate', compact('mapels', 'generateInput'));
+        return view('admin.paket-soal.generate', compact('mapels', 'generateInput', 'soalPerPart'));
     }
 
     public function storePart(Request $request): JsonResponse

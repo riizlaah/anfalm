@@ -5,6 +5,7 @@ use App\Domain\Ai\AiProviderException;
 use App\Domain\Ai\GeminiAiProvider;
 use App\Domain\Ai\JsonRepairService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 
 it('mengirim prompt ke API Gemini dan mengembalikan teks respons', function () {
@@ -81,6 +82,94 @@ it('memberi pesan ramah saat kena rate limit 429', function () {
 
     expect(fn () => (new GeminiAiProvider('kunci-rahasia'))->generate('prompt'))
         ->toThrow(AiProviderException::class, 'Layanan AI sedang sibuk. Tunggu beberapa saat, lalu coba lagi.');
+});
+
+it('berhenti langsung saat kuota harian habis, bukan membuang percobaan berikutnya', function () {
+    Sleep::fake();
+    Log::shouldReceive('channel')->with('ai')->andReturnSelf();
+    Log::shouldReceive('warning')->once();
+
+    Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+        'error' => [
+            'code' => 429,
+            'message' => 'Quota exceeded for quota metric.',
+            'status' => 'RESOURCE_EXHAUSTED',
+            'details' => [[
+                '@type' => 'type.googleapis.com/google.rpc.ErrorInfo',
+                'reason' => 'CONSUMER_QUOTA',
+                'domain' => 'googleapis.com',
+                'metadata' => ['quotaId' => 'GenerateContentDaily'],
+            ]],
+        ],
+    ], 429)]);
+
+    expect(fn () => (new GeminiAiProvider('kunci-rahasia'))->generate('prompt'))
+        ->toThrow(AiProviderException::class, 'Kuota AI harian habis');
+
+    Http::assertSentCount(1);
+});
+
+it('menyerah pada Retry-After panjang dengan jam yang bisa dituju', function () {
+    Sleep::fake();
+    Log::shouldReceive('channel')->with('ai')->andReturnSelf();
+    Log::shouldReceive('warning')->once();
+
+    Http::fake(['generativelanguage.googleapis.com/*' => Http::response([], 429, ['Retry-After' => '300'])]);
+
+    $pesan = null;
+
+    try {
+        (new GeminiAiProvider('kunci-rahasia'))->generate('prompt');
+    } catch (AiProviderException $e) {
+        $pesan = $e->getMessage();
+    }
+
+    expect($pesan)
+        ->toContain('±5 menit')
+        ->toContain('Coba lagi sekitar pukul');
+
+    Http::assertSentCount(1);
+});
+
+it('mencatat header x-ratelimit dan badan respons saat kena batas laju', function () {
+    Sleep::fake();
+
+    $tercatat = null;
+
+    Log::shouldReceive('channel')->with('ai')->andReturnSelf();
+    Log::shouldReceive('warning')->withArgs(function (string $judul, array $konteks) use (&$tercatat): bool {
+        $tercatat = $konteks;
+
+        return $judul !== '';
+    });
+
+    Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
+        ['error' => ['message' => 'slow down']],
+        429,
+        ['Retry-After' => '1', 'x-ratelimit-remaining-requests' => '0'],
+    )]);
+
+    expect(fn () => (new GeminiAiProvider('kunci-rahasia'))->generate('prompt'))
+        ->toThrow(AiProviderException::class);
+
+    expect($tercatat['retry_after'])->toBe('1')
+        ->and($tercatat['headers'])->toHaveKey('x-ratelimit-remaining-requests')
+        ->and($tercatat['body'])->toContain('slow down');
+});
+
+it('menghormati jeda singkat dari server lalu mencoba ulang', function () {
+    Sleep::fake();
+    Log::shouldReceive('channel')->with('ai')->andReturnSelf();
+    Log::shouldReceive('warning');
+
+    Http::fakeSequence()
+        ->push([], 429, ['Retry-After' => '1'])
+        ->push(['candidates' => [['content' => ['parts' => [['text' => '{"ok":true}']]]]]], 200);
+
+    $hasil = (new GeminiAiProvider('kunci-rahasia'))->generate('prompt');
+
+    expect($hasil)->toBe('{"ok":true}');
+    Http::assertSentCount(2);
 });
 
 it('memakai timeout 180 detik secara bawaan', function () {

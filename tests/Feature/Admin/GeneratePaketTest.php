@@ -157,6 +157,40 @@ it('part sukses mengakumulasi soal ke sesi ai_parts', function () {
         ->and(array_column($parts['daftar_soal'], 'tipe_soal'))->toContain('pg', 'pg_kompleks', 'pg_kategori');
 });
 
+it('meminta 12 soal per permintaan sehingga kuota AI lebih hemat', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create(['nama' => 'Matematika']);
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id, 'kode_kompetensi' => '3.1']);
+
+    $penangkap = new stdClass;
+    $penangkap->prompt = '';
+
+    $this->app->instance(AiProvider::class, new class($penangkap) implements AiProvider
+    {
+        public function __construct(private object $penangkap) {}
+
+        public function generate(string $prompt): string
+        {
+            $this->penangkap->prompt = $prompt;
+
+            return json_encode(AiFake::fixture());
+        }
+    });
+
+    $this->actingAs($admin)->postJson('/admin/paket-soal/generate', [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => [$kd->id],
+        'jumlah_soal' => 30,
+        'tingkat_kesulitan' => 'campuran',
+        'part' => 1,
+        'run' => 'run-1',
+    ])->assertOk();
+
+    // Satu permintaan untuk 12 soal memangkas separuh jumlah panggilan API
+    // dibanding 6 soal — itulah daya tahan terhadap batas kuota harian.
+    expect($penangkap->prompt)->toContain('Buatkan 12 soal');
+});
+
 it('generate bertahap mengakumulasi soal antar part', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create(['nama' => 'Matematika']);
@@ -173,7 +207,7 @@ it('generate bertahap mengakumulasi soal antar part', function () {
     $this->actingAs($admin)
         ->postJson('/admin/paket-soal/generate', $payload + ['part' => 1])
         ->assertOk()
-        ->assertJson(['part_total' => 3, 'jumlah_akumulasi' => 3, 'selesai' => false]);
+        ->assertJson(['part_total' => 2, 'jumlah_akumulasi' => 3, 'selesai' => false]);
 
     $this->actingAs($admin)
         ->postJson('/admin/paket-soal/generate', $payload + ['part' => 2])
@@ -205,7 +239,7 @@ it('generate berlanjut melewati perkiraan part_total saat yield per part kurang'
     ];
 
     $ekspektasi = [
-        1 => ['part_total' => 3, 'jumlah_akumulasi' => 3, 'selesai' => false],
+        1 => ['part_total' => 2, 'jumlah_akumulasi' => 3, 'selesai' => false],
         2 => ['part_total' => 3, 'jumlah_akumulasi' => 6, 'selesai' => false],
         3 => ['part_total' => 4, 'jumlah_akumulasi' => 9, 'selesai' => false],
         4 => ['part_total' => 4, 'jumlah_akumulasi' => 12, 'selesai' => true],
@@ -840,7 +874,8 @@ it('distribusi KD tersebar ke seluruh KD sepanjang part generate', function () {
     }
 
     expect($respons->json('selesai'))->toBeTrue()
-        ->and($perekam->prompt)->toHaveCount(5);
+        // 30 soal ÷ 12 soal per bagian = 3 permintaan AI, tanpa panggilan sisa.
+        ->and($perekam->prompt)->toHaveCount(3);
 
     $kodeTerpanggil = [];
 

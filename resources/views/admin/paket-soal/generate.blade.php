@@ -84,7 +84,7 @@
         </label>
 
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <p class="hint">Soal dibuat merata di seluruh KD yang dipilih, dikerjakan bertahap (±6 soal per bagian). Tunggu prosesnya hingga selesai, lalu Anda kurasi sebelum disimpan.</p>
+            <p class="hint">Soal dibuat merata di seluruh KD yang dipilih, dikerjakan bertahap (maksimal {{ $soalPerPart }} soal per bagian). Tunggu prosesnya hingga selesai, lalu Anda kurasi sebelum disimpan.</p>
             <button type="submit" id="generate-submit" class="btn btn-primary">Generate Paket</button>
         </div>
     </form>
