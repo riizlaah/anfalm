@@ -1,5 +1,10 @@
 {{--
-    Tabel level kompetensi per KD untuk halaman hasil tryout maupun latihan.
+    Daftar level kompetensi per KD untuk halaman hasil tryout maupun latihan.
+
+    Kartu dalam grid, bukan tabel: lima kolom angka di layar 360px hanya bisa
+    dibaca dengan menggulir mendatar, sementara isinya muat apa adanya dalam
+    satu kartu (laporan "kurangi penggunaan tabel di UI mobile"; tabel hanya
+    dipertahankan untuk PG Kategori).
 
     @param array<int, array{kd: \App\Models\KompetensiDasar, jumlah: int, benar: int, theta: ?float, level: string, label: string}> $baris
 --}}
@@ -14,38 +19,26 @@
         mengerjakan satu tryout. Belum pernah terjawab berarti belum teridentifikasi.
     </p>
 
-    <div class="mt-4 overflow-x-auto">
-        <table class="w-full text-left text-sm">
-            <thead class="text-xs tracking-wide text-slate-500 uppercase">
-                <tr class="border-b border-slate-200">
-                    <th class="py-2 pr-4 font-medium">Kompetensi dasar</th>
-                    <th class="py-2 pr-4 font-medium">Dikerjakan</th>
-                    <th class="py-2 pr-4 font-medium">Benar</th>
-                    <th class="py-2 pr-4 font-medium">Theta</th>
-                    <th class="py-2 font-medium">Level</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                @forelse ($baris as $barisKd)
-                    <tr>
-                        <td class="py-2 pr-4 text-slate-700">
-                            {{ $barisKd['kd']->deskripsi }}
-                        </td>
-                        <td class="py-2 pr-4 text-slate-700">{{ $barisKd['jumlah'] }}</td>
-                        <td class="py-2 pr-4 text-slate-700">{{ $barisKd['benar'] }}</td>
-                        <td class="py-2 pr-4 text-slate-700">
-                            {{ $barisKd['theta'] !== null ? number_format((float) $barisKd['theta'], 3) : '—' }}
-                        </td>
-                        <td class="py-2 font-medium text-ink">{{ $barisKd['label'] }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="py-4 text-center text-slate-400">
-                            Belum ada data kompetensi dasar.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        @forelse ($baris as $barisKd)
+            <article class="rounded-xl border border-slate-200 bg-white p-4">
+                <span class="inline-block rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-ink">
+                    {{ $barisKd['label'] }}
+                </span>
+
+                <p class="mt-2 text-sm text-slate-700">{{ $barisKd['kd']->deskripsi }}</p>
+
+                <p class="mt-3 text-xs text-slate-500">
+                    {{ $barisKd['jumlah'] }} dikerjakan · {{ $barisKd['benar'] }} benar
+                </p>
+                <p class="mt-1 text-xs text-slate-500">
+                    Theta {{ $barisKd['theta'] !== null ? number_format((float) $barisKd['theta'], 3) : '—' }}
+                </p>
+            </article>
+        @empty
+            <p class="py-4 text-center text-slate-400 sm:col-span-2 lg:col-span-3">
+                Belum ada data kompetensi dasar.
+            </p>
+        @endforelse
     </div>
 </section>

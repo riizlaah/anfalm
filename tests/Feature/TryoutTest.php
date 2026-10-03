@@ -325,6 +325,34 @@ it('menyembunyikan kode KD dan statistik internal psikometrik dari halaman hasil
         ->toContain('Skor IRT total');
 });
 
+it('menampilkan ringkasan kompetensi per KD sebagai kartu, bukan tabel', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $percobaan = Percobaan::sole();
+
+    $percobaan->update(['urutan_mapel' => 4]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']));
+
+    // Layar 360px tidak seharusnya dipaksa menggulir tabel lima kolom: isinya
+    // tetap utuh sebagai kartu. Matriks PG Kategori adalah satu-satunya tabel
+    // yang dikecualikan aturan ini (laporan: "kecuali untuk PG Kategori"),
+    // jadi dia dibuang dulu sebelum halaman dicek.
+    $halaman = (string) $this->actingAs($peserta)
+        ->get(route('tryout.hasil', $paket))
+        ->assertOk()
+        ->getContent();
+
+    $tanpaMatriks = (string) preg_replace('/<table[^>]*matriks-kategori[^>]*>.*?<\/table>/s', '', $halaman);
+
+    expect($tanpaMatriks)->not->toContain('<table')
+        ->and($halaman)->toContain('Level kompetensi per KD')
+        ->toContain('Mahir');
+});
+
 it('menandai kompetensi dasar yang belum pernah dijawab sebagai belum teridentifikasi', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
@@ -658,6 +686,19 @@ it('menandai posisi peserta sendiri di leaderboard', function () {
         ->assertOk()
         ->assertSee('Peringkat Anda: 2')
         ->assertSee('data-posisi-sendiri', false);
+});
+
+it('menampilkan leaderboard sebagai daftar kartu, bukan tabel', function () {
+    $paket = PaketTryout::firstOrFail();
+
+    barisLeaderboard($paket, 'Budi Rendah', 500, 2000, 1);
+    $penonton = barisLeaderboard($paket, 'Siti Juara', 600, 3000, 2);
+
+    $this->actingAs($penonton)
+        ->get(route('tryout.leaderboard', $paket))
+        ->assertOk()
+        ->assertDontSee('<table', false)
+        ->assertSeeInOrder(['Peringkat 1', 'Siti Juara', 'Skor IRT 600']);
 });
 
 it('menampilkan leaderboard kosong tanpa peserta yang sudah selesai', function () {
