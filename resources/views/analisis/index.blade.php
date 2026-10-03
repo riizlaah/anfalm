@@ -28,11 +28,9 @@
 
             <dl class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div>
-                    <dt class="label">Theta</dt>
+                    <dt class="label">Skor IRT</dt>
                     <dd class="text-lg font-semibold text-ink">
-                        {{ $ringkasan->theta_estimasi !== null
-                            ? number_format((float) $ringkasan->theta_estimasi, 3)
-                            : '—' }}
+                        {{ $skorIrt ?? '—' }}
                     </dd>
                 </div>
 
@@ -47,18 +45,16 @@
                 </div>
 
                 <div>
-                    <dt class="label">Rata-rata skor</dt>
+                    <dt class="label">Rata-rata benar</dt>
                     <dd class="text-lg font-semibold text-ink">
-                        {{ $ringkasan->rata_rata_skor_irt !== null
-                            ? number_format((float) $ringkasan->rata_rata_skor_irt, 3)
-                            : '—' }}
+                        {{ $rataRataBenar !== null ? $rataRataBenar.'%' : '—' }}
                     </dd>
                 </div>
             </dl>
 
             <p class="hint">
-                Latihan menaikkan theta dan level, tetapi tidak menambah jumlah tryout
-                maupun rata-rata skor — keduanya hanya dihitung dari tryout yang selesai.
+                Latihan menaikkan skor dan level, tetapi tidak menambah jumlah tryout
+                maupun rata-rata benar — keduanya hanya dihitung dari tryout yang selesai.
             </p>
         </section>
     @endif
@@ -71,8 +67,7 @@
 
             <p class="mt-1 text-xs text-slate-500">
                 Persentase dihitung dari soal yang sudah Anda kerjakan pada KD tersebut.
-                Theta ditampilkan hingga tiga desimal; belum pernah terjawab berarti
-                belum teridentifikasi.
+                Belum pernah terjawab berarti belum teridentifikasi.
             </p>
 
             {{-- Kartu, bukan tabel: di layar 360px lima kolom angka harus
@@ -100,9 +95,6 @@
 
                         <p class="mt-3 text-xs text-slate-500">
                             {{ $item['persentase'] }}% benar · {{ $item['benar'] }}/{{ $item['dikerjakan'] }} soal
-                        </p>
-                        <p class="mt-1 text-xs text-slate-500">
-                            Theta {{ $item['theta'] !== null ? number_format((float) $item['theta'], 3) : '—' }}
                         </p>
 
                         <p class="mt-2 text-xs text-slate-600">{{ $item['rekomendasi'] }}</p>
@@ -154,10 +146,10 @@
         --}}
         <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <figure>
-                <figcaption class="label">Theta per mapel</figcaption>
+                <figcaption class="label">Skor IRT per mapel</figcaption>
                 <div class="mt-2 h-64">
                     <canvas data-grafik="radar"
-                        aria-label="Grafik radar perbandingan theta antar mapel"
+                        aria-label="Grafik radar perbandingan skor IRT antar mapel"
                         role="img"></canvas>
                 </div>
             </figure>
@@ -176,12 +168,12 @@
             @endif
 
             <figure @class(['lg:col-span-2' => $mapel === null || ! $adaRiwayat])>
-                <figcaption class="label">Perkembangan theta tryout</figcaption>
+                <figcaption class="label">Perkembangan skor tryout</figcaption>
 
                 @if ($adaRiwayat)
                     <div class="mt-2 h-64">
                         <canvas data-grafik="riwayat"
-                            aria-label="Grafik garis perkembangan theta dari waktu ke waktu"
+                            aria-label="Grafik garis perkembangan skor IRT dari waktu ke waktu"
                             role="img"></canvas>
                     </div>
                 @else

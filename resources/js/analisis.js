@@ -3,6 +3,10 @@
  *
  * Modul ini hanya diimpor ketika halamannya punya kanvas bertanda
  * `data-grafik`, sehingga bobot Chart.js tidak ikut ke halaman lain.
+ *
+ * Seluruh nilai yang masuk ke grafik sudah berupa Skor IRT atau level —
+ * terjemahan dari theta. Sebutan theta sengaja tidak muncul di sini karena
+ * tidak pernah dibaca peserta (laporan: "stop info dump").
  */
 
 import Chart from 'chart.js/auto'
@@ -52,7 +56,7 @@ export function mulaiGrafikAnalisis() {
     const wadah = document.getElementById('grafik-analisis')
     if (!wadah) return
 
-    /** @type {{radar: {labels: string[], singkat?: string[], theta: (number|null)[]}, level: {labels: string[], nilai: number[], level: string[]}, riwayat: {labels: string[], theta: number[]}}} */
+    /** @type {{radar: {labels: string[], singkat?: string[], skor: (number|null)[], batas: number[]}, level: {labels: string[], nilai: number[], level: string[]}, riwayat: {labels: string[], skor: number[], batas: number[]}}} */
     const data = JSON.parse(wadah.textContent)
 
     const pasang = (nama, pembuat) => {
@@ -75,14 +79,18 @@ export function mulaiGrafikAnalisis() {
 }
 
 /**
- * Perbandingan theta antar mapel (3.9 butir 3).
+ * Perbandingan skor IRT antar mapel (3.9 butir 3).
  *
  * Label sumbu memakai `singkat` (kode mapel) begitu kanvas terlalu sempit bagi
  * nama penuh, supaya labelnya tidak terpotong di tepi kanvas. `data.labels`
  * tetap berisi nama lengkap dan dipakai tooltip, jadi informasinya tidak hilang.
  *
+ * `batas` mengunci rentang sumbu pada skala pelaporan akun. Tanpa itu Chart.js
+ * menyesuaikan radar pada rentang data yang tampil, sehingga selisih tipis
+ * antar mapel ikut terlihat selebar selisih yang lebar.
+ *
  * @param {HTMLCanvasElement} kanvas
- * @param {{labels: string[], singkat?: string[], theta: (number|null)[]}} data
+ * @param {{labels: string[], singkat?: string[], skor: (number|null)[], batas: number[]}} data
  */
 function grafikRadar(kanvas, data) {
     const singkat = data.singkat ?? data.labels
@@ -93,8 +101,8 @@ function grafikRadar(kanvas, data) {
         data: {
             labels: data.labels,
             datasets: [{
-                label: 'Theta',
-                data: data.theta,
+                label: 'Skor IRT',
+                data: data.skor,
                 backgroundColor: 'rgba(37, 99, 235, 0.16)',
                 borderColor: WARNA_BIRU,
                 pointBackgroundColor: WARNA_BIRU,
@@ -105,8 +113,8 @@ function grafikRadar(kanvas, data) {
             ...OPSI_DASAR,
             scales: {
                 r: {
-                    suggestedMin: -3,
-                    suggestedMax: 3,
+                    min: data.batas[0],
+                    max: data.batas[1],
                     ticks: { backdropColor: 'transparent', color: WARNA_TINTA },
                     pointLabels: {
                         callback: (label, index) => (pendek ? singkat[index] ?? label : label),
@@ -181,10 +189,14 @@ function grafikLevel(kanvas, data) {
 }
 
 /**
- * Perkembangan theta akhir tiap tryout dari waktu ke waktu (3.9 butir 4).
+ * Perkembangan skor IRT tiap tryout dari waktu ke waktu (3.9 butir 4).
+ *
+ * Seperti radar, sumbu-y dikunci pada rentang skala pelaporan akun lewat
+ * `batas`, bukan dibiarkan mengikuti data — grafik riwayat yang melayang di
+ * sekitar nilai tertingginya membuat kenaikan kecil terlihat seperti lompatan.
  *
  * @param {HTMLCanvasElement} kanvas
- * @param {{labels: string[], theta: number[]}} data
+ * @param {{labels: string[], skor: number[], batas: number[]}} data
  */
 function grafikRiwayat(kanvas, data) {
     new Chart(kanvas, {
@@ -192,8 +204,8 @@ function grafikRiwayat(kanvas, data) {
         data: {
             labels: data.labels,
             datasets: [{
-                label: 'Theta akhir',
-                data: data.theta,
+                label: 'Skor IRT',
+                data: data.skor,
                 borderColor: WARNA_TEAL,
                 backgroundColor: 'rgba(14, 116, 144, 0.15)',
                 fill: true,
@@ -204,7 +216,7 @@ function grafikRiwayat(kanvas, data) {
         options: {
             ...OPSI_DASAR,
             scales: {
-                y: { suggestedMin: -3, suggestedMax: 3, ticks: { color: WARNA_TINTA } },
+                y: { min: data.batas[0], max: data.batas[1], ticks: { color: WARNA_TINTA } },
                 x: { ticks: { color: WARNA_TINTA, maxRotation: 45 } },
             },
         },

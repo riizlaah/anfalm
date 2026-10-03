@@ -319,7 +319,7 @@ it('menyembunyikan kode KD dan statistik internal psikometrik dari halaman hasil
     // tampil karena itulah kolomnya di leaderboard.
     expect($kd->deskripsi)->not->toBeEmpty()
         ->and($tampilan)->not->toContain('Galat baku')
-        ->not->toContain('Theta (IRT)')
+        ->not->toContain('Theta')
         ->not->toContain($kd->kode_kompetensi)
         ->toContain($kd->deskripsi)
         ->toContain('Skor IRT total');

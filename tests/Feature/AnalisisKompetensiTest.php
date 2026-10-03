@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Scoring\IrtService;
 use App\Domain\Scoring\KompetensiLevel;
 use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
@@ -171,18 +172,47 @@ it('menampilkan dropdown mapel dan analisis per KD setelah peserta berlatih', fu
         ->assertSee((new KompetensiLevel)->rekomendasi(KompetensiLevel::MAHIR));
 });
 
-it('menampilkan theta dengan tiga desimal pada tabel analisis', function () {
+it('menerjemahkan theta menjadi skor IRT pada ringkasan analisis', function () {
     $peserta = User::factory()->peserta()->create();
     $mapel = mapelAnalisis();
 
     latihSemuaBenar($this, $peserta, $mapel);
 
-    $theta = $peserta->trackingKompetensi()->first()->theta_estimasi;
+    $baris = $peserta->trackingMapel()->where('mapel_id', $mapel->getKey())->firstOrFail();
 
-    $this->actingAs($peserta)
+    expect($baris->theta_estimasi)->not->toBeNull();
+
+    $theta = number_format((float) $baris->theta_estimasi, 3, '.', '');
+    $skorIrt = (new IrtService)->convertToScale((float) $baris->theta_estimasi, $peserta->tingkat);
+
+    $halaman = $this->actingAs($peserta)
         ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
         ->assertOk()
-        ->assertSee(number_format((float) $theta, 3, '.', ''));
+        ->assertSee('<dt class="label">Skor IRT</dt>', false);
+
+    expect($halaman->getContent())
+        ->toContain((string) $skorIrt)
+        ->not->toContain($theta);
+});
+
+it('tidak menyebut theta di halaman analisis peserta', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
+
+    $halaman = $this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk()
+        ->getContent();
+
+    $tampilan = (string) preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $halaman);
+
+    // Theta adalah statistik psikometrik mentah pada skala −3…+3 yang tidak
+    // bisa ditindaklanjuti peserta. Yang mereka baca adalah terjemahannya:
+    // Skor IRT di ringkasan dan Level di kartu KD. Label sumbu grafik pun
+    // memakai satuan yang sama, jadi istilahnya tak perlu muncul lagi.
+    expect(strtolower($tampilan))->not->toContain('theta');
 });
 
 it('menyembunyikan kode KD dari halaman analisis siswa', function () {
@@ -250,7 +280,7 @@ it('meringkas tracking mapel di bagian atas halaman analisis', function () {
         ->assertSee((new KompetensiLevel)->label($baris->level_kompetensi));
 });
 
-it('menyiapkan data grafik radar theta per mapel', function () {
+it('menyiapkan data grafik radar skor IRT per mapel', function () {
     $peserta = User::factory()->peserta()->create();
     $mapel = mapelAnalisis();
 
@@ -261,10 +291,10 @@ it('menyiapkan data grafik radar theta per mapel', function () {
         ->assertOk());
 
     expect($grafik['radar']['labels'])->toContain($mapel->nama)
-        ->and($grafik['radar']['theta'])->toHaveCount(count($grafik['radar']['labels']))
+        ->and($grafik['radar']['skor'])->toHaveCount(count($grafik['radar']['labels']))
         ->and(array_filter(
-            $grafik['radar']['theta'],
-            fn ($theta): bool => $theta !== null,
+            $grafik['radar']['skor'],
+            fn ($skor): bool => $skor !== null,
         ))->not->toBeEmpty();
 });
 
@@ -308,7 +338,7 @@ it('melengkapi label radar dengan kode singkat supaya muat di layar sempit', fun
         ->and(max(array_map('strlen', $grafik['radar']['singkat'])))->toBeLessThanOrEqual(20);
 });
 
-it('menyiapkan data grafik garis riwayat nilai tryout', function () {
+it('menyiapkan data grafik garis riwayat skor IRT tryout', function () {
     $peserta = User::factory()->peserta()->create();
     $mapel = mapelAnalisis();
 
@@ -320,11 +350,16 @@ it('menyiapkan data grafik garis riwayat nilai tryout', function () {
 
     $kosong = dataGrafik($halaman());
     expect($kosong['riwayat']['labels'])->toBeEmpty()
-        ->and($kosong['riwayat']['theta'])->toBeEmpty();
+        ->and($kosong['riwayat']['skor'])->toBeEmpty();
 
     HasilTryout::factory()->for($peserta)->create(['theta_final' => 1.25]);
 
+    // Sumbu-y memakai Skor IRT, bukan theta mentah. Bentuk garisnya persis
+    // sama karena keduanya transformasi linear — yang berubah hanya satuan
+    // yang dibaca peserta, dari −3…+3 menjadi skala pelaporan akunnya.
+    $skor = (new IrtService)->convertToScale(1.25, $peserta->tingkat);
+
     $terisi = dataGrafik($halaman());
-    expect($terisi['riwayat']['theta'])->toBe([1.25])
+    expect($terisi['riwayat']['skor'])->toBe([$skor])
         ->and($terisi['riwayat']['labels'])->toHaveCount(1);
 });

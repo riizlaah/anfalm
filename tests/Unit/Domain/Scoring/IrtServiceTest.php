@@ -159,3 +159,10 @@ it('konversi skala SMA/SMK di-clamp ke 200-700 (edge 6.8)', function () {
 it('tingkat yang tidak dikenal diperlakukan sebagai skala 200-700', function () {
     expect($this->irt->convertToScale(0.0, null))->toBe(450);
 });
+
+it('rentang skor berdiri pada batas konversi theta ekstrem', function () {
+    expect($this->irt->rentangSkor('SD'))->toBe([20, 80])
+        ->and($this->irt->rentangSkor('SMP'))->toBe([20, 80])
+        ->and($this->irt->rentangSkor('SMK'))->toBe([200, 700])
+        ->and($this->irt->rentangSkor(null))->toBe([200, 700]);
+});

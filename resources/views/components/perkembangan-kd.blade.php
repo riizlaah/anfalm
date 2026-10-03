@@ -6,7 +6,7 @@
     satu kartu (laporan "kurangi penggunaan tabel di UI mobile"; tabel hanya
     dipertahankan untuk PG Kategori).
 
-    @param array<int, array{kd: \App\Models\KompetensiDasar, jumlah: int, benar: int, theta: ?float, level: string, label: string}> $baris
+    @param array<int, array{kd: \App\Models\KompetensiDasar, jumlah: int, benar: int, level: string, label: string}> $baris
 --}}
 <section class="card mt-5 p-6">
     <h2 class="card-title">
@@ -14,11 +14,15 @@
     </h2>
 
     <p class="mt-1 text-xs text-slate-500">
-        Jumlah dan benar berasal dari percobaan ini. Theta dan level dihitung dari seluruh
+        Jumlah dan benar berasal dari percobaan ini. Level dihitung dari seluruh
         latihan dan tryout Anda pada kompetensi dasar itu, jadi tidak berubah tiap kali
         mengerjakan satu tryout. Belum pernah terjawab berarti belum teridentifikasi.
     </p>
 
+    {{-- Lencana level dan persentase adalah terjemahan dari theta. Angka
+         mentahnya sendiri tidak dipertemukan: ia skala −3…+3 yang hanya
+         bermakna pada kalibrasi soal ini dan tak bisa ditindaklanjuti
+         peserta (laporan: "stop info dump"). --}}
     <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         @forelse ($baris as $barisKd)
             <article class="rounded-xl border border-slate-200 bg-white p-4">
@@ -30,9 +34,6 @@
 
                 <p class="mt-3 text-xs text-slate-500">
                     {{ $barisKd['jumlah'] }} dikerjakan · {{ $barisKd['benar'] }} benar
-                </p>
-                <p class="mt-1 text-xs text-slate-500">
-                    Theta {{ $barisKd['theta'] !== null ? number_format((float) $barisKd['theta'], 3) : '—' }}
                 </p>
             </article>
         @empty

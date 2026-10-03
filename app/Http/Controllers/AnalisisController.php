@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Scoring\IrtService;
 use App\Domain\Scoring\KompetensiLevel;
 use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
@@ -18,20 +19,27 @@ use Illuminate\View\View;
  * Halaman "Analisis Kompetensi" peserta (3.9).
  *
  * Memetakan `tracking_kompetensi` per KD dan `tracking_mapel` per mapel menjadi
- * level, persentase, theta, dan rekomendasi latihan. Payload ketiga grafik
+ * level, persentase, skor IRT, dan rekomendasi latihan. Payload ketiga grafik
  * (radar, batang, garis) ikut dikirim dan dirender Chart.js di sisi klien.
+ *
+ * Theta tidak pernah sampai ke tampilan sebagai angka mentah: ia skala internal
+ * −3…+3 yang hanya bermakna di kalibrasi soal ini. Yang dibaca peserta adalah
+ * terjemahannya — Skor IRT untuk angka dan Level untuk kategori.
  */
 class AnalisisController extends Controller
 {
-    public function __construct(private readonly KompetensiLevel $kompetensi) {}
+    public function __construct(
+        private readonly KompetensiLevel $kompetensi,
+        private readonly IrtService $irt,
+    ) {}
 
     public function index(Request $request): View
     {
         $peserta = $request->user();
 
         // Pilihan mapel peserta (butir 96) hanya menyaring *tampilan*: daftar
-        // radar dan pilihan dropdown memakai yang ini, sedangkan catatan theta
-        // di bawahnya tetap dihitung dari seluruh pengerjaannya di semua mapel.
+        // radar dan pilihan dropdown memakai yang ini, sedangkan ringkasan di
+        // bawahnya tetap dihitung dari seluruh pengerjaannya di semua mapel.
         $mapels = $peserta->mapelTampil(Mapel::query()
             ->whereNull('deleted_at')
             ->orderBy('kode')
@@ -61,6 +69,15 @@ class AnalisisController extends Controller
             'labelRingkasan' => $ringkasan === null
                 ? null
                 : $this->kompetensi->label($ringkasan->level_kompetensi ?? ''),
+            // Terjemahan theta untuk ringkasan: skor dalam skala pelaporan
+            // akun, dan rata-rata proporsi jawaban benar (rentang 0–1) sebagai
+            // persentase — angka 0–1 tidak pernah dibaca siapa pun apa adanya.
+            'skorIrt' => $ringkasan?->theta_estimasi === null
+                ? null
+                : $this->irt->convertToScale((float) $ringkasan->theta_estimasi, $peserta->tingkat),
+            'rataRataBenar' => $ringkasan?->rata_rata_skor_irt === null
+                ? null
+                : (int) round((float) $ringkasan->rata_rata_skor_irt * 100),
         ]);
     }
 
@@ -151,10 +168,16 @@ class AnalisisController extends Controller
     /**
      * Payload ketiga grafik halaman analisis (3.9 butir 3–4).
      *
-     * - `radar`: theta per mapel milik peserta.
+     * - `radar`: skor IRT per mapel milik peserta.
      * - `level`: perbandingan level tiap KD pada mapel terpilih, dipetakan ke
      *   skala ordinal 0–4 agar bisa dibandingkan secara visual.
-     * - `riwayat`: theta akhir tiap tryout yang sudah selesai, terurut waktu.
+     * - `riwayat`: skor IRT tiap tryout yang sudah selesai, terurut waktu.
+     *
+     * `radar` dan `riwayat` membawa `batas`: rentang skala pelaporan akun yang
+     * diturunkan dari konversi theta ekstrem. Sumbunya jadi berdiri pada nilai
+     * yang benar-benar bisa dicapai — peran yang dulu dipegang −3…+3 sebelum
+     * theta diterjemahkan — sehingga selisih kecil antar mapel tidak ikut
+     * melebar sendiri mengikuti data.
      *
      * @param  Collection<int, array{kd: KompetensiDasar, theta: float|null, label: string}>  $baris
      * @return array<string, array<string, array<int, mixed>>>
@@ -172,10 +195,14 @@ class AnalisisController extends Controller
                 // Kode dipakai label sumbu di kanvas sempit; nama lengkap tetap
                 // ada di `labels` supaya tooltip tidak kehilangan informasi.
                 'singkat' => $mapels->pluck('kode')->values()->all(),
-                'theta' => $mapels
-                    ->map(fn (Mapel $m): ?float => $terlacak->get($m->getKey())?->theta_estimasi)
+                'skor' => $mapels
+                    ->map(fn (Mapel $m): ?int => $this->skorDari(
+                        $terlacak->get($m->getKey())?->theta_estimasi,
+                        $peserta->tingkat,
+                    ))
                     ->values()
                     ->all(),
+                'batas' => $this->irt->rentangSkor($peserta->tingkat),
             ],
             'level' => [
                 'labels' => $baris->pluck('kd.kode_kompetensi')->values()->all(),
@@ -192,10 +219,22 @@ class AnalisisController extends Controller
     }
 
     /**
-     * Riwayat theta akhir per tryout yang sudah selesai, diurutkan dari yang
+     * Terjemahan theta ke Skor IRT untuk satuan sumbu grafik. Theta yang belum
+     * terisi tetap `null`, bukan nol — nol adalah angka, dan angka nol di grafik
+     * berarti "kemampuan paling rendah", padahal belum ada data sama sekali.
+     */
+    private function skorDari(?float $theta, ?string $tingkat): ?int
+    {
+        return $theta === null
+            ? null
+            : $this->irt->convertToScale($theta, $tingkat);
+    }
+
+    /**
+     * Riwayat skor IRT per tryout yang sudah selesai, diurutkan dari yang
      * paling lama agar grafik garisnya terbaca sebagai perkembangan waktu.
      *
-     * @return array{labels: array<int, string>, theta: array<int, float>}
+     * @return array{labels: array<int, string>, skor: array<int, int>, batas: array{0: int, 1: int}}
      */
     private function riwayatTryout(User $peserta): array
     {
@@ -209,7 +248,14 @@ class AnalisisController extends Controller
                 ->map(fn (HasilTryout $hasil): string => $hasil->selesai_pada->format('d/m/Y'))
                 ->values()
                 ->all(),
-            'theta' => $riwayat->pluck('theta_final')->values()->all(),
+            'skor' => $riwayat
+                ->map(fn (HasilTryout $hasil): int => $this->irt->convertToScale(
+                    (float) $hasil->theta_final,
+                    $peserta->tingkat,
+                ))
+                ->values()
+                ->all(),
+            'batas' => $this->irt->rentangSkor($peserta->tingkat),
         ];
     }
 }

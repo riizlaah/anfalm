@@ -113,6 +113,25 @@ class IrtService
     }
 
     /**
+     * Rentang nilai yang mungkin pada skala pelaporan `$tingkat`, dipakai
+     * sebagai batas sumbu grafik halaman analisis.
+     *
+     * Tanpa batas tetap, Chart.js menyesuaikan jangkauannya pada data yang
+     * tampil sehingga selisih tipis antar mapel ikut terlihat sebesar selisih
+     * yang lebar. Batasnya diambil dari `convertToScale` pada theta ekstrem,
+     * jadi tidak mungkin menyimpang dari rumus konversi.
+     *
+     * @return array{0: int, 1: int}
+     */
+    public function rentangSkor(?string $tingkat): array
+    {
+        return [
+            $this->convertToScale(self::THETA_MIN, $tingkat),
+            $this->convertToScale(self::THETA_MAX, $tingkat),
+        ];
+    }
+
+    /**
      * Iterasi Newton mengoptimalkan log-likelihood (+ log prior bila diberikan).
      *
      * @param  array<int, array{a: float, b: float, c: float, response: int}>  $items

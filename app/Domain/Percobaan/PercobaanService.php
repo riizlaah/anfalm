@@ -714,12 +714,16 @@ class PercobaanService
     /**
      * Ringkasan per kompetensi dasar untuk satu percobaan, dipakai halaman hasil.
      *
-     * Jumlah dan benar diambil dari percobaan ini saja, sedangkan theta dan
-     * level dari `tracking_kompetensi` yang mengakumulasikan seluruh percobaan
-     * peserta — supaya level tidak melompat-lompat antar tryout. KD yang belum
-     * pernah dijawab tetap tampil dengan level "belum teridentifikasi" (7.5).
+     * Jumlah dan benar diambil dari percobaan ini saja, sedangkan level dari
+     * `tracking_kompetensi` yang mengakumulasikan seluruh percobaan peserta —
+     * supaya level tidak melompat-lompat antar tryout. KD yang belum pernah
+     * dijawab tetap tampil dengan level "belum teridentifikasi" (7.5).
      *
-     * @return array<int, array{kd: KompetensiDasar, jumlah: int, benar: int, theta: ?float, level: string, label: string}>
+     * Theta mentah sengaja tidak ikut keluar: hanya levelnya yang tampil,
+     * karena angka pada skala −3…+3 tidak bisa ditindaklanjuti peserta
+     * (laporan: "stop info dump").
+     *
+     * @return array<int, array{kd: KompetensiDasar, jumlah: int, benar: int, level: string, label: string}>
      */
     public function ringkasanKompetensi(Percobaan $percobaan): array
     {
@@ -763,7 +767,6 @@ class PercobaanService
                     'kd' => $kd,
                     'jumlah' => $baris?->count() ?? 0,
                     'benar' => $baris?->filter(fn (RiwayatPengerjaan $b): bool => $b->is_benar)->count() ?? 0,
-                    'theta' => $theta,
                     'level' => $level,
                     'label' => $this->level->label($level),
                 ];
