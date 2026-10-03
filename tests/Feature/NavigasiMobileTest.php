@@ -135,7 +135,33 @@ it('setiap menu di tab bar bawah memuat ikon SVG inline yang sah', function () {
     }
 });
 
-it('tab bar admin memuat ikon pada seluruh tujuh menu', function () {
+it('admin tidak melihat menu Latihan dan Analisis', function () {
+    $admin = User::factory()->admin()->create();
+
+    $html = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->getContent();
+
+    foreach ([potonganTabBar($html), potonganNavDesktop($html)] as $potongan) {
+        expect($potongan)
+            ->not->toBe('')
+            ->not->toContain(route('latihan.index'))
+            ->not->toContain(route('analisis.index'));
+    }
+});
+
+it('peserta tetap melihat menu Latihan dan Analisis', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
+
+    foreach ([potonganTabBar($html), potonganNavDesktop($html)] as $potongan) {
+        expect($potongan)
+            ->not->toBe('')
+            ->toContain(route('latihan.index'))
+            ->toContain(route('analisis.index'));
+    }
+});
+
+it('tab bar admin memuat ikon pada seluruh menu', function () {
     $admin = User::factory()->admin()->create();
 
     $tabBar = potonganTabBar(
@@ -144,7 +170,8 @@ it('tab bar admin memuat ikon pada seluruh tujuh menu', function () {
 
     $tautan = potonganTautan($tabBar);
 
-    expect($tautan)->toHaveCount(7);
+    // Dashboard, Tryout, Mapel, Paket Soal, Paket Tryout.
+    expect($tautan)->toHaveCount(5);
 
     foreach ($tautan as $linkMenu) {
         expect(punyaIkonSah($linkMenu))->toBeTrue();

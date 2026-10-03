@@ -15,20 +15,22 @@
 
 @php
     $lindungiKonten = $proteksi ?? (auth()->user()?->isPeserta() ?? false);
+    $admin = auth()->check() && auth()->user()->isAdmin();
 
+    // Latihan dan Analisis adalah alur peserta: muncul di menu admin hanya
+    // membingungkan karena keduanya bukan pekerjaan admin.
     $nav = [
         ['label' => 'Dashboard', 'route' => 'dashboard', 'ikon' => 'dashboard'],
         ['label' => 'Tryout', 'route' => 'tryout.index', 'ikon' => 'tryout'],
-        ['label' => 'Latihan', 'route' => 'latihan.index', 'ikon' => 'latihan'],
-        ['label' => 'Analisis', 'route' => 'analisis.index', 'ikon' => 'analisis'],
     ];
 
-    if (auth()->check() && auth()->user()->isAdmin()) {
-        $nav = array_merge($nav, [
-            ['label' => 'Mapel', 'route' => 'admin.mapel.index', 'ikon' => 'mapel'],
-            ['label' => 'Paket Soal', 'route' => 'admin.paket-soal.index', 'ikon' => 'paket-soal'],
-            ['label' => 'Paket Tryout', 'route' => 'admin.paket-tryout.index', 'ikon' => 'paket-tryout'],
-        ]);
+    if ($admin) {
+        $nav[] = ['label' => 'Mapel', 'route' => 'admin.mapel.index', 'ikon' => 'mapel'];
+        $nav[] = ['label' => 'Paket Soal', 'route' => 'admin.paket-soal.index', 'ikon' => 'paket-soal'];
+        $nav[] = ['label' => 'Paket Tryout', 'route' => 'admin.paket-tryout.index', 'ikon' => 'paket-tryout'];
+    } else {
+        $nav[] = ['label' => 'Latihan', 'route' => 'latihan.index', 'ikon' => 'latihan'];
+        $nav[] = ['label' => 'Analisis', 'route' => 'analisis.index', 'ikon' => 'analisis'];
     }
 @endphp
 
