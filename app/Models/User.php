@@ -106,12 +106,18 @@ class User extends Authenticatable
     /**
      * Menyaring daftar mapel menurut pilihan peserta ini.
      *
-     * Dua hal dijaga di sini. Peserta yang belum memilih apa pun — termasuk
+     * Mapel wajib **tidak pernah tersaring**: ia bukan sesuatu yang dipilih
+     * (halaman profil menampilkan namanya sebagai keterangan, tanpa kotak),
+     * sehingga memasukkannya ke daftar pilihan justru menempatkan hal yang
+     * sama di dua tempat. Ia ikut tampil berbarengan pilihan peserta.
+     *
+     * Dua hal tetap dijaga. Peserta yang belum memilih apa pun — termasuk
      * seluruh akun yang lahir sebelum fitur ini ada — tetap melihat seluruh
      * mapel, jadi tidak ada yang mendadak kehilangan isi halaman. Dan bila
      * semua mapel pilihannya sudah dihapus admin, penyaringannya gugur dengan
      * sendirinya karena relasi ikut menyaring baris terhapus, sehingga
-     * halaman tidak pernah berakhir tanpa isi.
+     * halaman tidak pernah berakhir tanpa isi — kecuali ada mapel wajib yang
+     * selalu menemani.
      *
      * @param  Collection<int, Mapel>  $mapels  seluruh mapel yang tidak dihapus
      * @return Collection<int, Mapel>
@@ -124,8 +130,13 @@ class User extends Authenticatable
             return $mapels;
         }
 
+        $wajib = $mapels
+            ->filter(fn (Mapel $mapel): bool => $mapel->jenis === Mapel::JENIS_WAJIB)
+            ->pluck('id');
+
         return $mapels
-            ->filter(fn (Mapel $mapel): bool => $pilihan->contains($mapel->getKey()))
+            ->filter(fn (Mapel $mapel): bool => $wajib->contains($mapel->getKey())
+                || $pilihan->contains($mapel->getKey()))
             ->values();
     }
 }

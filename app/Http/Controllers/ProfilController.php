@@ -17,9 +17,21 @@ use Illuminate\View\View;
  * tetap mencakup semua mapel. Karena halaman inilah satu-satunya tempat
  * memilihnya, halaman yang sama juga dipakai sebagai onboarding: peserta baru
  * langsung diarahkan ke sini begitu pendaftarannya selesai.
+ *
+ * Pilihan hanya berisi mapel **pilihan**. Mapel wajib ditampilkan sebagai
+ * keterangan berupa nama, tanpa kotak centang — menawarkannya berarti
+ * menyuruh peserta memilih sesuatu yang sebenarnya tidak bisa tidak ia pilih.
  */
 class ProfilController extends Controller
 {
+    /**
+     * Maksimum jumlah mapel pilihan yang bisa dicentang peserta.
+     *
+     * Angka yang sama dipakai tiga kali: validasi server, pesan yang dibaca
+     * peserta, dan penghentian kotak di sisi klien.
+     */
+    public const MAKS_PILIHAN = 2;
+
     /**
      * Opsi tingkat pada form, sama dengan nilai yang bisa dimiliki kolom
      * `users.tingkat`.
@@ -36,12 +48,15 @@ class ProfilController extends Controller
     public function show(Request $request): View
     {
         $peserta = $request->user();
+        $mapels = $this->semuaMapel();
 
         return view('profil.show', [
             'peserta' => $peserta,
-            'mapels' => $this->semuaMapel(),
+            'wajib' => $mapels->where('jenis', Mapel::JENIS_WAJIB)->values(),
+            'pilihan' => $mapels->where('jenis', '!=', Mapel::JENIS_WAJIB)->values(),
             'terpilih' => $peserta->mapelPilihan->pluck('id'),
             'tingkatOpsi' => self::TINGKAT_OPSI,
+            'maksPilihan' => self::MAKS_PILIHAN,
         ]);
     }
 
@@ -49,16 +64,25 @@ class ProfilController extends Controller
     {
         $peserta = $request->user();
 
+        $mapels = $this->semuaMapel();
+        $wajibIds = $mapels->where('jenis', Mapel::JENIS_WAJIB)->pluck('id')->all();
+
         $validated = $request->validate([
             'nama_lengkap' => ['required', 'string', 'max:100'],
             'sekolah' => ['nullable', 'string', 'max:100'],
             'tingkat' => ['nullable', 'string', Rule::in(self::TINGKAT_OPSI)],
             'jurusan' => ['nullable', 'string', 'max:50'],
-            'mapel_pilihan' => ['sometimes', 'array'],
-            'mapel_pilihan.*' => ['integer', Rule::exists('mapel', 'id')->whereNull('deleted_at')],
+            'mapel_pilihan' => ['sometimes', 'array', 'max:'.self::MAKS_PILIHAN],
+            'mapel_pilihan.*' => [
+                'integer',
+                Rule::exists('mapel', 'id')->whereNull('deleted_at'),
+                Rule::notIn($wajibIds),
+            ],
         ], [
             'tingkat.in' => 'Pilih tingkat sekolah yang tersedia.',
+            'mapel_pilihan.max' => 'Maksimal '.self::MAKS_PILIHAN.' mapel pilihan. Pilih dua yang paling ingin kamu fokuskan.',
             'mapel_pilihan.*.exists' => 'Ada mapel pilihan yang sudah tidak tersedia. Muat ulang halaman lalu pilih lagi.',
+            'mapel_pilihan.*.not_in' => 'Mapel wajib tidak perlu dipilih — ia selalu ditampilkan.',
         ]);
 
         $peserta->update([
