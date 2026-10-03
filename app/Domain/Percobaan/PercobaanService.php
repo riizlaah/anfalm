@@ -30,12 +30,6 @@ use RuntimeException;
  */
 class PercobaanService
 {
-    /**
-     * Di bawah jumlah item ini estimasi memakai prior lemah, karena MLE pada
-     * data sangat sedikit mudah meledak ke ±3.
-     */
-    private const MIN_ITEM_MLE = 3;
-
     public function __construct(
         private readonly ScoringService $scoring,
         private readonly IrtService $irt,
@@ -417,7 +411,7 @@ class PercobaanService
                     continue;
                 }
 
-                $itemsIrt = $this->keItemIrt($items);
+                $itemsIrt = $this->scoring->itemsIrt($items);
 
                 $itemsPerMapel[$indeks] = [...($itemsPerMapel[$indeks] ?? []), ...$itemsIrt];
                 $itemTerjawab = [...$itemTerjawab, ...$itemsIrt];
@@ -480,16 +474,6 @@ class PercobaanService
      * @param  array<int, array<string, mixed>>  $items
      * @return array<int, array{a: float, b: float, c: float, response: int}>
      */
-    private function keItemIrt(array $items): array
-    {
-        return array_map(fn (array $item): array => [
-            'a' => (float) ($item['a'] ?? IrtService::DEFAULT_A),
-            'b' => (float) ($item['b'] ?? IrtService::DEFAULT_B),
-            'c' => (float) ($item['c'] ?? IrtService::DEFAULT_C),
-            'response' => (int) $item['resp'],
-        ], $items);
-    }
-
     /**
      * Pemetaan soal ke posisi kelompok mapelnya di daftar percobaan ini.
      *
@@ -520,7 +504,7 @@ class PercobaanService
         $theta = [];
 
         foreach ($itemsPerMapel as $posisi => $items) {
-            $theta[$posisi] = count($items) < self::MIN_ITEM_MLE
+            $theta[$posisi] = count($items) < IrtService::MIN_ITEM_MLE
                 ? $this->irt->estimateWithPrior($items)
                 : $this->irt->estimateMle($items);
         }
@@ -580,7 +564,7 @@ class PercobaanService
                     $benar++;
                 }
 
-                $items = [...$items, ...$this->keItemIrt(array_values(array_filter(
+                $items = [...$items, ...$this->scoring->itemsIrt(array_values(array_filter(
                     $skor['items'],
                     fn (array $item): bool => $item['resp'] !== null
                 )))];
@@ -588,7 +572,7 @@ class PercobaanService
 
             $theta = $items === []
                 ? null
-                : (count($items) < self::MIN_ITEM_MLE
+                : (count($items) < IrtService::MIN_ITEM_MLE
                     ? $this->irt->estimateWithPrior($items)
                     : $this->irt->estimateMle($items));
 
@@ -672,7 +656,7 @@ class PercobaanService
 
                 $skor = $this->scoring->score($barisRiwayat->soal, $barisRiwayat->jawaban_user);
 
-                $items = [...$items, ...$this->keItemIrt(array_values(array_filter(
+                $items = [...$items, ...$this->scoring->itemsIrt(array_values(array_filter(
                     $skor['items'],
                     fn (array $item): bool => $item['resp'] !== null
                 )))];
@@ -687,7 +671,7 @@ class PercobaanService
 
             $theta = $items === []
                 ? null
-                : (count($items) < self::MIN_ITEM_MLE
+                : (count($items) < IrtService::MIN_ITEM_MLE
                     ? $this->irt->estimateWithPrior($items)
                     : $this->irt->estimateMle($items));
 

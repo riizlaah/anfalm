@@ -9,6 +9,7 @@ use App\Models\Percobaan;
 use App\Models\Soal;
 use App\Models\TrackingKompetensi;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -42,6 +43,83 @@ function latihSemuaBenar(TestCase $t, User $peserta, Mapel $mapel): void
         route('latihan.jawab', $percobaan),
         [...payloadSemuaBenar($aktif['soal']), 'aksi' => 'selesai']
     );
+}
+
+/**
+ * Menutup satu sesi latihan berisi seluruh soal `$mapel` pada waktu berjalan.
+ *
+ * `jumlah_soal` memakai batas atas validasi supaya seluruh soal ikut
+ * terambil, sehingga dua sesi memakai himpunan soal yang persis sama dan
+ * kompetensi dasar yang tersentuhnya pun sama — tanpa itu seri garis antar
+ * tanggal bisa tidak pernah bersinggungan. Payload jawabannya diserahkan ke
+ * pemanggil.
+ *
+ * @param  callable(Collection<int, Soal>): array<string, mixed>  $isiPayload
+ */
+function latihSesi(TestCase $t, User $peserta, Mapel $mapel, callable $isiPayload): void
+{
+    $t->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 30,
+        'timer' => 'stopwatch',
+    ]);
+
+    $percobaan = Percobaan::latest('id')->firstOrFail();
+    $aktif = soalMapelAktif($percobaan);
+
+    $t->actingAs($peserta)->post(
+        route('latihan.jawab', $percobaan),
+        [...$isiPayload($aktif['soal']), 'aksi' => 'selesai']
+    );
+}
+
+/**
+ * Payload yang menjawab salah pada setiap soal.
+ *
+ * Dipakai sebagai sesi kedua uji garis perkembangan: sesi pertama seluruhnya
+ * benar dan sesi kedua seluruhnya salah membuat theta bergerak jauh, sehingga
+ * titik keduanya pasti berbeda. Tanpa perbedaan itu, garis yang menghitung
+ * ulang dari seluruh riwayat pada tiap tanggal — datar sepanjang sejarah —
+ * akan lulus uji invarian.
+ *
+ * @param  Collection<int, Soal>|array<int, Soal>  $soals
+ * @return array<string, mixed>
+ */
+function payloadSemuaSalah($soals): array
+{
+    $payload = ['jawaban' => ['opsi' => [], 'kategori' => []]];
+
+    foreach ($soals as $soal) {
+        if ($soal->tipe_soal === Soal::TIPE_PG_KATEGORI) {
+            $allowed = array_values((array) $soal->daftar_kategori);
+
+            $payload['jawaban']['kategori'][$soal->id] = $soal->pernyataanKategori
+                ->mapWithKeys(fn ($pernyataan) => [
+                    $pernyataan->id => collect($allowed)
+                        ->first(fn ($kategori): bool => $kategori !== $pernyataan->kategori_benar)
+                        ?? $pernyataan->kategori_benar,
+                ])->all();
+
+            continue;
+        }
+
+        // PG kompleks dinilai per opsi, jadi memilih hanya opsi yang salah
+        // membuat seluruh itemnya bernilai 0.
+        $salah = $soal->opsiJawaban->filter(fn ($opsi): bool => ! $opsi->is_benar);
+        $tunggal = $soal->tipe_soal === Soal::TIPE_PG;
+
+        if ($salah->isEmpty()) {
+            $payload['jawaban']['opsi'][$soal->id] = $tunggal ? jawabanBenarSoal($soal) : [];
+
+            continue;
+        }
+
+        $payload['jawaban']['opsi'][$soal->id] = $tunggal
+            ? $salah->first()->id
+            : $salah->pluck('id')->all();
+    }
+
+    return $payload;
 }
 
 /**
@@ -229,8 +307,8 @@ it('menyembunyikan kode KD dari halaman analisis siswa', function () {
         ->getContent();
 
     // Tag <script dibuang dulu: payload #grafik-analisis masih memuat kode KD
-    // sebagai label sumbu grafik batang — grafik tak muat memuat deskripsi
-    // penuh — dan label itu memang tidak terlihat oleh peserta. Yang dinilai
+    // sebagai legenda garis perkembangan — grafik tak muat memuat deskripsi
+    // penuh — dan legenda itu memang tidak terlihat oleh peserta. Yang dinilai
     // hanya yang benar-benar dibaca mata.
     $tampilan = (string) preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $halaman);
 
@@ -298,25 +376,121 @@ it('menyiapkan data grafik radar skor IRT per mapel', function () {
         ))->not->toBeEmpty();
 });
 
-it('menyiapkan data grafik batang level per KD terpilih', function () {
+it('menyiapkan garis perkembangan skor per kompetensi dasar dari riwayat pengerjaan', function () {
     $peserta = User::factory()->peserta()->create();
     $mapel = mapelAnalisis();
 
     latihSemuaBenar($this, $peserta, $mapel);
 
-    $kd = $mapel->kompetensiDasars()->orderBy('kode_kompetensi')->first();
+    $grafik = dataGrafik($this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk());
+
+    $seri = $grafik['garis']['seri'];
+
+    expect($grafik['garis']['labels'])->not->toBeEmpty()
+        ->and($seri)->not->toBeEmpty()
+        ->and(array_column($seri, 'kode'))->toContain($mapel
+        ->kompetensiDasars()->orderBy('kode_kompetensi')->first()->kode_kompetensi);
+
+    foreach ($seri as $baris) {
+        $terisi = array_filter($baris['nilai'], fn ($skor): bool => $skor !== null);
+
+        expect($baris['nilai'])->toHaveCount(count($grafik['garis']['labels']))
+            ->and($terisi)->not->toBeEmpty();
+
+        foreach ($terisi as $skor) {
+            expect($skor)->toBeGreaterThanOrEqual($grafik['garis']['batas'][0])
+                ->toBeLessThanOrEqual($grafik['garis']['batas'][1]);
+        }
+    }
+});
+
+it('menutup garis perkembangan pada theta yang tersimpan di tracking', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    latihSemuaBenar($this, $peserta, $mapel);
 
     $grafik = dataGrafik($this->actingAs($peserta)
         ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
         ->assertOk());
 
-    // Latihan tadi 100% benar, jadi setidaknya satu KD sudah Mahir (urutan 4).
-    expect($grafik['level']['labels'])->toContain($kd->kode_kompetensi)
-        ->and($grafik['level']['nilai'])->not->toBeEmpty()
-        ->and(min($grafik['level']['nilai']))->toBeGreaterThanOrEqual(0)
-        ->and(max($grafik['level']['nilai']))->toBeLessThanOrEqual(4)
-        ->and($grafik['level']['nilai'])->toContain(4)
-        ->and($grafik['level']['level'])->toContain((new KompetensiLevel)->label(KompetensiLevel::MAHIR));
+    $kds = $mapel->kompetensiDasars()->get()->keyBy('kode_kompetensi');
+    $tracking = $peserta->trackingKompetensi()->get()->keyBy('kompetensi_dasar_id');
+    $akhir = count($grafik['garis']['labels']) - 1;
+
+    // Invarian rekonstruksi: garis memotong riwayat pada tanggal, tracking
+    // menghitung ulang dari seluruh jawaban — keduanya memakai fungsi estimasi
+    // dan himpunan item yang sama, jadi titik terakhir wajib identik. Tanpa
+    // jaminan ini grafik bisa menampilkan perkembangan yang berbeda dari
+    // angka yang dibaca peserta pada kartu KD.
+    foreach ($grafik['garis']['seri'] as $baris) {
+        $kd = $kds->get($baris['kode']);
+        $tersimpan = $tracking->get($kd?->getKey())?->theta_estimasi;
+
+        expect($kd)->not->toBeNull()
+            ->and($tersimpan)->not->toBeNull()
+            ->and($baris['nilai'][$akhir])
+            ->toBe((new IrtService)->convertToScale((float) $tersimpan, $peserta->tingkat));
+    }
+});
+
+it('memotong garis perkembangan per tanggal dan mengakumulasikan jawabannya', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    $this->travelTo('2026-09-28 09:00:00');
+    latihSesi($this, $peserta, $mapel, fn ($soals) => payloadSemuaBenar($soals));
+
+    $this->travelTo('2026-10-02 09:00:00');
+    latihSesi($this, $peserta, $mapel, fn ($soals) => payloadSemuaSalah($soals));
+
+    $grafik = dataGrafik($this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk());
+
+    $kds = $mapel->kompetensiDasars()->get()->keyBy('kode_kompetensi');
+    $tracking = $peserta->trackingKompetensi()->get()->keyBy('kompetensi_dasar_id');
+
+    expect($grafik['garis']['labels'])->toBe(['28/09/2026', '02/10/2026'])
+        ->and($grafik['garis']['seri'])->not->toBeEmpty();
+
+    $berubah = 0;
+
+    foreach ($grafik['garis']['seri'] as $baris) {
+        $tersimpan = $tracking->get($kds->get($baris['kode'])?->getKey())?->theta_estimasi;
+
+        expect($baris['nilai'])->toHaveCount(2)
+            ->and($tersimpan)->not->toBeNull()
+            ->and($baris['nilai'][1])
+            ->toBe((new IrtService)->convertToScale((float) $tersimpan, $peserta->tingkat));
+
+        if ($baris['nilai'][0] !== $baris['nilai'][1]) {
+            $berubah++;
+        }
+    }
+
+    // Sesi kedua menjawab seluruhnya salah, jadi titiknya wajib bergerak. Tanpa
+    // ini, garis yang menghitung ulang dari seluruh riwayat pada tiap tanggal
+    // — sehingga datar sepanjang sejarah — lulus uji invarian di atas.
+    expect($berubah)->toBeGreaterThan(0);
+});
+
+it('menampilkan keterangan kosong ketika belum ada riwayat pengerjaan', function () {
+    $peserta = User::factory()->peserta()->create();
+    $mapel = mapelAnalisis();
+
+    $halaman = $this->actingAs($peserta)
+        ->get(route('analisis.index', ['mapel_id' => $mapel->getKey()]))
+        ->assertOk()
+        ->assertSee('Belum ada latihan atau tryout yang selesai di mapel ini')
+        ->assertDontSee('data-grafik="garis"', false);
+
+    $grafik = dataGrafik($halaman);
+
+    expect($grafik['garis']['labels'])->toBeEmpty()
+        ->and($grafik['garis']['seri'])->toBeEmpty();
 });
 
 it('melengkapi label radar dengan kode singkat supaya muat di layar sempit', function () {

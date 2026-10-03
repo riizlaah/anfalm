@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Scoring\IrtService;
+use App\Domain\Scoring\JejakKompetensi;
 use App\Domain\Scoring\KompetensiLevel;
 use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
@@ -20,7 +21,8 @@ use Illuminate\View\View;
  *
  * Memetakan `tracking_kompetensi` per KD dan `tracking_mapel` per mapel menjadi
  * level, persentase, skor IRT, dan rekomendasi latihan. Payload ketiga grafik
- * (radar, batang, garis) ikut dikirim dan dirender Chart.js di sisi klien.
+ * (radar, garis perkembangan KD, riwayat tryout) ikut dikirim dan dirender
+ * Chart.js di sisi klien.
  *
  * Theta tidak pernah sampai ke tampilan sebagai angka mentah: ia skala internal
  * −3…+3 yang hanya bermakna di kalibrasi soal ini. Yang dibaca peserta adalah
@@ -31,6 +33,7 @@ class AnalisisController extends Controller
     public function __construct(
         private readonly KompetensiLevel $kompetensi,
         private readonly IrtService $irt,
+        private readonly JejakKompetensi $jejak,
     ) {}
 
     public function index(Request $request): View
@@ -65,7 +68,7 @@ class AnalisisController extends Controller
             'mapel' => $mapel,
             'baris' => $baris,
             'ringkasan' => $ringkasan,
-            'grafik' => $this->grafik($peserta, $mapels, $baris),
+            'grafik' => $this->grafik($peserta, $mapels, $mapel),
             'labelRingkasan' => $ringkasan === null
                 ? null
                 : $this->kompetensi->label($ringkasan->level_kompetensi ?? ''),
@@ -169,20 +172,19 @@ class AnalisisController extends Controller
      * Payload ketiga grafik halaman analisis (3.9 butir 3–4).
      *
      * - `radar`: skor IRT per mapel milik peserta.
-     * - `level`: perbandingan level tiap KD pada mapel terpilih, dipetakan ke
-     *   skala ordinal 0–4 agar bisa dibandingkan secara visual.
+     * - `garis`: perkembangan skor IRT tiap KD pada mapel terpilih, per tanggal,
+     *   dipulihkan dari riwayat pengerjaan oleh `JejakKompetensi`.
      * - `riwayat`: skor IRT tiap tryout yang sudah selesai, terurut waktu.
      *
-     * `radar` dan `riwayat` membawa `batas`: rentang skala pelaporan akun yang
-     * diturunkan dari konversi theta ekstrem. Sumbunya jadi berdiri pada nilai
-     * yang benar-benar bisa dicapai — peran yang dulu dipegang −3…+3 sebelum
-     * theta diterjemahkan — sehingga selisih kecil antar mapel tidak ikut
-     * melebar sendiri mengikuti data.
+     * Ketiganya membawa `batas`: rentang skala pelaporan akun yang diturunkan
+     * dari konversi theta ekstrem. Sumbunya jadi berdiri pada nilai yang
+     * benar-benar bisa dicapai — peran yang dulu dipegang −3…+3 sebelum theta
+     * diterjemahkan — sehingga selisih kecil antar KD tidak ikut melebar
+     * sendiri mengikuti data.
      *
-     * @param  Collection<int, array{kd: KompetensiDasar, theta: float|null, label: string}>  $baris
      * @return array<string, array<string, array<int, mixed>>>
      */
-    private function grafik(User $peserta, Collection $mapels, Collection $baris): array
+    private function grafik(User $peserta, Collection $mapels, ?Mapel $mapel): array
     {
         $terlacak = TrackingMapel::query()
             ->where('user_id', $peserta->getKey())
@@ -204,16 +206,12 @@ class AnalisisController extends Controller
                     ->all(),
                 'batas' => $this->irt->rentangSkor($peserta->tingkat),
             ],
-            'level' => [
-                'labels' => $baris->pluck('kd.kode_kompetensi')->values()->all(),
-                'nilai' => $baris
-                    ->map(fn (array $b): int => $this->kompetensi->urut(
-                        $this->kompetensi->levelFor($b['theta']),
-                    ))
-                    ->values()
-                    ->all(),
-                'level' => $baris->pluck('label')->values()->all(),
-            ],
+            'garis' => $mapel === null
+                ? ['labels' => [], 'seri' => [], 'batas' => $this->irt->rentangSkor($peserta->tingkat)]
+                : $this->jejak->garisPerKd(
+                    $peserta,
+                    $mapel->kompetensiDasars()->pluck('id')->all(),
+                ),
             'riwayat' => $this->riwayatTryout($peserta),
         ];
     }

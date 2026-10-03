@@ -6,6 +6,18 @@ use InvalidArgumentException;
 
 class IrtService
 {
+    /**
+     * Di bawah jumlah item ini estimasi memakai prior lemah, karena MLE pada
+     * data sangat sedikit mudah meledak ke ±3.
+     *
+     * Ditempatkan di sini, bukan di pemakainya, karena dua penghitung theta —
+     * penulisan `tracking_kompetensi` dan rekonstruksi jejak perkembangan —
+     * harus memilih metode yang sama. Pilihan yang berbeda membuat titik
+     * terakhir grafik perkembangan tidak pernah sama dengan theta yang kini
+     * dibaca peserta pada kartu KD.
+     */
+    public const MIN_ITEM_MLE = 3;
+
     public const THETA_MIN = -3.0;
 
     public const THETA_MAX = 3.0;

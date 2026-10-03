@@ -4,28 +4,25 @@
  * Modul ini hanya diimpor ketika halamannya punya kanvas bertanda
  * `data-grafik`, sehingga bobot Chart.js tidak ikut ke halaman lain.
  *
- * Seluruh nilai yang masuk ke grafik sudah berupa Skor IRT atau level —
- * terjemahan dari theta. Sebutan theta sengaja tidak muncul di sini karena
- * tidak pernah dibaca peserta (laporan: "stop info dump").
+ * Ketiga grafik kini bersatuan sama: Skor IRT. Sebutan theta sengaja tidak
+ * muncul di sini karena tidak pernah dibaca peserta (laporan: "stop info dump").
  */
 
 import Chart from 'chart.js/auto'
 
 /**
- * Warna batang per level; urutan indeksnya sama dengan ordinal di
- * `KompetensiLevel::urut()`.
+ * Warna tiap seri garis perkembangan per KD, berputar pada panjang daftar.
+ * Dipilih agar tetap terbedakan satu sama lain pada latar putih dan tetap
+ * terbaca ketika garisnya berdekatan — jumlah KD satu mapel bisa mencapai
+ * belasan, jadi warna tunggal tidak lagi membedakan.
  *
  * @type {string[]}
  */
-const WARNA_LEVEL = ['#94a3b8', '#f43f5e', '#f59e0b', '#0ea5e9', '#10b981']
-
-/**
- * Nama singkat tiap level untuk label sumbu-y (nama lengkapnya terlalu panjang
- * dan sudah tampil di tabel maupun tooltip).
- *
- * @type {string[]}
- */
-const LABEL_LEVEL = ['Belum', 'Bimbingan', 'Dasar', 'Menengah', 'Mahir']
+const WARNA_SERI = [
+    '#2563eb', '#f59e0b', '#0e7490', '#f43f5e',
+    '#10b981', '#7c3aed', '#ea580c', '#0891b2',
+    '#65a30d', '#db2777', '#4f46e5', '#a16207',
+]
 
 const WARNA_TINTA = '#0f172a'
 const WARNA_BIRU = '#2563eb'
@@ -56,7 +53,7 @@ export function mulaiGrafikAnalisis() {
     const wadah = document.getElementById('grafik-analisis')
     if (!wadah) return
 
-    /** @type {{radar: {labels: string[], singkat?: string[], skor: (number|null)[], batas: number[]}, level: {labels: string[], nilai: number[], level: string[]}, riwayat: {labels: string[], skor: number[], batas: number[]}}} */
+    /** @type {{radar: {labels: string[], singkat?: string[], skor: (number|null)[], batas: number[]}, garis: {labels: string[], seri: {kode: string, nilai: (number|null)[]}[], batas: number[]}, riwayat: {labels: string[], skor: number[], batas: number[]}}} */
     const data = JSON.parse(wadah.textContent)
 
     const pasang = (nama, pembuat) => {
@@ -74,7 +71,7 @@ export function mulaiGrafikAnalisis() {
     }
 
     pasang('radar', grafikRadar)
-    pasang('level', grafikLevel)
+    pasang('garis', grafikGaris)
     pasang('riwayat', grafikRiwayat)
 }
 
@@ -140,47 +137,61 @@ function grafikRadar(kanvas, data) {
 }
 
 /**
- * Perbandingan level tiap KD pada satu mapel (3.9 butir 3).
+ * Perkembangan skor IRT tiap kompetensi dasar pada satu mapel (3.9 butir 3).
+ *
+ * Menggantikan grafik batang level. Batang menjawab "kini seberapa tinggi";
+ * pertanyaan yang sebenarnya muncul dari peserta adalah "bagaimana ia naik",
+ * dan `tracking_kompetensi` tidak menyimpan riwayatnya — hanya satu baris per
+ * KD yang ditulis ulang tiap percobaan ditutup. Deretnya dipulihkan server-side
+ * dari `riwayat_pengerjaan` dan tiap titik adalah penghitungan ulang pada batas
+ * tanggal, jadi titik terakhirnya identik dengan theta pada kartu KD.
+ *
+ * Sumbu-y dikunci pada rentang skala pelaporan akun lewat `batas`, sama seperti
+ * radar dan riwayat tryout: tanpa itu Chart.js menyesuaikan jangkauannya pada
+ * data yang tampil, lalu kenaikan kecil antar tanggal terlihat seperti lompatan.
  *
  * @param {HTMLCanvasElement} kanvas
- * @param {{labels: string[], nilai: number[], level: string[]}} data
+ * @param {{labels: string[], seri: {kode: string, nilai: (number|null)[]}[], batas: number[]}} data
  */
-function grafikLevel(kanvas, data) {
+function grafikGaris(kanvas, data) {
     new Chart(kanvas, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: data.labels,
-            datasets: [{
-                label: 'Level',
-                data: data.nilai,
-                backgroundColor: data.nilai.map(
-                    (nilai) => WARNA_LEVEL[nilai] ?? WARNA_LEVEL[0],
-                ),
-                borderRadius: 4,
-            }],
+            datasets: data.seri.map((baris, indeks) => ({
+                label: baris.kode,
+                data: baris.nilai,
+                borderColor: WARNA_SERI[indeks % WARNA_SERI.length],
+                backgroundColor: WARNA_SERI[indeks % WARNA_SERI.length],
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                // Tanpa `tension`: tiap titik adalah hasil penghitungan pada
+                // tanggal tertentu, dan lengkung kubik di antaranya akan
+                // menggambar nilai yang tak pernah ada.
+                spanGaps: true,
+                fill: false,
+            })),
         },
         options: {
             ...OPSI_DASAR,
             scales: {
-                y: {
-                    min: 0,
-                    max: 4,
-                    ticks: {
-                        stepSize: 1,
-                        color: WARNA_TINTA,
-                        callback: (nilai) => LABEL_LEVEL[nilai] ?? '',
-                    },
-                },
-                x: {
-                    ticks: { color: WARNA_TINTA, maxRotation: 45, minRotation: 0 },
-                },
+                y: { min: data.batas[0], max: data.batas[1], ticks: { color: WARNA_TINTA } },
+                x: { ticks: { color: WARNA_TINTA, maxRotation: 45, minRotation: 0 } },
             },
             plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        title: (item) => data.labels[item[0].dataIndex] ?? '',
-                        label: (item) => data.level[item.dataIndex] ?? '',
+                // Legenda di sini wajib: bedanya dengan grafik lain, satu
+                // sumbu-x dipakai belasan seri sekaligus, sehingga warna adalah
+                // satu-satunya pembeda. Kode KD — bukan deskripsi penuh — yang
+                // dipakai, karena legenda belasan baris tidak muat di 360px.
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 10,
+                        boxHeight: 10,
+                        usePointStyle: true,
+                        color: WARNA_TINTA,
+                        font: { size: 11 },
                     },
                 },
             },

@@ -157,13 +157,22 @@
             @if ($mapel !== null)
                 <figure>
                     <figcaption class="label">
-                        Level per kompetensi dasar — {{ $mapel->nama }}
+                        Perkembangan skor per kompetensi dasar — {{ $mapel->nama }}
                     </figcaption>
-                    <div class="mt-2 h-64">
-                        <canvas data-grafik="level"
-                            aria-label="Grafik batang perbandingan level tiap kompetensi dasar"
-                            role="img"></canvas>
-                    </div>
+
+                    @if ($grafik['garis']['labels'] !== [])
+                        <div class="mt-2 h-64">
+                            <canvas data-grafik="garis"
+                                aria-label="Grafik garis perkembangan skor IRT per kompetensi dasar"
+                                role="img"></canvas>
+                        </div>
+                    @else
+                        <p class="mt-2 text-sm text-slate-400">
+                            Belum ada latihan atau tryout yang selesai di mapel ini.
+                            Grafik ini muncul setelah Anda mengerjakan soalnya — tiap
+                            satu kompetensi dasar selesai, garisnya bertambah satu titik.
+                        </p>
+                    @endif
                 </figure>
             @endif
 

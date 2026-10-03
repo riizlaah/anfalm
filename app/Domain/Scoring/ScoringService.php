@@ -31,6 +31,28 @@ class ScoringService
         };
     }
 
+    /**
+     * Mengubah item hasil `score()` menjadi bentuk yang dibaca `IrtService`.
+     *
+     * Pemetaannya dipusatkan di sini karena format jawaban (`resp`) milik
+     * penykor dan bentuk estimasi (`response`) milik model IRT berbeda kunci.
+     * Penghitung yang membangun theta dari riwayat — penulisan tracking
+     * maupun rekonstruksi jejak perkembangan — wajib lewat satu fungsi ini
+     * agar jawaban yang sama selalu menghasilkan item yang sama.
+     *
+     * @param  array<int, array{a?: float|null, b?: float|null, c?: float|null, resp: int|null}>  $items
+     * @return array<int, array{a: float, b: float, c: float, response: int}>
+     */
+    public function itemsIrt(array $items): array
+    {
+        return array_map(fn (array $item): array => [
+            'a' => (float) ($item['a'] ?? IrtService::DEFAULT_A),
+            'b' => (float) ($item['b'] ?? IrtService::DEFAULT_B),
+            'c' => (float) ($item['c'] ?? IrtService::DEFAULT_C),
+            'response' => (int) $item['resp'],
+        ], $items);
+    }
+
     private function scorePG(Soal $soal, ?array $jawaban): array
     {
         $chosenId = isset($jawaban['opsi']) ? (int) $jawaban['opsi'] : null;
