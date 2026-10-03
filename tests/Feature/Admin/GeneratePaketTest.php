@@ -319,6 +319,54 @@ it('kurasi mematerialisasi draft dari ai_parts tanpa ai_draft', function () {
     expect(session('ai_draft.daftar_soal'))->toHaveCount(3);
 });
 
+it('kurasi memetakan kode KD walau ditulis AI berbeda format', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+
+    session(['ai_draft' => [
+        'mapel_id' => $mapel->id,
+        'nama_paket' => 'Paket AI Matematika',
+        'deskripsi' => null,
+        'daftar_soal' => [
+            ['id_soal_sementara' => 'S001', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => ' KD 3.1 ', 'pertanyaan' => 'Q1'],
+            ['id_soal_sementara' => 'S002', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => 'kd 3.2', 'pertanyaan' => 'Q2'],
+            ['id_soal_sementara' => 'S003', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '3.1', 'pertanyaan' => 'Q3'],
+        ],
+    ]]);
+
+    $html = $this->actingAs($admin)->get('/admin/paket-soal/kurasi')->assertOk()->getContent();
+
+    expect(kdTerpilih(blokSelectKd($html, 0)))->toBe((string) $kd31->id)
+        ->and(kdTerpilih(blokSelectKd($html, 1)))->toBe((string) $kd32->id)
+        ->and(kdTerpilih(blokSelectKd($html, 2)))->toBe((string) $kd31->id);
+});
+
+it('kurasi menandai soal yang kode KD-nya tidak dikenal alih-alih membiarkannya diam-diam', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel] = setupKurasiMapel();
+
+    session(['ai_draft' => [
+        'mapel_id' => $mapel->id,
+        'nama_paket' => 'Paket AI Matematika',
+        'deskripsi' => null,
+        'daftar_soal' => [
+            ['id_soal_sementara' => 'S001', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '9.9', 'pertanyaan' => 'Q1'],
+            ['id_soal_sementara' => 'S002', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => null, 'pertanyaan' => 'Q2'],
+        ],
+    ]]);
+
+    $html = $this->actingAs($admin)->get('/admin/paket-soal/kurasi')
+        ->assertOk()
+        ->assertSee('tidak ditemukan di Matematika', false)
+        ->assertSee('AI tidak menyebut kode KD', false)
+        ->assertSee('2 soal belum punya KD yang cocok', false)
+        ->getContent();
+
+    // Pilihan tetap pada placeholder supaya admin sadar harus memilih sendiri.
+    expect(kdTerpilih(blokSelectKd($html, 0)))->toBeNull()
+        ->and(kdTerpilih(blokSelectKd($html, 1)))->toBeNull();
+});
+
 it('kurasi tanpa draft dialihkan ke halaman generate', function () {
     $admin = User::factory()->admin()->create();
 
@@ -797,6 +845,27 @@ it('soal yang dibuang otomatis diberi nomor part agar tidak ambigu', function ()
 function seedAiDraft(Mapel $mapel): void
 {
     session(['ai_draft' => ['mapel_id' => $mapel->id]]);
+}
+
+/**
+ * Blok <select> Kompetensi Dasar milik satu kartu soal, untuk memeriksa opsi
+ * mana yang terpilih.
+ */
+function blokSelectKd(string $html, int $index): string
+{
+    preg_match('/<select name="daftar_soal\['.$index.'\]\[kompetensi_dasar_id\]".*?<\/select>/su', $html, $cocok);
+
+    return $cocok[0] ?? '';
+}
+
+/**
+ * ID KD yang terpilih pada blok select, atau null kalau masih pada placeholder.
+ */
+function kdTerpilih(string $blok): ?string
+{
+    preg_match('/<option value="(\d+)"[^>]*selected[^>]*>/su', $blok, $cocok);
+
+    return $cocok[1] ?? null;
 }
 
 function setupKurasiMapel(): array

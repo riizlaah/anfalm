@@ -4,8 +4,17 @@
     <x-alert />
     <x-errors />
 
+    @if ($kdBelumCocok !== [])
+        <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            {{ count($kdBelumCocok) }} soal belum punya KD yang cocok. Pilih Kompetensi Dasar secara manual
+            pada kartu yang ditandai di bawah.
+        </div>
+    @endif
+
     @php
-        $kurasiSoals = old('daftar_soal', $draft['daftar_soal'] ?? []);
+        // Resolusi kode KD → id sudah dilakukan controller (termasuk saat halaman
+        // dirender ulang dari old()), jadi view cukup membaca apa adanya.
+        $kurasiSoals = $draft['daftar_soal'] ?? [];
         $namaPaket = old('nama_paket', $draft['nama_paket'] ?? '');
         $deskripsi = old('deskripsi', $draft['deskripsi'] ?? '');
 
@@ -25,6 +34,7 @@
                 'hapus' => ! empty($s['dihapus']),
                 'tipe' => $s['tipe_soal'] ?? 'pg',
                 'kd_id' => $kdId,
+                'kode_kd' => $kdKode,
                 'pertanyaan' => $s['pertanyaan'] ?? '',
                 'pembahasan' => $s['pembahasan'] ?? '',
                 'gambar_url' => $s['gambar_url'] ?? '',
@@ -114,6 +124,21 @@
                                 </option>
                             @endforeach
                         </select>
+
+                        {{-- Kode mentah dari AI ikut dikirim supaya saat submit gagal
+                             dan halaman dirender ulang, penandanya tetap bisa
+                             menyebut kode apa yang sebenarnya dikembalikan AI. --}}
+                        <input type="hidden" name="daftar_soal[{{ $i }}][kompetensi_dasar_kode]" value="{{ $sv['kode_kd'] }}">
+
+                        @if (in_array($i, $kdBelumCocok, true))
+                            <p class="hint text-amber-700">
+                                @if (trim((string) $sv['kode_kd']) === '')
+                                    AI tidak menyebut kode KD — pilih secara manual.
+                                @else
+                                    Kode KD "{{ $sv['kode_kd'] }}" tidak ditemukan di {{ $mapel->nama }} — pilih secara manual.
+                                @endif
+                            </p>
+                        @endif
                     </label>
 
                     <label class="block sm:col-span-3">

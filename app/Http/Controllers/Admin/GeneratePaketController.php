@@ -227,7 +227,14 @@ class GeneratePaketController extends Controller
             ->orderBy('kode_kompetensi')
             ->get();
 
-        return view('admin.paket-soal.kurasi', compact('draft', 'mapel', 'kompetensiDasars'));
+        // Sudah termasuk old() bila sebelumnya ada submit yang gagal, sehingga
+        // penanda "KD belum cocok" ikut terbawa saat halaman dirender ulang.
+        [$draft['daftar_soal'], $kdBelumCocok] = $this->cocokkanKdSoal(
+            old('daftar_soal', $draft['daftar_soal'] ?? []),
+            $kompetensiDasars,
+        );
+
+        return view('admin.paket-soal.kurasi', compact('draft', 'mapel', 'kompetensiDasars', 'kdBelumCocok'));
     }
 
     public function simpan(Request $request): RedirectResponse
@@ -530,6 +537,49 @@ class GeneratePaketController extends Controller
         $kode = (string) preg_replace('/^kd[\s.:\-_]*/iu', '', $kode);
 
         return mb_strtoupper(trim($kode));
+    }
+
+    /**
+     * Menautkan tiap soal draft ke Kompetensi Dasar berdasarkan kode yang
+     * dikembalikan AI, plus daftar soal yang tetap tidak cocok.
+     *
+     * Pencocokan memakai kode ternormalisasi supaya beda format tulisan model
+     * tidak menjatuhkan soal ke placeholder "— pilih KD —". Kode yang memang
+     * tidak dikenal sengaja **tidak ditebak**: KD salah pilih membuat statistik
+     * per KD dan latihan lanjutannya jadi salah sasaran. Soal dikembalikan ke
+     * admin beserta penandanya supaya keputusannya terlihat, bukan diam-diam
+     * memblokir tombol simpan.
+     *
+     * @param  array<array-key, array<string, mixed>>  $daftarSoal
+     * @param  Collection<int, KompetensiDasar>  $kompetensiDasars
+     * @return array{0: array<array-key, array<string, mixed>>, 1: list<array-key>}
+     */
+    private function cocokkanKdSoal(array $daftarSoal, Collection $kompetensiDasars): array
+    {
+        $idPerKode = [];
+
+        foreach ($kompetensiDasars as $kd) {
+            $idPerKode[$this->normalisasiKodeKd($kd->kode_kompetensi)] = $kd->getKey();
+        }
+
+        $belumCocok = [];
+
+        foreach ($daftarSoal as $index => $soal) {
+            if ((int) ($soal['kompetensi_dasar_id'] ?? 0) > 0) {
+                continue;
+            }
+
+            $kode = trim((string) ($soal['kompetensi_dasar_kode'] ?? ''));
+            $id = $kode === '' ? 0 : ($idPerKode[$this->normalisasiKodeKd($kode)] ?? 0);
+
+            $daftarSoal[$index]['kompetensi_dasar_id'] = $id;
+
+            if ($id === 0) {
+                $belumCocok[] = $index;
+            }
+        }
+
+        return [$daftarSoal, $belumCocok];
     }
 
     /**
