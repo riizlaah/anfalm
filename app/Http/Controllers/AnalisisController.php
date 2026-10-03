@@ -166,6 +166,9 @@ class AnalisisController extends Controller
         return [
             'radar' => [
                 'labels' => $mapels->pluck('nama')->values()->all(),
+                // Kode dipakai label sumbu di kanvas sempit; nama lengkap tetap
+                // ada di `labels` supaya tooltip tidak kehilangan informasi.
+                'singkat' => $mapels->pluck('kode')->values()->all(),
                 'theta' => $mapels
                     ->map(fn (Mapel $m): ?float => $terlacak->get($m->getKey())?->theta_estimasi)
                     ->values()

@@ -262,6 +262,25 @@ it('menyiapkan data grafik batang level per KD terpilih', function () {
         ->and($grafik['level']['level'])->toContain((new KompetensiLevel)->label(KompetensiLevel::MAHIR));
 });
 
+it('melengkapi label radar dengan kode singkat supaya muat di layar sempit', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $grafik = dataGrafik($this->actingAs($peserta)
+        ->get(route('analisis.index'))
+        ->assertOk());
+
+    $mapels = Mapel::whereNull('deleted_at')->orderBy('kode')->get();
+
+    // Nama lengkap tetap ikut agar tooltip menampilkan "Bahasa Indonesia
+    // Tingkat Lanjut" penuh, tetapi label sumbu harus memakai kode: panjang
+    // "Pendidikan Pancasila dan Kewarganegaraan" membuat labelnya terpotong di
+    // tepi kanvas pada layar 360px.
+    expect($grafik['radar']['labels'])->toBe($mapels->pluck('nama')->all())
+        ->and($grafik['radar']['singkat'])->toBe($mapels->pluck('kode')->all())
+        ->and($grafik['radar']['singkat'])->toHaveCount(count($grafik['radar']['labels']))
+        ->and(max(array_map('strlen', $grafik['radar']['singkat'])))->toBeLessThanOrEqual(20);
+});
+
 it('menyiapkan data grafik garis riwayat nilai tryout', function () {
     $peserta = User::factory()->peserta()->create();
     $mapel = mapelAnalisis();

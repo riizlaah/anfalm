@@ -27,6 +27,15 @@ const WARNA_TINTA = '#0f172a'
 const WARNA_BIRU = '#2563eb'
 const WARNA_TEAL = '#0e7490'
 
+/**
+ * Lebar kanvas minimum agar nama mapel penuh masih muat sebagai label sumbu
+ * radar. Panjang sisi kiri "Pendidikan Pancasila dan Kewarganegaraan" saja
+ * sudah melebihi lebar kanvas 360px, sehingga ujung labelnya terpotong tepat di
+ * tepi kanvas. Di bawah ambang ini label ditukar dengan kode mapel (mis. PPKN),
+ * sementara nama lengkap tetap terbaca lewat tooltip.
+ */
+const LEBAR_LABEL_PENUH = 520
+
 /** Opsi yang dipakai ketiga grafik: kotaknya menyesuaikan kontainer `h-64`. */
 const OPSI_DASAR = {
     responsive: true,
@@ -43,7 +52,7 @@ export function mulaiGrafikAnalisis() {
     const wadah = document.getElementById('grafik-analisis')
     if (!wadah) return
 
-    /** @type {{radar: {labels: string[], theta: (number|null)[]}, level: {labels: string[], nilai: number[], level: string[]}, riwayat: {labels: string[], theta: number[]}}} */
+    /** @type {{radar: {labels: string[], singkat?: string[], theta: (number|null)[]}, level: {labels: string[], nilai: number[], level: string[]}, riwayat: {labels: string[], theta: number[]}}} */
     const data = JSON.parse(wadah.textContent)
 
     const pasang = (nama, pembuat) => {
@@ -68,11 +77,18 @@ export function mulaiGrafikAnalisis() {
 /**
  * Perbandingan theta antar mapel (3.9 butir 3).
  *
+ * Label sumbu memakai `singkat` (kode mapel) begitu kanvas terlalu sempit bagi
+ * nama penuh, supaya labelnya tidak terpotong di tepi kanvas. `data.labels`
+ * tetap berisi nama lengkap dan dipakai tooltip, jadi informasinya tidak hilang.
+ *
  * @param {HTMLCanvasElement} kanvas
- * @param {{labels: string[], theta: (number|null)[]}} data
+ * @param {{labels: string[], singkat?: string[], theta: (number|null)[]}} data
  */
 function grafikRadar(kanvas, data) {
-    new Chart(kanvas, {
+    const singkat = data.singkat ?? data.labels
+    let pendek = kanvas.clientWidth < LEBAR_LABEL_PENUH
+
+    const chart = new Chart(kanvas, {
         type: 'radar',
         data: {
             labels: data.labels,
@@ -92,10 +108,27 @@ function grafikRadar(kanvas, data) {
                     suggestedMin: -3,
                     suggestedMax: 3,
                     ticks: { backdropColor: 'transparent', color: WARNA_TINTA },
+                    pointLabels: {
+                        callback: (label, index) => (pendek ? singkat[index] ?? label : label),
+                    },
                 },
             },
         },
     })
+
+    // Kanvas bisa melewati ambang saat layar diputar atau ukuran panel berubah;
+    // tanpa pengamat ini labelnya terkunci pada lebar saat dirender pertama
+    // kali. `chart.update()` membangun ulang label sumbu.
+    const sesuaikan = () => {
+        const baru = kanvas.clientWidth < LEBAR_LABEL_PENUH
+        if (baru === pendek) return
+        pendek = baru
+        chart.update()
+    }
+
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(sesuaikan).observe(kanvas)
+    }
 }
 
 /**

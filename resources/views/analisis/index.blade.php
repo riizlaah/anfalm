@@ -139,7 +139,17 @@
             Grafik perkembangan
         </h2>
 
-        <div class="mt-4 grid gap-6 lg:grid-cols-2">
+        {{--
+            `grid-cols-1` wajib, bukan sekadar penanda. Tanpa kelas itu kolom
+            tunggalnya berstatus `auto` sehingga ukuran jalurnya ikut min-content
+            isi sel — dan isi selnya adalah kanvas Chart.js yang berlebar tetap
+            523px. Setelah layar mengecil, kolomnya tak pernah bisa menyusut,
+            Chart.js tak pernah menerima perintah resize, dan kartu grafik
+            meluber ke luar viewport sampai halaman bisa digeser mendatar.
+            `minmax(0, 1fr)` memutus lingkaran itu; `lg:grid-cols-2` sudah memakai
+            bentuk yang sama.
+        --}}
+        <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <figure>
                 <figcaption class="label">Theta per mapel</figcaption>
                 <div class="mt-2 h-64">
