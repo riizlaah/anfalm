@@ -67,16 +67,6 @@
         @csrf
         <input type="hidden" name="aksi" id="aksi-input" value="{{ $aksiDefault }}">
 
-        <nav class="card mt-5 flex flex-wrap items-center gap-2 p-3" aria-label="Navigasi soal">
-            @foreach ($soals as $index => $soal)
-                <button type="button" class="rail-soal" data-indeks="{{ $index }}"
-                    data-terjawab="0" data-aktif="{{ $index === 0 ? '1' : '0' }}"
-                    aria-label="Lompat ke soal {{ $index + 1 }}">
-                    {{ $index + 1 }}
-                </button>
-            @endforeach
-        </nav>
-
         <div class="mt-4 space-y-4">
             @foreach ($soals as $index => $soal)
                 <section class="card p-5" data-blok-soal="{{ $index }}" @if ($index > 0) hidden @endif>
@@ -88,6 +78,23 @@
                 </section>
             @endforeach
         </div>
+
+        {{--
+            Rail sengaja di bawah blok soal, bukan di atas: peserta harus langsung
+            melihat pertanyaan begitu halaman terbuka, bukan deretan nomor yang
+            mendorongnya ke bawah layar. Nomor tetap di atas kendali
+            Sebelumnya/Berikutnya agar yang paling sering disentuh jempol berada
+            paling bawah.
+        --}}
+        <nav class="card mt-4 flex flex-wrap items-center gap-2 p-3" aria-label="Navigasi soal">
+            @foreach ($soals as $index => $soal)
+                <button type="button" class="rail-soal" data-indeks="{{ $index }}"
+                    data-terjawab="0" data-aktif="{{ $index === 0 ? '1' : '0' }}"
+                    aria-label="Lompat ke soal {{ $index + 1 }}">
+                    {{ $index + 1 }}
+                </button>
+            @endforeach
+        </nav>
 
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
             <button type="button" class="btn btn-ghost" id="soal-sebelumnya" disabled>Sebelumnya</button>

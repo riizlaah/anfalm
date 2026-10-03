@@ -66,7 +66,11 @@
   Ikon dipasang di **tab bar bawah saja**, menumpuk di atas label (empat tab selebar 90px tidak cukup untuk keduanya berjalan mendatar). Menu desktop tetap teks apa adanya, dan `aria-hidden="true"` dipasang karena label menu sudah menjadi nama aksesibel tautan.
   Tambahan yang muncul saat pengujian: `overflow-x-auto` pada tab admin menampilkan bilah gulir 15px, sehingga bar naik dari 61px menjadi 76px dan melewati ruang 72px yang dipesan `<main>`. Bilah gulirnya disembunyikan lewat `.tabbar-scroll`; petunjuk gulirnya sendiri tetap terbaca dari tab ketujuh yang terpotong di tepi layar.
   Ditutup tes: setiap tautan di tab bar wajib memuat ikon sah (`viewBox="0 0 24 24"`, `aria-hidden="true"`, dan setidaknya satu elemen goresan) — 4 untuk peserta, 7 untuk admin — sementara navigasi desktop dipastikan tetap tanpa `<svg>` sama sekali.
-- Pindahkan navigasi soal ke bagian bawah
+- ~~Pindahkan navigasi soal ke bagian bawah~~
+  **Selesai 2026-10-03.** Rail nomor soal berada tepat di atas blok soal, sehingga begitu halaman terbuka yang menyambut peserta adalah deretan nomor dan pertanyaannya terdorong ke bawah layar — padahal satu-satunya yang sedang dilihat peserta adalah soal yang sedang aktif.
+  Perbaikan: `<nav aria-label="Navigasi soal">` dipindah turun, urutannya kini **soal → rail nomor → Sebelumnya/Berikutnya → Simpan/Selesai**. Rail sengaja tetap di atas kendali Sebelumnya/Berikutnya supaya kendali yang paling sering disentuh jempol tetap paling bawah. Jaraknya disesuaikan (`mt-5` → `mt-4`) karena sebelumnya rail menempel pada judul.
+  Berlaku untuk latihan dan tryout sekaligus karena keduanya memakai `percobaan/kerja.blade.php` yang sama; posisi relatif JS, ID, dan tombol tidak berubah sama sekali, jadi perilaku lompat ke soal mana pun tetap identik.
+  Tertutup test: 1 test baru memastikan posisi karakter `data-blok-soal` < `class="rail-soal"` < `id="soal-sebelumnya"` di halaman kerja. Diverifikasi visual di 360px (tanpa scroll mendatar, `scrollWidth` 345 ≤ 360).
 - Stop info dump ke pengguna, khususnya siswa, tampilkan hanya yang perlu diketahui. Misalnya di KD, mereka tak perlu tahu kode KDnya, cukup tahu deskripsi KD. Lakukan untuk semua kasus sejenis
 - Tambahkan grafik aktivitas belajar (streak kalender mirip github contribution graph) atau komponen/grafik/data lain yang membantu
 - ~~Tambahkan tombol aksi 'Belajar' di KD, tampilkan yang paling penting dengan cara yang eye-catching~~

@@ -285,6 +285,38 @@ it('memakai stopwatch tanpa hitung mundur', function () {
         ->assertDontSee('data-batas');
 });
 
+it('menempatkan rail navigasi soal di bawah blok soal', function () {
+    $peserta = User::factory()->peserta()->create();
+    ['mapel' => $mapel] = mapelLatihan();
+
+    $this->actingAs($peserta)->post(route('latihan.mulai'), [
+        'mapel_id' => $mapel->getKey(),
+        'jumlah_soal' => 3,
+        'timer' => 'stopwatch',
+    ]);
+
+    $percobaan = Percobaan::sole();
+
+    $html = $this->actingAs($peserta)
+        ->get(route('latihan.kerja', $percobaan))
+        ->assertOk()
+        ->getContent();
+
+    $blok = strpos($html, 'data-blok-soal');
+    $rail = strpos($html, 'class="rail-soal"');
+    $pengendali = strpos($html, 'id="soal-sebelumnya"');
+
+    // Soal duluan, baru navigasinya. Sebelumnya rail yang menyambut peserta
+    // sehingga pertanyaan malah terdorong ke bawah layar; "Sebelumnya" tetap
+    // paling bawah di antara keduanya karena itu kendali yang paling sering
+    // dipakai jempol.
+    expect($blok)->not->toBeFalse()
+        ->and($rail)->not->toBeFalse()
+        ->and($pengendali)->not->toBeFalse()
+        ->and($blok)->toBeLessThan($rail)
+        ->and($rail)->toBeLessThan($pengendali);
+});
+
 it('menghalangi peserta lain membuka percobaan latihan', function () {
     $peserta = User::factory()->peserta()->create();
     ['mapel' => $mapel] = mapelLatihan();
