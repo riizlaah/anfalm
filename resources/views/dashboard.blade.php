@@ -135,9 +135,16 @@
         tombolnya; tujuannya satu dan sama, halaman latihan. Pill levelnya
         memakai idiom yang sama dengan kode KD di halaman Analisis supaya
         "sekilas baca" terasa di dua tempat.
+
+        Lebarnya `max-w-3xl` seperti kartu streak dan tryout terbaru di atasnya:
+        blok ini tadinya `max-w-5xl` dan grid tiga kolom, sehingga tepi kanannya
+        menjorok jauh melewati dua kartu di atas — persis asimetris yang dilaporkan.
+        Tiga kolom juga mustahil dipertahankan pada lebar itu tanpa memaksa dua
+        kartu di atasnya ikut melebar, padahal isinya cuma dua baris teks.
+        Dua kolom muat di `3xl` dan menyatukan seluruh halaman pada satu lebar.
     --}}
     @if ($kartuLatihan !== null && $kartuLatihan->isNotEmpty())
-        <section class="mt-8 max-w-5xl">
+        <section class="mt-8 max-w-3xl">
             <h2 class="text-lg font-semibold text-ink">Latihan per mapel</h2>
 
             <p class="mt-1 text-sm text-slate-600">
@@ -145,7 +152,7 @@
                 di bawahnya menyesuaikan level itu.
             </p>
 
-            <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 @foreach ($kartuLatihan as $kartu)
                     {{-- `flex flex-col` + `mt-auto` pada tombolnya: ajakan satu
                          baris dan dua baris menghasilkan tinggi kartu yang sama

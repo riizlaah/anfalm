@@ -212,6 +212,25 @@ it('kartu latihan berhenti di mapel wajib ketika peserta belum memilih pilihan',
         ->and($html)->not->toContain('Fisika');
 });
 
+it('ketiga blok dashboard berbagi lebar yang sama dan grid latihan dua kolom', function () {
+    $this->travelTo('2026-10-03 10:00:00');
+
+    $peserta = User::factory()->peserta()->create();
+
+    $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
+
+    // Asimetris di desktop (butir laporan): grid latihan berdiri di `max-w-5xl`
+    // sementara kartu streak dan tryout terbaru berhenti di `max-w-3xl`, jadi
+    // tepi kanan halaman terpotong-potong. Kini ketiganya `max-w-3xl`, dan
+    // gridnya dua kolom — tiga kolom butuh lebar yang justru memaksa blok di
+    // atasnya melebar lagi.
+    expect($html)
+        ->not->toContain('max-w-5xl')
+        ->not->toContain('lg:grid-cols-3')
+        ->toContain('sm:grid-cols-2')
+        ->toContain('max-w-3xl');
+});
+
 it('kartu latihan menampilkan ajakan dan tombol yang berbeda menurut level', function () {
     $this->travelTo('2026-10-03 10:00:00');
 
