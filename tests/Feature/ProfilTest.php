@@ -128,7 +128,7 @@ it('pilihan mapel tidak membatasi daftar paket tryout', function () {
 
     $this->actingAs($peserta)->get(route('tryout.index'))
         ->assertOk()
-        ->assertSee($paket->wajib1->nama);
+        ->assertSee($paket->daftarMapel()->with('mapel')->get()->first()->mapel->nama);
 });
 
 it('halaman profil menampilkan mapel wajib sebagai keterangan, bukan opsi pilihan', function () {

@@ -116,7 +116,11 @@ it('paket soal yang belum dipakai dapat dihapus (soft delete)', function () {
 it('paket soal yang dipakai tryout diblokir dari hapus', function () {
     $admin = User::factory()->admin()->create();
     $paket = paketSoalF4(Mapel::factory()->create());
-    PaketTryout::factory()->create(['paket_soal_wajib_1_id' => $paket->id]);
+    $paketTryout = PaketTryout::factory()->create();
+
+    // Menempelkan paket itu ke satu baris isinya, persis seperti yang dilakukan
+    // form admin saat memilih paket soal untuk sebuah mapel.
+    $paketTryout->susunIsiMapel([(int) $paket->mapel_id => $paket->getKey()]);
 
     $this->actingAs($admin)->delete("/admin/paket-soal/{$paket->id}")
         ->assertRedirect(route('admin.paket-soal.index'))

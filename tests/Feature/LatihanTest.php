@@ -401,7 +401,7 @@ it('menolak percobaan tryout lewat jalur latihan', function () {
     $peserta = User::factory()->peserta()->create();
     $paket = PaketTryout::firstOrFail();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $this->actingAs($peserta)->get(route('latihan.kerja', $percobaan))->assertNotFound();

@@ -7,7 +7,7 @@ use App\Domain\Scoring\KompetensiLevel;
 use App\Domain\Scoring\ScoringService;
 use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
-use App\Models\PaketSoal;
+use App\Models\Mapel;
 use App\Models\PaketTryout;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
@@ -41,21 +41,28 @@ class PercobaanService
      * sini saja lalu disimpan ke `percobaan.daftar_soal`, supaya tidak diacak
      * ulang pada tiap request dan peserta tidak melihat urutan berubah.
      *
+     * Peserta mengerjakan seluruh mapel wajib beserta dua mapel pilihan yang
+     * ia pilih sendiri sebelum mulai; mapel pilihan lain pada paket sengaja
+     * dilewatkan, jadi pilihan admin tidak lagi membatasi peserta.
+     *
+     * @param  array<int, int>  $pilihanMapelIds  dua mapel pilihan milik peserta ini
      * @return array<int, array{mapel_id: int, soal_ids: array<int, int>}>
      */
-    public function susunDaftarSoal(PaketTryout $paket): array
+    public function susunDaftarSoal(PaketTryout $paket, array $pilihanMapelIds = []): array
     {
+        $paket->loadMissing(['daftarMapel.mapel', 'daftarMapel.paketSoal.soal']);
+
+        $terpilih = array_map('intval', $pilihanMapelIds);
         $grup = [];
 
-        foreach (PaketTryout::SLOT as $slot) {
-            $mapelId = (int) $paket->getAttribute($slot['mapel']);
-            $paketSoal = PaketSoal::find((int) $paket->getAttribute($slot['paket']));
+        foreach ($paket->daftarMapelUrut() as $baris) {
+            $mapelId = (int) $baris->mapel_id;
 
-            if ($mapelId === 0 || $paketSoal === null) {
+            if ($baris->mapel->jenis !== Mapel::JENIS_WAJIB && ! in_array($mapelId, $terpilih, true)) {
                 continue;
             }
 
-            $soalIds = $paketSoal->soal()->get()->pluck('id')->all();
+            $soalIds = $baris->paketSoal?->soal->pluck('id')->all() ?? [];
 
             if ($soalIds === []) {
                 continue;
@@ -73,6 +80,10 @@ class PercobaanService
      * Memulai percobaan tryout milik peserta, atau mengembalikan percobaan yang
      * masih berjalan bila sudah ada (6.4).
      *
+     * `$pilihanMapelIds` adalah dua mapel pilihan yang dipilih peserta; hanya
+     * dipakai saat percobaan benar-benar dibuat baru, karena percobaan yang
+     * sedang berjalan menyimpan daftar soalnya sendiri.
+     *
      * `$ulang` mengosongkan jawaban percobaan yang sedang berjalan dan
      * mengulang hitung mundur dari awal (6.4), tetapi tidak mengacak ulang
      * `daftar_soal` — urutan soal hanya ditentukan sekali per percobaan.
@@ -80,11 +91,13 @@ class PercobaanService
      * Mengembalikan `null` bila paket itu sudah pernah menghasilkan nilai,
      * karena tiap peserta hanya boleh satu percobaan per paket (6.16).
      *
+     * @param  array<int, int>  $pilihanMapelIds
+     *
      * @throws RuntimeException bila paket tryout tidak berisi soal apa pun
      */
-    public function mulai(PaketTryout $paket, User $user, bool $ulang = false): ?Percobaan
+    public function mulai(PaketTryout $paket, User $user, array $pilihanMapelIds = [], bool $ulang = false): ?Percobaan
     {
-        return DB::transaction(function () use ($paket, $user, $ulang): ?Percobaan {
+        return DB::transaction(function () use ($paket, $user, $pilihanMapelIds, $ulang): ?Percobaan {
             // percobaan tidak punya unique index pada (user, paket), jadi
             // kuncinya di sini agar klik ganda tidak membuat dua baris berjalan.
             $sudahDinilai = HasilTryout::query()
@@ -103,7 +116,7 @@ class PercobaanService
                 return $ulang ? $this->kosongkan($berjalan) : $berjalan;
             }
 
-            $daftarSoal = $this->susunDaftarSoal($paket);
+            $daftarSoal = $this->susunDaftarSoal($paket, $pilihanMapelIds);
 
             if ($daftarSoal === []) {
                 throw new RuntimeException("Paket tryout \"{$paket->nama_paket}\" tidak berisi soal apa pun.");

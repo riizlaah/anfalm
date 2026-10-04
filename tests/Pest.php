@@ -4,6 +4,7 @@ use App\Models\DetailPaketSoal;
 use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
+use App\Models\PaketTryout;
 use App\Models\Percobaan;
 use App\Models\Soal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,6 +79,25 @@ function paketSoalF4(Mapel $mapel, int $jumlahSoal = 1): PaketSoal
     }
 
     return $paket;
+}
+
+/**
+ * Sepasang mapel pilihan yang dipakai tes memulai tryout: dua mapel pilihan
+ * pertama milik paket itu, terurut menurut kode mapel seperti peserta
+ * memilihnya di halaman pilihan.
+ *
+ * @return array<int, int>
+ */
+function duaMapelPilihan(PaketTryout $paket): array
+{
+    return $paket->daftarMapel()
+        ->with('mapel')
+        ->get()
+        ->filter(fn ($baris) => $baris->mapel?->jenis !== Mapel::JENIS_WAJIB)
+        ->sortBy(fn ($baris) => $baris->mapel->kode)
+        ->take(2)
+        ->pluck('mapel_id')
+        ->all();
 }
 
 /**

@@ -6,12 +6,14 @@ use App\Domain\Percobaan\PercobaanService;
 use App\Models\HasilTryout;
 use App\Models\Mapel;
 use App\Models\PaketTryout;
+use App\Models\PaketTryoutMapel;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -26,7 +28,7 @@ class TryoutController extends Controller
         $user = $request->user();
 
         $paketTryouts = PaketTryout::query()
-            ->with(['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'])
+            ->with('daftarMapel.mapel')
             ->orderBy('nama_paket')
             ->get();
 
@@ -49,9 +51,40 @@ class TryoutController extends Controller
         return view('tryout.index', compact('paketTryouts', 'berjalan', 'sudahDinilai'));
     }
 
+    /**
+     * Layar pilihan dua mapel pilihan sebelum peserta menekan Mulai. Peserta
+     * sendirilah yang memilih, bukan admin, sehingga seluruh mapel pilihan
+     * pada paket ditawarkan tanpa dibatasi dua pilihan yang pernah dipilih
+     * admin.
+     */
+    public function pilih(Request $request, PaketTryout $paketTryout): View|RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($this->sudahDinilai($paketTryout, $user)) {
+            return redirect()->route('tryout.hasil', $paketTryout);
+        }
+
+        if ($this->percobaan->cariAktif($paketTryout, $user) !== null) {
+            return redirect()->route('tryout.kerja', $paketTryout);
+        }
+
+        $isi = $paketTryout->daftarMapelUrut();
+
+        return view('tryout.pilih', [
+            'paketTryout' => $paketTryout,
+            'mapelWajib' => $isi
+                ->filter(fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis === Mapel::JENIS_WAJIB)
+                ->values(),
+            'mapelPilihan' => $this->mapelPilihanTersedia($paketTryout),
+        ]);
+    }
+
     public function mulai(Request $request, PaketTryout $paketTryout): RedirectResponse
     {
-        if ($this->percobaan->mulai($paketTryout, $request->user()) === null) {
+        $pilihan = $this->validasiPilihan($request, $paketTryout);
+
+        if ($this->percobaan->mulai($paketTryout, $request->user(), $pilihan) === null) {
             return redirect()->route('tryout.index')->with('error', self::PESAN_SUDAH_SELESAI);
         }
 
@@ -61,10 +94,19 @@ class TryoutController extends Controller
     /**
      * Mengosongkan jawaban percobaan yang masih berjalan lalu mengulangnya
      * dari mapel pertama (6.4). Tetap ditolak bila paket sudah dinilai.
+     *
+     * Tanpa percobaan berjalan tidak ada yang bisa diulang dan pilihan mapel
+     * pun belum pernah dibuat, jadi peserta dimilihkan dua mapel pilihan dulu.
      */
     public function ulang(Request $request, PaketTryout $paketTryout): RedirectResponse
     {
-        if ($this->percobaan->mulai($paketTryout, $request->user(), true) === null) {
+        $user = $request->user();
+
+        if ($this->percobaan->cariAktif($paketTryout, $user) === null && ! $this->sudahDinilai($paketTryout, $user)) {
+            return redirect()->route('tryout.pilih', $paketTryout);
+        }
+
+        if ($this->percobaan->mulai($paketTryout, $user, [], true) === null) {
             return redirect()->route('tryout.index')->with('error', self::PESAN_SUDAH_SELESAI);
         }
 
@@ -178,7 +220,8 @@ class TryoutController extends Controller
         }
 
         // Percobaan terakhir jadi sumber soal yang dikerjakan peserta pada
-        // paket ini; jumlah soal paket sendiri tetap dihitung dari paketnya.
+        // paket ini. Jumlah soalnya juga dari sana: peserta hanya mengerjakan
+        // mapel wajib dan dua pilihan yang ia pilih, bukan seluruh isi paket.
         $percobaan = Percobaan::query()
             ->where('user_id', $user->getKey())
             ->where('paket_tryout_id', $paketTryout->getKey())
@@ -203,15 +246,7 @@ class TryoutController extends Controller
                 ->values()
             : collect();
 
-        $jumlahSoal = (int) DB::table('detail_paket_soal')
-            ->whereIn('paket_soal_id', [
-                $paketTryout->paket_soal_wajib_1_id,
-                $paketTryout->paket_soal_wajib_2_id,
-                $paketTryout->paket_soal_wajib_3_id,
-                $paketTryout->paket_soal_pilihan_1_id,
-                $paketTryout->paket_soal_pilihan_2_id,
-            ])
-            ->count();
+        $jumlahSoal = $percobaan?->jumlah_soal ?? 0;
 
         return view('tryout.hasil', compact('paketTryout', 'hasil', 'jumlahSoal', 'perKd', 'riwayat'));
     }
@@ -251,13 +286,55 @@ class TryoutController extends Controller
      */
     private function alihkanSetelahTidakAktif(Request $request, PaketTryout $paketTryout): RedirectResponse
     {
-        $sudahDinilai = HasilTryout::query()
-            ->where('user_id', $request->user()->getKey())
-            ->where('paket_tryout_id', $paketTryout->getKey())
-            ->exists();
-
-        return $sudahDinilai
+        return $this->sudahDinilai($paketTryout, $request->user())
             ? redirect()->route('tryout.hasil', $paketTryout)
             : redirect()->route('tryout.index');
+    }
+
+    private function sudahDinilai(PaketTryout $paketTryout, User $user): bool
+    {
+        return HasilTryout::query()
+            ->where('user_id', $user->getKey())
+            ->where('paket_tryout_id', $paketTryout->getKey())
+            ->exists();
+    }
+
+    /**
+     * Seluruh mapel pilihan yang ditawarkan paket ini — bukan dua yang pernah
+     * dipilih admin, melainkan semua yang ikut tersimpan pada paket.
+     *
+     * @return Collection<int, PaketTryoutMapel>
+     */
+    private function mapelPilihanTersedia(PaketTryout $paketTryout): Collection
+    {
+        return $paketTryout->daftarMapelUrut()
+            ->filter(fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis !== Mapel::JENIS_WAJIB)
+            ->values();
+    }
+
+    /**
+     * Dua mapel pilihan yang dipilih peserta, dipastikan benar-benar milik
+     * paket ini dan berjenis pilihan — mapel wajib maupun mapel di luar paket
+     * ditolak.
+     *
+     * @return array<int, int>
+     */
+    private function validasiPilihan(Request $request, PaketTryout $paketTryout): array
+    {
+        $tersedia = $this->mapelPilihanTersedia($paketTryout)
+            ->pluck('mapel_id')
+            ->map(fn ($mapelId): int => (int) $mapelId)
+            ->all();
+
+        $hasil = $request->validate([
+            'pilihan' => ['required', 'array', 'size:2'],
+            'pilihan.*' => ['integer', Rule::in($tersedia)],
+        ], [
+            'pilihan.required' => 'Pilih tepat dua mapel pilihan terlebih dahulu.',
+            'pilihan.size' => 'Pilih tepat dua mapel pilihan terlebih dahulu.',
+            'pilihan.*.in' => 'Pilihan yang kamu tandai bukan bagian dari tryout ini.',
+        ]);
+
+        return array_map('intval', $hasil['pilihan']);
     }
 }

@@ -4,107 +4,96 @@ use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
+use App\Models\PaketTryoutMapel;
 use App\Models\Soal;
 use App\Models\User;
 use Database\Seeders\TryoutSeeder;
+use Illuminate\Support\Collection;
 
 /**
- * Slot mapel dan slot paket soal harus berurutan sama, karena posisi ke-i dari
- * keduanya saling terikat pada satu baris paket tryout.
+ * Seluruh baris isi paket tryout, terurut seperti peserta mengerjakannya:
+ * mapel wajib lebih dulu, baru mapel pilihan.
  *
- * @return array{mapel: array<int, string>, paket: array<int, string>}
+ * @return Collection<int, PaketTryoutMapel>
  */
-function slotTryoutFase6(): array
+function isiPaketTryout(PaketTryout $paketTryout)
 {
-    return [
-        'mapel' => ['mapel_wajib_1', 'mapel_wajib_2', 'mapel_wajib_3', 'mapel_pilihan_1', 'mapel_pilihan_2'],
-        'paket' => [
-            'paket_soal_wajib_1_id',
-            'paket_soal_wajib_2_id',
-            'paket_soal_wajib_3_id',
-            'paket_soal_pilihan_1_id',
-            'paket_soal_pilihan_2_id',
-        ],
-    ];
+    return $paketTryout->daftarMapel()->with('mapel')->get();
 }
 
-function nilaiSlot(PaketTryout $paketTryout, string $slot): int
-{
-    return (int) $paketTryout->getAttribute($slot);
-}
-
-it('membuat paket tryout dengan lima slot mapel yang berbeda', function () {
+it('membuat paket tryout berisi seluruh mapel yang layak masuk', function () {
     $this->seed();
 
     $paketTryout = PaketTryout::firstOrFail();
-    $mapelIds = array_map(fn (string $slot) => nilaiSlot($paketTryout, $slot), slotTryoutFase6()['mapel']);
+    $isi = isiPaketTryout($paketTryout);
 
-    expect($mapelIds)->toHaveCount(5)
-        ->and($mapelIds)->not->toContain(0)
-        ->and(array_unique($mapelIds))->toHaveCount(5)
-        ->and(Mapel::whereIn('id', $mapelIds)->count())->toBe(5);
+    $layak = Mapel::query()
+        ->whereNull('deleted_at')
+        ->whereNotIn('tingkat', [Mapel::TINGKAT_SD, Mapel::TINGKAT_SMP])
+        ->pluck('id')
+        ->map(fn ($id) => (int) $id)
+        ->all();
+
+    expect($isi->pluck('mapel_id')->map(fn ($id) => (int) $id)->all())->toEqualCanonicalizing($layak)
+        ->and($isi->pluck('mapel_id')->unique())->toHaveCount(count($layak))
+        ->and($layak)->toHaveCount(9);
 });
 
-it('tiap slot paket soal dimiliki mapel slotnya dan berisi minimal satu soal', function () {
+it('tiap baris paket soal dimiliki mapel barisnya dan berisi minimal satu soal', function () {
     $this->seed();
 
     $paketTryout = PaketTryout::firstOrFail();
-    $slots = slotTryoutFase6();
 
-    foreach ($slots['paket'] as $index => $slotPaket) {
-        $slotMapel = $slots['mapel'][$index];
-        $paketSoal = PaketSoal::withTrashed()->find(nilaiSlot($paketTryout, $slotPaket));
+    foreach (isiPaketTryout($paketTryout) as $baris) {
+        $paketSoal = PaketSoal::withTrashed()->find((int) $baris->paket_soal_id);
 
-        $this->assertNotNull($paketSoal, "slot {$slotPaket} tidak menunjuk paket soal yang ada");
-        $this->assertNull($paketSoal->deleted_at, "slot {$slotPaket} menunjuk paket soal yang sudah dihapus");
+        $this->assertNotNull($paketSoal, "baris mapel {$baris->mapel_id} tidak menunjuk paket soal yang ada");
+        $this->assertNull($paketSoal->deleted_at, 'baris menunjuk paket soal yang sudah dihapus');
         $this->assertSame(
-            nilaiSlot($paketTryout, $slotMapel),
-            $paketSoal->mapel_id,
-            "paket soal di slot {$slotPaket} bukan milik mapel di slot {$slotMapel}"
+            (int) $baris->mapel_id,
+            (int) $paketSoal->mapel_id,
+            "paket soal pada baris mapel {$baris->mapel_id} bukan milik mapel itu"
         );
-        $this->assertGreaterThan(0, $paketSoal->soal()->count(), "paket soal di slot {$slotPaket} tidak berisi soal");
+        $this->assertGreaterThan(0, $paketSoal->soal()->count(), 'paket soal pada baris tidak berisi soal');
     }
 });
 
-it('memenuhi aturan SMK dan kecocokan tingkat pada tiap slot', function () {
+it('memenuhi aturan SMK dan kecocokan tingkat pada tiap baris', function () {
     $this->seed();
 
     $paketTryout = PaketTryout::firstOrFail();
-    $slots = slotTryoutFase6();
+    $isi = isiPaketTryout($paketTryout);
 
     expect($paketTryout->tingkat)->toBe(PaketTryout::TINGKAT_SMK);
 
-    $mapels = Mapel::query()
-        ->whereIn('id', array_map(fn (string $slot) => nilaiSlot($paketTryout, $slot), $slots['mapel']))
-        ->get()
-        ->keyBy('id');
-
     $tingkatCocok = [PaketTryout::TINGKAT_SMK, Mapel::TINGKAT_SMA, Mapel::TINGKAT_ALL];
 
-    foreach ($slots['mapel'] as $slot) {
-        $mapel = $mapels->get(nilaiSlot($paketTryout, $slot));
-
-        $this->assertNotNull($mapel, "slot {$slot} tidak menunjuk mapel yang ada");
+    foreach ($isi as $baris) {
+        $this->assertNotNull($baris->mapel, "baris mapel {$baris->mapel_id} tidak menunjuk mapel yang ada");
         $this->assertContains(
-            $mapel->tingkat,
+            $baris->mapel->tingkat,
             $tingkatCocok,
-            "tingkat mapel {$mapel->kode} tidak cocok dengan tingkat tryout"
+            "tingkat mapel {$baris->mapel->kode} tidak cocok dengan tingkat tryout"
         );
     }
 
-    $pilihan = array_map(
-        fn (string $slot) => $mapels->get(nilaiSlot($paketTryout, $slot)),
-        ['mapel_pilihan_1', 'mapel_pilihan_2']
-    );
+    $pilihan = $isi
+        ->filter(fn ($baris) => $baris->mapel->jenis !== Mapel::JENIS_WAJIB)
+        ->pluck('mapel');
 
-    $adaKejuruan = (bool) array_filter(
-        $pilihan,
+    $adaKejuruan = (bool) $pilihan->filter(
         fn (Mapel $mapel): bool => $mapel->jenis === Mapel::JENIS_PILIHAN_KEJURUAN || $mapel->is_pkk
-    );
+    )->count();
 
     $this->assertTrue(
         $adaKejuruan,
         'untuk tingkat SMK minimal satu mapel pilihan harus pilihan_kejuruan atau berstatus PKK'
+    );
+
+    $this->assertGreaterThanOrEqual(
+        2,
+        $pilihan->count(),
+        'peserta wajib memilih dua mapel pilihan, jadi paket harus menyediakan minimal dua'
     );
 });
 
@@ -112,7 +101,7 @@ it('mengisi soal berikut opsinya sehingga tryout benar-benar bisa dijawab', func
     $this->seed();
 
     $paketTryout = PaketTryout::firstOrFail();
-    $paketSoalIds = array_map(fn (string $slot) => nilaiSlot($paketTryout, $slot), slotTryoutFase6()['paket']);
+    $paketSoalIds = isiPaketTryout($paketTryout)->pluck('paket_soal_id')->map(fn ($id) => (int) $id)->all();
 
     $soals = PaketSoal::whereIn('id', $paketSoalIds)->with('soal')->get()->flatMap->soal;
 
@@ -169,29 +158,24 @@ it('melempar error yang jelas ketika mapel tidak mencukupi', function () {
     Mapel::factory()->count(4)->create(['tingkat' => PaketTryout::TINGKAT_SMK]);
 
     expect(fn () => (new TryoutSeeder)->run())
-        ->toThrow(RuntimeException::class, 'minimal 5 mapel');
+        ->toThrow(RuntimeException::class, 'minimal 2 mapel pilihan');
 });
 
 it('nilai hasil seeder lolos validasi yang sama dengan form admin', function () {
     $this->seed();
 
     $paketTryout = PaketTryout::firstOrFail();
-    $slots = slotTryoutFase6();
+    $isi = isiPaketTryout($paketTryout);
 
     $payload = [
         'nama_paket' => 'Percobaan simpan ulang hasil seeder',
         'deskripsi' => 'Memastikan aturan seeder tidak berbeda dengan aturan controller.',
         'tingkat' => $paketTryout->tingkat,
         'batas_waktu_menit' => $paketTryout->batas_waktu_menit,
+        'paket_soal' => $isi->mapWithKeys(
+            fn ($baris) => [(int) $baris->mapel_id => (int) $baris->paket_soal_id]
+        )->all(),
     ];
-
-    foreach ($slots['mapel'] as $slot) {
-        $payload[$slot] = nilaiSlot($paketTryout, $slot);
-    }
-
-    foreach ($slots['paket'] as $slot) {
-        $payload[$slot] = nilaiSlot($paketTryout, $slot);
-    }
 
     $this->actingAs(User::factory()->admin()->create())
         ->post(route('admin.paket-tryout.store'), $payload)

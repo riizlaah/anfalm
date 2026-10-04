@@ -66,8 +66,10 @@ it('membuat percobaan berjalan berisi daftar soal tiap mapel sesuai paket', func
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
+    $pilihan = duaMapelPilihan($paket);
+
     $this->actingAs($peserta)
-        ->post(route('tryout.mulai', $paket))
+        ->post(route('tryout.mulai', $paket), ['pilihan' => $pilihan])
         ->assertRedirect(route('tryout.kerja', $paket));
 
     $percobaan = Percobaan::sole();
@@ -80,14 +82,17 @@ it('membuat percobaan berjalan berisi daftar soal tiap mapel sesuai paket', func
         ->and($percobaan->waktu_mulai)->not->toBeNull();
 
     $daftarSoal = $percobaan->daftar_soal;
+    $urutan = urutanMapelDicoba($paket, $pilihan);
 
-    expect($daftarSoal)->toHaveCount(5);
+    expect($daftarSoal)->toHaveCount(count($urutan));
 
     $totalSoal = 0;
 
-    foreach (PaketTryout::SLOT as $index => $slot) {
-        $mapelId = (int) $paket->getAttribute($slot['mapel']);
-        $soalIds = PaketSoal::find($paket->getAttribute($slot['paket']))->soal()->get()->pluck('id')->all();
+    foreach ($urutan as $index => $mapelId) {
+        $paketSoalId = (int) $paket->daftarMapel()
+            ->where('mapel_id', $mapelId)
+            ->value('paket_soal_id');
+        $soalIds = PaketSoal::findOrFail($paketSoalId)->soal()->get()->pluck('id')->all();
 
         expect($daftarSoal[$index]['mapel_id'])->toBe($mapelId)
             ->and($daftarSoal[$index]['soal_ids'])->toEqualCanonicalizing($soalIds);
@@ -102,8 +107,9 @@ it('mengacak urutan soal tiap percobaan tanpa mengurangi isinya', function () {
     $paket = PaketTryout::firstOrFail();
     $service = app(PercobaanService::class);
 
-    $pertama = $service->susunDaftarSoal($paket);
-    $kedua = $service->susunDaftarSoal($paket);
+    $pilihan = duaMapelPilihan($paket);
+    $pertama = $service->susunDaftarSoal($paket, $pilihan);
+    $kedua = $service->susunDaftarSoal($paket, $pilihan);
 
     foreach ($pertama as $index => $grup) {
         expect($grup['mapel_id'])->toBe($kedua[$index]['mapel_id'])
@@ -124,8 +130,8 @@ it('melanjutkan percobaan yang masih berjalan alih-alih membuat yang baru', func
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
 
     expect(Percobaan::count())->toBe(1);
 
@@ -143,7 +149,7 @@ it('menolak memulai ulang paket tryout yang sudah menghasilkan nilai', function 
     ]);
 
     $this->actingAs($peserta)
-        ->post(route('tryout.mulai', $paket))
+        ->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)])
         ->assertRedirect(route('tryout.index'))
         ->assertSessionHas('error', 'Anda sudah menyelesaikan tryout ini. Silakan hubungi admin jika ada masalah teknis.');
 
@@ -154,7 +160,7 @@ it('membuka halaman kerja pada mapel pertama', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
 
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
@@ -169,7 +175,7 @@ it('menyimpan jawaban satu mapel lalu mengunci mapel itu', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
 
@@ -190,7 +196,7 @@ it('mengabaikan jawaban untuk soal di luar mapel yang sedang dikerjakan', functi
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $soalBerikut = Soal::find($percobaan->daftar_soal[1]['soal_ids'][0]);
@@ -206,7 +212,7 @@ it('menghitung hasil pada mapel terakhir lalu menutup percobaan', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     // Pindah ke mapel terakhir tanpa menjawab mapel di tengah sama sekali.
@@ -236,7 +242,7 @@ it('mengabaikan mapel yang tidak dijawab saat merata-ratakan theta', function ()
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     // Menjawab benar satu mapel pertama saja; empat mapel lain kosong.
@@ -264,7 +270,7 @@ it('menampilkan halaman hasil setelah percobaan ditutup', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $percobaan->update(['urutan_mapel' => 4]);
     $terakhir = soalMapelAktif($percobaan->refresh());
@@ -283,7 +289,7 @@ it('menampilkan level kompetensi per KD di halaman hasil tryout', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $percobaan->update(['urutan_mapel' => 4]);
@@ -305,7 +311,7 @@ it('menyembunyikan kode KD dan statistik internal psikometrik dari halaman hasil
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $percobaan->update(['urutan_mapel' => 4]);
@@ -338,7 +344,7 @@ it('menampilkan ringkasan kompetensi per KD sebagai kartu, bukan tabel', functio
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $percobaan->update(['urutan_mapel' => 4]);
@@ -366,7 +372,7 @@ it('menandai kompetensi dasar yang belum pernah dijawab sebagai belum teridentif
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $percobaan->update(['urutan_mapel' => 4]);
 
@@ -386,7 +392,7 @@ it('menulis tracking mapel untuk tiap mapel pada paket tryout yang selesai', fun
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     // Menjawab mapel terakhir saja; empat mapel sebelumnya dibiarkan kosong.
@@ -419,7 +425,7 @@ it('menghitung ulang theta mapel dari latihan tanpa menambah jumlah tryout', fun
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $percobaan->update(['urutan_mapel' => 4]);
     $terakhir = soalMapelAktif($percobaan->refresh());
@@ -458,7 +464,7 @@ it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman'
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $waktuMulai = $percobaan->waktu_mulai->toIso8601String();
 
@@ -473,7 +479,7 @@ it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman'
         ->assertSee($batasAkhir);
 
     // Memulai ulang tidak boleh mengulang hitung mundur dari nol.
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
 
     expect($percobaan->refresh()->waktu_mulai->toIso8601String())->toBe($waktuMulai);
 });
@@ -482,7 +488,7 @@ it('menampilkan dialog konfirmasi sebelum pindah mapel', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
 
     $this->actingAs($peserta)
         ->get(route('tryout.kerja', $paket))
@@ -495,7 +501,7 @@ it('mengunci mapel yang sudah ditinggalkan', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $pertanyaanMapelPertama = soalMapelAktif($percobaan)['soal']->first()->pertanyaan;
@@ -515,7 +521,7 @@ it('menutup percobaan otomatis ketika batas waktu sudah lewat', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $percobaan->update(['waktu_mulai' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
 
@@ -531,7 +537,7 @@ it('tetap menyimpan jawaban yang terkirim setelah batas waktu lewat', function (
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
 
@@ -550,7 +556,7 @@ it('menawarkan mulai ulang saat percobaan masih berjalan', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
 
     $this->actingAs($peserta)
         ->get(route('tryout.index'))
@@ -563,7 +569,7 @@ it('mengosongkan jawaban ketika peserta memilih mulai ulang', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
 
@@ -609,7 +615,7 @@ it('menutup percobaan ketika peserta memilih selesai di tengah mapel', function 
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
 
@@ -650,7 +656,7 @@ it('menampilkan leaderboard peserta yang sudah selesai saja diurutkan dari skor 
 
     // Peserta yang masih mengerjakan tidak boleh muncul (6.9).
     $sedang = User::factory()->peserta()->create(['nama_lengkap' => 'Andi Sedang']);
-    $this->actingAs($sedang)->post(route('tryout.mulai', $paket));
+    $this->actingAs($sedang)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
 
     $this->actingAs($penonton)
         ->get(route('tryout.leaderboard', $paket))
@@ -724,7 +730,7 @@ it('menampilkan pembahasan per soal di halaman hasil tryout (3.7)', function () 
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
 
     $percobaan->update(['urutan_mapel' => 4]);
@@ -745,7 +751,7 @@ it('me-render konten HTML soal secara mentah sekaligus membuang skripnya (6.13)'
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $soal = soalMapelAktif($percobaan)['soal']->first();
 
@@ -766,7 +772,7 @@ it('me-escape teks biasa saat ditampilkan agar karakter kurang dari tidak jadi t
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
-    $this->actingAs($peserta)->post(route('tryout.mulai', $paket));
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
     $soal = soalMapelAktif($percobaan)['soal']->first();
 
@@ -777,4 +783,125 @@ it('me-escape teks biasa saat ditampilkan agar karakter kurang dari tidak jadi t
         ->assertOk()
         ->assertSee('Karena i &lt; n, jawabannya 3', false)
         ->assertDontSee('Karena i < n, jawabannya 3', false);
+});
+
+/**
+ * Urutan mapel yang seharusnya dikerjakan peserta: seluruh mapel wajib
+ * menurut kode mapel, lalu sepasang pilihan yang dipilih peserta itu.
+ *
+ * @param  array<int, int>  $pilihan
+ * @return array<int, int>
+ */
+function urutanMapelDicoba(PaketTryout $paket, array $pilihan): array
+{
+    $wajib = $paket->daftarMapel()
+        ->with('mapel')
+        ->get()
+        ->filter(fn ($baris) => $baris->mapel->jenis === Mapel::JENIS_WAJIB)
+        ->sortBy(fn ($baris) => $baris->mapel->kode)
+        ->pluck('mapel_id');
+
+    return $wajib->concat(collect($pilihan)->sort()->values())->all();
+}
+
+/** Seluruh mapel pilihan pada paket tryout, terurut menurut kode mapel. */
+function semuaMapelPilihan(PaketTryout $paket): array
+{
+    return $paket->daftarMapel()
+        ->with('mapel')
+        ->get()
+        ->filter(fn ($baris) => $baris->mapel->jenis !== Mapel::JENIS_WAJIB)
+        ->sortBy(fn ($baris) => $baris->mapel->kode)
+        ->pluck('mapel_id')
+        ->values()
+        ->all();
+}
+
+it('halaman pilihan menampilkan seluruh mapel pilihan milik paket tryout', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $html = $this->actingAs($peserta)
+        ->get(route('tryout.pilih', $paket))
+        ->assertOk()
+        ->assertSee('Pilih 2 Mapel Pilihan')
+        ->getContent();
+
+    $pilihan = semuaMapelPilihan($paket);
+
+    // Seeder mengisi seluruh mapel pilihan, bukan hanya dua milik admin.
+    expect($pilihan)->toHaveCount(6);
+
+    foreach ($pilihan as $mapelId) {
+        expect($html)->toContain('name="pilihan[]" value="'.$mapelId.'"');
+    }
+
+    $wajib = $paket->daftarMapel()
+        ->with('mapel')
+        ->get()
+        ->filter(fn ($baris) => $baris->mapel->jenis === Mapel::JENIS_WAJIB);
+
+    foreach ($wajib as $baris) {
+        expect($html)->toContain($baris->mapel->nama)
+            ->not->toContain('name="pilihan[]" value="'.$baris->mapel_id.'"');
+    }
+});
+
+it('peserta memilih dua mapel pilihan sendiri saat memulai tryout', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $semua = semuaMapelPilihan($paket);
+    $dua = array_slice($semua, -2);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket), ['pilihan' => $dua])
+        ->assertRedirect(route('tryout.kerja', $paket));
+
+    expect(array_column(Percobaan::sole()->daftar_soal, 'mapel_id'))
+        ->toBe(urutanMapelDicoba($paket, $dua));
+});
+
+it('menolak memulai tryout tanpa memilih tepat dua mapel pilihan', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+    $semua = semuaMapelPilihan($paket);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket), ['pilihan' => [$semua[0]]])
+        ->assertSessionHasErrors('pilihan');
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket), ['pilihan' => []])
+        ->assertSessionHasErrors('pilihan');
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket))
+        ->assertSessionHasErrors('pilihan');
+
+    expect(Percobaan::count())->toBe(0);
+});
+
+it('menolak mapel wajib dan mapel di luar paket sebagai pilihan peserta', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+    $semua = semuaMapelPilihan($paket);
+
+    $wajib = $paket->daftarMapel()
+        ->with('mapel')
+        ->get()
+        ->first(fn ($baris) => $baris->mapel->jenis === Mapel::JENIS_WAJIB)
+        ->mapel_id;
+
+    $luar = Mapel::factory()->create(['jenis' => Mapel::JENIS_PILIHAN_UMUM])->getKey();
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket), ['pilihan' => [$wajib, $semua[0]]])
+        ->assertSessionHasErrors('pilihan.0');
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket), ['pilihan' => [$semua[0], $luar]])
+        ->assertSessionHasErrors('pilihan.1');
+
+    expect(Percobaan::count())->toBe(0);
 });

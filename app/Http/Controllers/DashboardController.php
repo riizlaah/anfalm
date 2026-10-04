@@ -109,7 +109,7 @@ class DashboardController extends Controller
     private function tryoutTerbaru(User $user): array
     {
         $paket = PaketTryout::query()
-            ->with(['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'])
+            ->with('daftarMapel.mapel')
             ->latest('id')
             ->first();
 

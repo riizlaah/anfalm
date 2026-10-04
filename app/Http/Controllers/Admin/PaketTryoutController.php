@@ -13,6 +13,7 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator as ValidatorFacade;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -21,7 +22,7 @@ class PaketTryoutController extends Controller
 {
     public function index(): View
     {
-        $paketTryouts = PaketTryout::with(['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'])
+        $paketTryouts = PaketTryout::with('daftarMapel.mapel')
             ->orderByDesc('id')
             ->get();
 
@@ -30,21 +31,24 @@ class PaketTryoutController extends Controller
 
     public function create(): View
     {
-        $mapels = $this->mapelsUntukForm();
-        $paketSoals = PaketSoal::with('mapel')->orderByDesc('id')->get();
-
-        return view('admin.paket-tryout.create', compact('mapels', 'paketSoals'));
+        return view('admin.paket-tryout.create', $this->dataForm(
+            (string) old('tingkat', PaketTryout::TINGKAT_SMK)
+        ));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validateData($request);
 
-        PaketTryout::create([
-            ...$data,
-            'batas_waktu_menit' => $data['batas_waktu_menit'] ?? 120,
-            'created_by' => $request->user()->id,
-        ]);
+        DB::transaction(function () use ($data, $request): void {
+            $paketTryout = PaketTryout::create([
+                ...collect($data)->except('paket_soal')->all(),
+                'batas_waktu_menit' => $data['batas_waktu_menit'] ?? 120,
+                'created_by' => $request->user()->id,
+            ]);
+
+            $paketTryout->susunIsiMapel($data['paket_soal']);
+        });
 
         return redirect()->route('admin.paket-tryout.index')
             ->with('success', 'Paket tryout berhasil ditambahkan.');
@@ -52,20 +56,24 @@ class PaketTryoutController extends Controller
 
     public function edit(PaketTryout $paketTryout): View
     {
-        $mapels = $this->mapelsUntukForm();
-        $paketSoals = PaketSoal::with('mapel')->orderByDesc('id')->get();
-
-        return view('admin.paket-tryout.edit', compact('paketTryout', 'mapels', 'paketSoals'));
+        return view('admin.paket-tryout.edit', [
+            ...$this->dataForm((string) $paketTryout->tingkat),
+            'paketTryout' => $paketTryout,
+        ]);
     }
 
     public function update(Request $request, PaketTryout $paketTryout): RedirectResponse
     {
         $data = $this->validateData($request);
 
-        $paketTryout->update([
-            ...$data,
-            'batas_waktu_menit' => $data['batas_waktu_menit'] ?? 120,
-        ]);
+        DB::transaction(function () use ($data, $paketTryout): void {
+            $paketTryout->update([
+                ...collect($data)->except('paket_soal')->all(),
+                'batas_waktu_menit' => $data['batas_waktu_menit'] ?? 120,
+            ]);
+
+            $paketTryout->susunIsiMapel($data['paket_soal']);
+        });
 
         return redirect()->route('admin.paket-tryout.index')
             ->with('success', 'Paket tryout berhasil diperbarui.');
@@ -89,16 +97,53 @@ class PaketTryoutController extends Controller
     }
 
     /**
+     * Isi form paket tryout: seluruh mapel yang ditawarkan pada tingkat ini,
+     * beserta daftar paket soal miliknya masing-masing.
+     *
+     * Tiap baris memilih paket soalnya sendiri, jadi tidak ada lagi peta slot
+     * yang harus disinkronkan lewat JavaScript — dan jumlah barisnya bebas
+     * mengikuti katalog mapel.
+     *
+     * @return array{mapels: Collection<int, Mapel>, paketSoals: Collection<int, PaketSoal>}
+     */
+    private function dataForm(string $tingkat): array
+    {
+        return [
+            'mapels' => $this->mapelsUntukForm($tingkat),
+            'paketSoals' => $this->paketSoalsUntukForm(),
+        ];
+    }
+
+    /**
      * Mapel yang ditawarkan pada form paket tryout. SD/SMP bukan lagi sasaran
-     * aplikasi, jadi keduanya tidak ditawarkan — jumlahnya nol di basis data,
-     * sehingga tidak ada baris yang tersingkir.
+     * aplikasi, dan tingkatnya harus cocok dengan paket tryout yang disunting —
+     * supaya admin tidak pernah menempatkan mapel yang nanti ditolak validasi.
      *
      * @return Collection<int, Mapel>
      */
-    private function mapelsUntukForm(): Collection
+    private function mapelsUntukForm(string $tingkat): Collection
     {
         return Mapel::orderBy('kode')
             ->whereNotIn('tingkat', [Mapel::TINGKAT_SD, Mapel::TINGKAT_SMP])
+            ->get()
+            ->filter(fn (Mapel $mapel): bool => $this->tingkatMapelCocok($mapel->tingkat, $tingkat))
+            ->values();
+    }
+
+    /**
+     * Paket soal yang layak ditawarkan: minimal berisi satu soal, karena paket
+     * tanpa soal akan selalu ditolak validasi dan barisnya hanya mengunci form.
+     *
+     * Diurut menurun supaya keputusan bawaan tiap baris jatuh ke paket yang
+     * paling baru dibuat — aturan yang sama dengan sebelumnya.
+     *
+     * @return Collection<int, PaketSoal>
+     */
+    private function paketSoalsUntukForm(): Collection
+    {
+        return PaketSoal::with('mapel')
+            ->whereHas('soal')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -107,6 +152,8 @@ class PaketTryoutController extends Controller
      */
     private function validateData(Request $request): array
     {
+        $tingkat = $request->filled('tingkat') ? (string) $request->input('tingkat') : null;
+
         $rules = [
             'nama_paket' => ['required', 'string', 'max:255'],
             'deskripsi' => ['nullable', 'string'],
@@ -117,88 +164,110 @@ class PaketTryoutController extends Controller
                 PaketTryout::TINGKAT_SMK,
             ])],
             'batas_waktu_menit' => ['nullable', 'integer', 'min:1'],
+            'paket_soal' => ['required', 'array'],
         ];
-
-        foreach (PaketTryout::SLOT as $slot) {
-            $rules[$slot['mapel']] = ['required', 'integer', Rule::exists('mapel', 'id')->whereNull('deleted_at')];
-            $rules[$slot['paket']] = ['required', 'integer', Rule::exists('paket_soal', 'id')->whereNull('deleted_at')];
-        }
-
-        $tingkat = $request->filled('tingkat') ? (string) $request->input('tingkat') : null;
 
         $validator = ValidatorFacade::make($request->all(), $rules);
 
         $validator->after(function (Validator $validator) use ($request, $tingkat) {
-            $this->validateSlots($validator, $request, $tingkat);
+            $this->validateIsiMapel($validator, $request, $tingkat);
         });
 
         return $validator->validate();
     }
 
-    private function validateSlots(Validator $validator, Request $request, ?string $tingkat): void
+    /**
+     * Satu aturan utama form: peta `paket_soal` berisi tepat seluruh mapel yang
+     * ditawarkan, tiap barisnya menunjuk paket soal milik mapel itu sendiri.
+     *
+     * Mapel tanpa paket soal tidak ikut wajib diisi — barisnya tetap tampil
+     * sebagai keterangan, tetapi tidak menyimpan apa pun sehingga form tidak
+     * pernah terkunci hanya karena satu mapel belum punya paket.
+     */
+    private function validateIsiMapel(Validator $validator, Request $request, ?string $tingkat): void
     {
-        $mapelIds = [];
-        foreach (PaketTryout::SLOT as $slot) {
-            $mapelField = $slot['mapel'];
-            $mapelId = (int) $request->input($mapelField);
-            if ($mapelId === 0) {
-                continue;
-            }
-            if (isset($mapelIds[$mapelId])) {
-                $validator->errors()->add($mapelField, 'Mapel wajib dan pilihan tidak boleh sama satu sama lain.');
-            }
-            $mapelIds[$mapelId] = true;
+        $isian = $request->input('paket_soal');
+
+        if (! is_array($isian) || $tingkat === null) {
+            return;
         }
 
-        $this->validateAturanSmk($validator, $request, $tingkat);
+        // Kunci datang sebagai teks dari form; dinormalkan lebih dulu supaya
+        // penelusuran tiap baris tidak terpecah oleh variasi penulisan angka.
+        $terurut = [];
+        foreach ($isian as $kunciBaris => $nilai) {
+            $terurut[(int) $kunciBaris] = $nilai;
+        }
+        $isian = $terurut;
 
-        foreach (PaketTryout::SLOT as $slot) {
-            $mapelField = $slot['mapel'];
-            $paketField = $slot['paket'];
-            $mapelId = (int) $request->input($mapelField);
-            $paketId = (int) $request->input($paketField);
+        $ditawarkan = $this->mapelsUntukForm($tingkat);
+        $paketSoals = $this->paketSoalsUntukForm();
 
-            if ($mapelId === 0 || $paketId === 0) {
+        foreach ($ditawarkan as $mapel) {
+            $kunci = 'paket_soal.'.$mapel->getKey();
+            $nilai = $isian[$mapel->getKey()] ?? null;
+            $kosong = ! is_scalar($nilai) || ! filled($nilai);
+            $mapelPunyaPaket = $paketSoals->contains(
+                fn (PaketSoal $paketSoal): bool => (int) $paketSoal->mapel_id === $mapel->getKey()
+            );
+
+            if (! $mapelPunyaPaket) {
+                if (! $kosong) {
+                    $validator->errors()->add($kunci, 'Mapel ini belum punya paket soal yang bisa dipakai.');
+                }
+
                 continue;
             }
 
-            $this->validateTingkatMapel($validator, $mapelField, $mapelId, $tingkat);
+            if ($kosong) {
+                $validator->errors()->add($kunci, 'Paket soal untuk mapel '.$mapel->nama.' wajib dipilih.');
 
-            if ($this->paketTidakCocokSlot($paketId, $mapelId) || $this->paketTanpaSoal($paketId)) {
-                $validator->errors()->add($paketField, 'Paket soal harus milik mapel slot dan minimal berisi 1 soal.');
+                continue;
+            }
+
+            $paketTerpilih = $paketSoals->first(fn (PaketSoal $paketSoal): bool => $paketSoal->getKey() === (int) $nilai);
+
+            if ($paketTerpilih === null || (int) $paketTerpilih->mapel_id !== $mapel->getKey()) {
+                $validator->errors()->add($kunci, 'Paket soal harus milik mapel yang sama dan minimal berisi 1 soal.');
             }
         }
+
+        foreach (array_keys($isian) as $kunciBaris) {
+            $ditawarkanSaja = $ditawarkan->contains(fn (Mapel $mapel): bool => $mapel->getKey() === (int) $kunciBaris);
+
+            if (! $ditawarkanSaja) {
+                $validator->errors()->add(
+                    'paket_soal.'.$kunciBaris,
+                    'Mapel tersebut tidak tersedia pada paket tryout tingkat ini.'
+                );
+            }
+        }
+
+        $this->validateAturanSmk($validator, $ditawarkan, $tingkat);
     }
 
-    private function validateAturanSmk(Validator $validator, Request $request, ?string $tingkat): void
+    /**
+     * Seluruh mapel pilihan yang ikut tersimpan pada paket — nanti menjadi
+     * bebas yang dipilih peserta — harus menyisakan minimal satu pilihan
+     * kejuruan atau PKK untuk tingkat SMK.
+     *
+     * @param  Collection<int, Mapel>  $ditawarkan
+     */
+    private function validateAturanSmk(Validator $validator, Collection $ditawarkan, ?string $tingkat): void
     {
         if ($tingkat !== PaketTryout::TINGKAT_SMK) {
             return;
         }
 
-        $pilihan1 = Mapel::find((int) $request->input('mapel_pilihan_1'));
-        $pilihan2 = Mapel::find((int) $request->input('mapel_pilihan_2'));
-
-        $adaKejuruan = $this->apakahKejuruan($pilihan1) || $this->apakahKejuruan($pilihan2);
+        $adaKejuruan = $ditawarkan
+            ->filter(fn (Mapel $mapel): bool => $mapel->jenis !== Mapel::JENIS_WAJIB)
+            ->contains(fn (Mapel $mapel): bool => $this->apakahKejuruan($mapel));
 
         if (! $adaKejuruan) {
             $validator->errors()->add(
-                'mapel_pilihan_1',
+                'paket_soal',
                 'Untuk tingkat SMK, minimal satu mapel pilihan harus berjenis pilihan_kejuruan atau berstatus PKK.'
             );
-        }
-    }
-
-    private function validateTingkatMapel(Validator $validator, string $field, int $mapelId, ?string $tingkat): void
-    {
-        if ($tingkat === null) {
-            return;
-        }
-
-        $mapel = Mapel::find($mapelId);
-
-        if ($mapel && ! $this->tingkatMapelCocok($mapel->tingkat, $tingkat)) {
-            $validator->errors()->add($field, 'Mapel tingkat harus sesuai dengan tingkat tryout.');
         }
     }
 
@@ -211,21 +280,8 @@ class PaketTryoutController extends Controller
         return $tingkat === PaketTryout::TINGKAT_SMK && $mapelTingkat === PaketTryout::TINGKAT_SMA;
     }
 
-    private function paketTidakCocokSlot(int $paketId, int $mapelId): bool
+    private function apakahKejuruan(Mapel $mapel): bool
     {
-        $paket = PaketSoal::find($paketId);
-
-        return $paket === null || $paket->mapel_id !== $mapelId;
-    }
-
-    private function paketTanpaSoal(int $paketId): bool
-    {
-        return PaketSoal::find($paketId)?->soal()->count() === 0;
-    }
-
-    private function apakahKejuruan(?Mapel $mapel): bool
-    {
-        return $mapel !== null
-            && ($mapel->jenis === Mapel::JENIS_PILIHAN_KEJURUAN || $mapel->is_pkk);
+        return $mapel->jenis === Mapel::JENIS_PILIHAN_KEJURUAN || $mapel->is_pkk;
     }
 }

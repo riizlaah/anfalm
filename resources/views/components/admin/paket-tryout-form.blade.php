@@ -1,34 +1,35 @@
+@use('App\Models\Mapel')
+@use('App\Models\PaketSoal')
+
 @props(['paketTryout' => null, 'mapels' => [], 'paketSoals' => []])
 
 @php
-    $slots = [
-        ['mapel' => 'mapel_wajib_1', 'paket' => 'paket_soal_wajib_1_id', 'label' => 'Wajib 1', 'paketSel' => 'paket-sel-0'],
-        ['mapel' => 'mapel_wajib_2', 'paket' => 'paket_soal_wajib_2_id', 'label' => 'Wajib 2', 'paketSel' => 'paket-sel-1'],
-        ['mapel' => 'mapel_wajib_3', 'paket' => 'paket_soal_wajib_3_id', 'label' => 'Wajib 3', 'paketSel' => 'paket-sel-2'],
-        ['mapel' => 'mapel_pilihan_1', 'paket' => 'paket_soal_pilihan_1_id', 'label' => 'Pilihan 1', 'paketSel' => 'paket-sel-3'],
-        ['mapel' => 'mapel_pilihan_2', 'paket' => 'paket_soal_pilihan_2_id', 'label' => 'Pilihan 2', 'paketSel' => 'paket-sel-4'],
+    // Satu baris per mapel, bukan lima slot tetap: jumlahnya bebas mengikuti
+    // katalog mapel, dan admin memilih paket soal langsung pada mapelnya
+    // sehingga tidak ada lagi peta slot yang harus disinkronkan lewat JS.
+    //
+    // Bawaan tiap baris: pilihan lama lebih dulu (old input menang atas data
+    // tersimpan), lalu paket soal terbarunya milik mapel itu — daftar
+    // `$paketSoals` sudah diurut menurun di controller, jadi yang pertama
+    // sejajar dengan "paling baru".
+    $isianTersimpan = collect($paketTryout?->daftarMapel)
+        ->mapWithKeys(fn ($baris) => [(int) $baris->mapel_id => (int) $baris->paket_soal_id]);
+    $isian = old('paket_soal', $isianTersimpan->all());
+
+    $paketPerMapel = $paketSoals->groupBy(fn (PaketSoal $paketSoal) => (int) $paketSoal->mapel_id);
+
+    $wajib = $mapels->filter(fn (Mapel $mapel) => $mapel->jenis === Mapel::JENIS_WAJIB);
+    $pilihan = $mapels->filter(fn (Mapel $mapel) => $mapel->jenis !== Mapel::JENIS_WAJIB);
+
+    // Mapel wajib dan pilihan dipisah lebih dulu; di dalam pilihan, per tingkat,
+    // supaya admin melihat sasaran SMA dan SMK terpisah seperti isinya kelak
+    // ditawarkan kepada peserta.
+    $kelompok = [
+        ['label' => 'Mapel wajib', 'mapels' => $wajib],
+        ['label' => 'Mapel pilihan · SMA', 'mapels' => $pilihan->filter(fn (Mapel $mapel) => $mapel->tingkat === Mapel::TINGKAT_SMA)],
+        ['label' => 'Mapel pilihan · SMK', 'mapels' => $pilihan->filter(fn (Mapel $mapel) => $mapel->tingkat === Mapel::TINGKAT_SMK)],
+        ['label' => 'Mapel pilihan · Semua tingkat', 'mapels' => $pilihan->filter(fn (Mapel $mapel) => $mapel->tingkat === Mapel::TINGKAT_ALL)],
     ];
-
-    // Default tiap slot: pilihan lama lebih dulu (old input menang atas data
-    // tersimpan), baru jatuh ke mapel pertama beserta paket soal terbarunya —
-    // daftar `$paketSoals` sudah diurut menurun di controller, jadi yang
-    // pertama sejajar dengan "paling baru".
-    foreach ($slots as $i => $slot) {
-        $mapelTerpilih = old($slot['mapel'], $paketTryout?->getAttribute($slot['mapel']));
-        if (! (is_scalar($mapelTerpilih) && filled($mapelTerpilih))) {
-            $mapelTerpilih = $mapels->first()?->id;
-        }
-
-        $paketTerpilih = old($slot['paket'], $paketTryout?->getAttribute($slot['paket']));
-        if (! (is_scalar($paketTerpilih) && filled($paketTerpilih))) {
-            $paketTerpilih = $paketSoals->first(
-                fn ($paketSoal) => (string) $paketSoal->mapel_id === (string) $mapelTerpilih
-            )?->id;
-        }
-
-        $slots[$i]['mapelTerpilih'] = (string) $mapelTerpilih;
-        $slots[$i]['paketTerpilih'] = (string) $paketTerpilih;
-    }
 @endphp
 
 <div class="space-y-4">
@@ -53,86 +54,63 @@
         </label>
     </div>
 
-    @foreach ($slots as $slot)
-        <div class="rounded-lg border border-slate-200 p-4">
-            <h2 class="mb-3 text-sm font-semibold text-ink">{{ $slot['label'] }}</h2>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label class="block">
-                    <span class="label">Mapel</span>
-                    <select name="{{ $slot['mapel'] }}" class="select mapel-slot" data-paket-sel="{{ $slot['paketSel'] }}" required>
-                        @foreach ($mapels as $mapel)
-                            <option value="{{ $mapel->id }}" data-tingkat="{{ $mapel->tingkat }}"
-                                @selected($slot['mapelTerpilih'] === (string) $mapel->id)>
-                                {{ $mapel->nama }} · {{ $mapel->tingkat === 'all' ? 'Semua' : $mapel->tingkat }}
-                            </option>
-                        @endforeach
-                    </select>
-                </label>
+    @foreach ($kelompok as $grup)
+        @if ($grup['mapels']->isNotEmpty())
+            <section class="rounded-lg border border-slate-200 p-4">
+                <h2 class="text-sm font-semibold text-ink">{{ $grup['label'] }}</h2>
 
-                <label class="block">
-                    <span class="label">Paket Soal</span>
-                    <select name="{{ $slot['paket'] }}" id="{{ $slot['paketSel'] }}" class="select paket-sel" required>
-                        @foreach ($paketSoals as $paketSoal)
-                            <option value="{{ $paketSoal->id }}" data-mapel="{{ $paketSoal->mapel_id }}" data-tingkat="{{ $paketSoal->mapel?->tingkat }}"
-                                @selected($slot['paketTerpilih'] === (string) $paketSoal->id)>
-                                {{ $paketSoal->nama_paket }}
-                            </option>
-                        @endforeach
-                    </select>
-                </label>
-            </div>
-        </div>
+                <div class="mt-3 space-y-3">
+                    @foreach ($grup['mapels'] as $mapel)
+                        @php
+                            $opsi = $paketPerMapel->get($mapel->getKey()) ?? collect();
+                            $terpilih = $isian[$mapel->getKey()] ?? $opsi->first()?->id;
+                            $terpilih = filled($terpilih) ? (string) $terpilih : '';
+                        @endphp
+
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
+                            <div>
+                                <p class="label">{{ $mapel->nama }}</p>
+                                <p class="text-xs text-slate-500">
+                                    {{ $mapel->tingkat === 'all' ? 'Semua' : $mapel->tingkat }} ·
+                                    {{ $mapel->is_pkk ? 'PKK' : ($mapel->jenis === Mapel::JENIS_PILIHAN_KEJURUAN ? 'Kejuruan' : ($mapel->jenis === Mapel::JENIS_PILIHAN_UMUM ? 'Umum' : 'Wajib')) }}
+                                </p>
+                            </div>
+
+                            <div>
+                                @if ($opsi->isEmpty())
+                                    {{-- Baris ini tidak ikut disimpan: tanpa paket
+                                         soal tidak ada yang bisa dipilih, dan
+                                         mengharuskannya hanya mengunci form. --}}
+                                    <p class="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                                        Belum ada paket soal yang bisa dipakai.
+                                    </p>
+                                @else
+                                    <label class="block">
+                                        <span class="label">Paket Soal</span>
+                                        <select name="paket_soal[{{ $mapel->getKey() }}]" class="select" required>
+                                            <option value="">— pilih paket soal —</option>
+
+                                            @foreach ($opsi as $paketSoal)
+                                                <option value="{{ $paketSoal->getKey() }}"
+                                                    @selected($terpilih === (string) $paketSoal->getKey())>
+                                                    {{ $paketSoal->nama_paket }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </label>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+        @endif
     @endforeach
 
-    <p class="hint">SMK: minimal salah satu mapel pilihan harus berjenis pilihan_kejuruan atau berstatus PKK. Paket soal pada tiap slot otomatis difilter mengikuti mapel yang dipilih. Mapel ber-tingkat SMA juga dapat dipakai pada tryout SMK.</p>
+    <p class="hint">
+        Seluruh mapel pada tingkat ini ikut masuk paket, dan peserta nanti memilih
+        sendiri dua mapel pilihan yang ia kerjakan. SMK: minimal satu mapel pilihan
+        berjenis pilihan_kejuruan atau berstatus PKK. Mapel ber-tingkat SMA juga
+        dapat dipakai pada tryout SMK.
+    </p>
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const tingkatSelect = document.getElementById('tingkat-select');
-
-        function cocokTingkat(optionTingkat) {
-            const tingkat = tingkatSelect.value;
-            return optionTingkat === tingkat || optionTingkat === 'all'
-                || (tingkat === 'SMK' && optionTingkat === 'SMA');
-        }
-
-        function filterOpsiDenganTingkat() {
-            document.querySelectorAll('.mapel-slot option, .paket-sel option').forEach(function (option) {
-                option.hidden = !cocokTingkat(option.dataset.tingkat);
-            });
-        }
-
-        function filterPaketPerMapel(mapelSelect) {
-            const paketSelect = document.getElementById(mapelSelect.dataset.paketSel);
-            const mapelId = mapelSelect.value;
-            let terbaruTampak = null;
-
-            paketSelect.querySelectorAll('option').forEach(function (option) {
-                const cocok = cocokTingkat(option.dataset.tingkat) && (mapelId === '' || option.dataset.mapel === mapelId);
-                option.hidden = !cocok;
-                if (cocok && terbaruTampak === null) terbaruTampak = option;
-            });
-
-            // Daftar menurun dari server, jadi opsi tampak pertama = paket
-            // terbaru milik mapel itu. Dipakai hanya bila pilihan sekarang
-            // gugur oleh saringan — pilihan tersimpan tidak diganti.
-            const terpilih = paketSelect.selectedOptions[0];
-            if (terbaruTampak && (!terpilih || terpilih.hidden)) {
-                paketSelect.value = terbaruTampak.value;
-            }
-        }
-
-        document.querySelectorAll('.mapel-slot').forEach(function (select) {
-            select.addEventListener('change', function () { filterPaketPerMapel(select); });
-        });
-
-        tingkatSelect.addEventListener('change', function () {
-            filterOpsiDenganTingkat();
-            document.querySelectorAll('.mapel-slot').forEach(filterPaketPerMapel);
-        });
-
-        filterOpsiDenganTingkat();
-        document.querySelectorAll('.mapel-slot').forEach(filterPaketPerMapel);
-    });
-</script>

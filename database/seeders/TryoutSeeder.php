@@ -15,10 +15,15 @@ use RuntimeException;
 /**
  * Menyiapkan paket tryout yang bisa langsung dikerjakan peserta.
  *
- * Satu paket tryout sah butuh lima paket soal di lima mapel berbeda, dan tiap
- * paket soal minimal berisi satu soal. Database yang berisi hanya sebagian
- * mapel belum tentu memenuhi syarat itu, karena itu seeder ini melengkapi
- * kompetensi dasar dan soal yang masih kosong sebelum merangkai slotnya.
+ * Satu paket tryout kini memuat seluruh mapel yang layak — tingkatnya cocok
+ * dan bukan SD/SMP — dengan satu paket soal per mapel, dan tiap paket soal
+ * minimal berisi satu soal. Peserta nanti memilih sendiri dua mapel pilihan
+ * di antaranya, jadi tugas seeder hanya menjamin tidak ada mapel yang
+ * kehilangan paket.
+ *
+ * Database yang berisi hanya sebagian mapel belum tentu memenuhi syarat itu,
+ * karena itu seeder ini melengkapi kompetensi dasar dan soal yang masih kosong
+ * sebelum merangkai isinya.
  *
  * Jalankan: php artisan db:seed --class=TryoutSeeder
  */
@@ -42,30 +47,27 @@ class TryoutSeeder extends Seeder
     {
         $mapels = $this->pilihMapel();
 
-        $slotPaket = array_map(
-            fn (Mapel $mapel): int => $this->paketSoalUntuk($mapel)->getKey(),
-            $mapels
+        $paketTryout = PaketTryout::updateOrCreate(
+            ['nama_paket' => self::NAMA_TRYOUT],
+            [
+                'deskripsi' => 'Paket tryout uji coba untuk memvalidasi alur pengerjaan Fase 6.',
+                'tingkat' => self::TINGKAT,
+                'batas_waktu_menit' => self::WAKTU_MENIT,
+                'created_by' => $this->adminId(),
+            ]
         );
 
-        $atribut = [
-            'deskripsi' => 'Paket tryout uji coba untuk memvalidasi alur pengerjaan Fase 6.',
-            'tingkat' => self::TINGKAT,
-            'batas_waktu_menit' => self::WAKTU_MENIT,
-            'created_by' => $this->adminId(),
-        ];
+        $paketPerMapel = collect($mapels)->mapWithKeys(fn (Mapel $mapel): array => [
+            $mapel->getKey() => $this->paketSoalUntuk($mapel)->getKey(),
+        ]);
 
-        foreach (PaketTryout::SLOT as $index => $slot) {
-            $atribut[$slot['mapel']] = $mapels[$index]->getKey();
-            $atribut[$slot['paket']] = $slotPaket[$index];
-        }
-
-        PaketTryout::updateOrCreate(['nama_paket' => self::NAMA_TRYOUT], $atribut);
+        $paketTryout->susunIsiMapel($paketPerMapel->all());
     }
 
     /**
-     * Slot mapel dipilih agar aturan SMK tetap terpenuhi: minimal satu mapel
-     * pilihan berjenis pilihan kejuruan atau berstatus PKK, dan tingkat mapel
-     * harus cocok dengan tingkat tryout.
+     * Seluruh mapel yang layak masuk paket tryout: SD/SMP bukan sasaran dan
+     * tingkatnya harus cocok. Tidak ada lagi seleksi menjadi lima slot, karena
+     * pesertalah yang memilih dua mapel pilihan di antara mereka.
      *
      * @return array<int, Mapel>
      */
@@ -74,35 +76,39 @@ class TryoutSeeder extends Seeder
         $kandidat = Mapel::query()
             ->whereNull('deleted_at')
             ->whereIn('tingkat', [self::TINGKAT, Mapel::TINGKAT_SMA, Mapel::TINGKAT_ALL])
-            ->orderBy('id')
+            ->orderBy('kode')
             ->get();
 
-        $wajib = $kandidat
-            ->where('jenis', Mapel::JENIS_WAJIB)
-            ->take(3)
+        $pilihan = $kandidat
+            ->filter(fn (Mapel $mapel): bool => $mapel->jenis !== Mapel::JENIS_WAJIB)
             ->values();
 
-        if ($wajib->count() < 3) {
-            $wajib = $kandidat->take(3)->values();
-        }
-
-        $sisa = $kandidat->whereNotIn('id', $wajib->pluck('id'))->values();
-
-        $kejuruan = $sisa
-            ->filter(fn (Mapel $mapel): bool => $mapel->jenis === Mapel::JENIS_PILIHAN_KEJURUAN || $mapel->is_pkk)
-            ->values();
-
-        $pilihan1 = $kejuruan->first() ?? $sisa->first();
-        $pilihan2 = $sisa->firstWhere('id', '!=', $pilihan1?->getKey());
-
-        if ($pilihan1 === null || $pilihan2 === null) {
+        if ($kandidat->count() < 3) {
             throw new RuntimeException(
-                'TryoutSeeder membutuhkan minimal 5 mapel hidup dengan tingkat yang cocok, termasuk satu mapel '
-                .'pilihan_kejuruan atau berstatus PKK untuk aturan SMK.'
+                'TryoutSeeder membutuhkan minimal 3 mapel hidup dengan tingkat yang cocok.'
             );
         }
 
-        return [...$wajib->all(), $pilihan1, $pilihan2];
+        if ($pilihan->count() < 2) {
+            throw new RuntimeException(
+                'TryoutSeeder membutuhkan minimal 2 mapel pilihan dengan tingkat yang cocok, '
+                .'karena peserta wajib memilih dua di antaranya.'
+            );
+        }
+
+        if (! $pilihan->contains(fn (Mapel $mapel): bool => $this->apakahKejuruan($mapel))) {
+            throw new RuntimeException(
+                'Untuk tingkat SMK, TryoutSeeder membutuhkan minimal satu mapel pilihan '
+                .'berjenis pilihan_kejuruan atau berstatus PKK.'
+            );
+        }
+
+        return $kandidat->all();
+    }
+
+    private function apakahKejuruan(Mapel $mapel): bool
+    {
+        return $mapel->jenis === Mapel::JENIS_PILIHAN_KEJURUAN || $mapel->is_pkk;
     }
 
     /**

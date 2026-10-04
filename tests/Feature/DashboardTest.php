@@ -13,6 +13,20 @@ beforeEach(function () {
 });
 
 /**
+ * Gabungan seluruh kartu latihan pada dashboard.
+ *
+ * Pemeriksaan nama mapel dibatasi ke kartunya sendiri, karena kartu tryout
+ * terbaru kini menampilkan seluruh mapel milik paketnya — termasuk mapel yang
+ * tidak boleh ditawarkan halaman Latihan.
+ */
+function kartuLatihanDashboard(string $html): string
+{
+    preg_match_all('/<article[^>]*data-kartu-latihan[^>]*>.*?<\/article>/s', $html, $cocok);
+
+    return implode("\n", $cocok[0]);
+}
+
+/**
  * Satu percobaan yang dimulai pada hari tertentu, dihitung mundur dari hari
  * yang dibekukan. Streak dihitung per tanggal, jadi `waktu_mulai` satu-satunya
  * kolom yang perlu diatur.
@@ -125,7 +139,7 @@ it('dashboard menampilkan tryout terbaru yang belum diikuti beserta ajakan memul
         ->assertOk()
         ->assertSee('Tryout Mike Terbaru')
         ->assertSee('Belum kamu selesaikan')
-        ->assertSee(route('tryout.mulai', $terbaru), false)
+        ->assertSee(route('tryout.pilih', $terbaru), false)
         ->assertDontSee('Tryout Zulu Lama')
         ->assertDontSee('Tryout Fase 6 (uji coba)')
         ->assertDontSee(route('tryout.hasil', $terbaru), false);
@@ -150,7 +164,7 @@ it('dashboard menampilkan hasil peserta ketika tryout terbaru sudah diikuti', fu
         ->assertSee('547')
         ->assertSee(route('tryout.hasil', $terbaru), false)
         ->assertDontSee('Belum kamu selesaikan')
-        ->assertDontSee(route('tryout.mulai', $terbaru), false);
+        ->assertDontSee(route('tryout.pilih', $terbaru), false);
 });
 
 it('dashboard menampilkan keterangan kosong ketika belum ada paket tryout', function () {
@@ -164,7 +178,7 @@ it('dashboard menampilkan keterangan kosong ketika belum ada paket tryout', func
 
     expect($html)
         ->toContain('Belum ada paket tryout')
-        ->not->toContain('tryout/mulai')
+        ->not->toContain('tryout/pilih')
         ->not->toContain('tryout/hasil');
 });
 
@@ -195,7 +209,7 @@ it('kartu latihan hanya menawarkan mapel wajib dan mapel pilihan yang dipilih', 
     $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
 
     expect(substr_count($html, 'data-kartu-latihan'))->toBe(4)
-        ->and($html)
+        ->and(kartuLatihanDashboard($html))
         ->toContain('Matematika')
         ->toContain('Kimia')
         ->not->toContain('Fisika');
@@ -209,7 +223,7 @@ it('kartu latihan berhenti di mapel wajib ketika peserta belum memilih pilihan',
     $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
 
     expect(substr_count($html, 'data-kartu-latihan'))->toBe(3)
-        ->and($html)->not->toContain('Fisika');
+        ->and(kartuLatihanDashboard($html))->not->toContain('Fisika');
 });
 
 it('ketiga blok dashboard berbagi lebar yang sama dan grid latihan dua kolom', function () {

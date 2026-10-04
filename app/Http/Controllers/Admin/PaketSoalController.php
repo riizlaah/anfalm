@@ -78,12 +78,7 @@ class PaketSoalController extends Controller
     public function destroy(PaketSoal $paketSoal): RedirectResponse
     {
         $dipakai = PaketTryout::query()
-            ->where(fn (Builder $q) => $q
-                ->where('paket_soal_wajib_1_id', $paketSoal->getKey())
-                ->orWhere('paket_soal_wajib_2_id', $paketSoal->getKey())
-                ->orWhere('paket_soal_wajib_3_id', $paketSoal->getKey())
-                ->orWhere('paket_soal_pilihan_1_id', $paketSoal->getKey())
-                ->orWhere('paket_soal_pilihan_2_id', $paketSoal->getKey()))
+            ->whereHas('daftarMapel', fn (Builder $q) => $q->where('paket_soal_id', $paketSoal->getKey()))
             ->exists();
 
         if ($dipakai) {

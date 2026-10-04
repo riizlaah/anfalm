@@ -7,6 +7,9 @@ use App\Models\Percobaan;
 use App\Models\User;
 
 /**
+ * Payload form admin: satu peta `paket_soal[mapel_id] => paket_soal_id`
+ * berisi setiap mapel yang dibuat, persis seperti yang dikirim browser.
+ *
  * @return array{payload: array<string, mixed>, mapels: array<string, Mapel>, pakets: array<string, PaketSoal>}
  */
 function setupTryoutF4(string $tingkat = 'SMK', bool $pilihanPertamaKejuruan = true, ?string $mapelTingkat = null): array
@@ -24,37 +27,30 @@ function setupTryoutF4(string $tingkat = 'SMK', bool $pilihanPertamaKejuruan = t
     ];
 
     $pakets = [];
+    $paketPerMapel = [];
+
     foreach (['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'] as $slot) {
         $pakets[$slot] = paketSoalF4($mapels[$slot]);
+        $paketPerMapel[$mapels[$slot]->getKey()] = $pakets[$slot]->getKey();
     }
-
-    $slotMapel = [
-        'wajib1' => 'mapel_wajib_1',
-        'wajib2' => 'mapel_wajib_2',
-        'wajib3' => 'mapel_wajib_3',
-        'pilihan1' => 'mapel_pilihan_1',
-        'pilihan2' => 'mapel_pilihan_2',
-    ];
-    $slotPaket = [
-        'wajib1' => 'paket_soal_wajib_1_id',
-        'wajib2' => 'paket_soal_wajib_2_id',
-        'wajib3' => 'paket_soal_wajib_3_id',
-        'pilihan1' => 'paket_soal_pilihan_1_id',
-        'pilihan2' => 'paket_soal_pilihan_2_id',
-    ];
 
     $payload = [
         'nama_paket' => 'Tryout '.$tingkat.' '.fake()->word(),
         'deskripsi' => null,
         'tingkat' => $tingkat,
         'batas_waktu_menit' => 120,
+        'paket_soal' => $paketPerMapel,
     ];
-    foreach ($slotMapel as $slot => $field) {
-        $payload[$field] = $mapels[$slot]->id;
-        $payload[$slotPaket[$slot]] = $pakets[$slot]->id;
-    }
 
     return ['payload' => $payload, 'mapels' => $mapels, 'pakets' => $pakets];
+}
+
+/** Seluruh baris isi paket, dalam bentuk `mapel_id => paket_soal_id`. */
+function isiPaketTryoutAdmin(PaketTryout $paketTryout)
+{
+    return $paketTryout->daftarMapel()
+        ->pluck('paket_soal_id', 'mapel_id')
+        ->map(fn ($paketId): int => (int) $paketId);
 }
 
 it('tamu yang membuka /admin/paket-tryout dialihkan ke login', function () {
@@ -88,9 +84,9 @@ it('admin dapat membuat paket tryout SMK yang valid (kejuruan + umum)', function
         'nama_paket' => $data['payload']['nama_paket'],
         'tingkat' => 'SMK',
         'batas_waktu_menit' => 120,
-        'mapel_wajib_1' => $data['payload']['mapel_wajib_1'],
-        'mapel_pilihan_1' => $data['payload']['mapel_pilihan_1'],
     ]);
+
+    expect(PaketTryout::sole()->daftarMapel()->count())->toBe(5);
 });
 
 it('batas waktu default 120 menit saat dikosongkan', function () {
@@ -127,47 +123,69 @@ it('validasi paket tryout: field wajib', function () {
         ->assertSessionHasErrors([
             'nama_paket',
             'tingkat',
-            'mapel_wajib_1',
-            'mapel_wajib_2',
-            'mapel_wajib_3',
-            'mapel_pilihan_1',
-            'mapel_pilihan_2',
-            'paket_soal_wajib_1_id',
-            'paket_soal_wajib_2_id',
-            'paket_soal_wajib_3_id',
-            'paket_soal_pilihan_1_id',
-            'paket_soal_pilihan_2_id',
+            'paket_soal',
         ]);
 });
 
-it('mapel pilihan tidak boleh sama dengan mapel wajib', function () {
+it('tiap mapel tampil tepat sekali pada form paket tryout', function () {
     $admin = User::factory()->admin()->create();
     $data = setupTryoutF4();
-    $data['payload']['mapel_pilihan_1'] = $data['mapels']['wajib3']->id;
-    $data['payload']['paket_soal_pilihan_1_id'] = $data['pakets']['wajib3']->id;
 
-    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['mapel_pilihan_1']);
+    $html = $this->actingAs($admin)->get('/admin/paket-tryout/create')
+        ->assertOk()
+        ->getContent();
+
+    foreach ($data['mapels'] as $mapel) {
+        expect(substr_count($html, 'name="paket_soal['.$mapel->getKey().']"'))->toBe(1);
+    }
 });
 
-it('mapel pilihan 1 dan 2 tidak boleh sama', function () {
+it('menyunting ulang paket tryout tidak menggandakan baris mapelnya', function () {
     $admin = User::factory()->admin()->create();
     $data = setupTryoutF4();
-    $data['payload']['mapel_pilihan_2'] = $data['mapels']['pilihan1']->id;
-    $data['payload']['paket_soal_pilihan_2_id'] = $data['pakets']['pilihan1']->id;
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['mapel_pilihan_2']);
+        ->assertSessionHasNoErrors();
+
+    $paketTryout = PaketTryout::sole();
+
+    $this->actingAs($admin)->put(route('admin.paket-tryout.update', $paketTryout), $data['payload'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $tersimpan = isiPaketTryoutAdmin($paketTryout);
+
+    expect($tersimpan)->toHaveCount(5);
+
+    foreach (['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'] as $slot) {
+        expect($tersimpan->get($data['mapels'][$slot]->getKey()))
+            ->toBe($data['pakets'][$slot]->getKey());
+    }
 });
 
-it('mapel wajib tidak boleh berduplikasi', function () {
+it('baris mapel yang tidak lagi ditawarkan ikut dibuang saat disunting', function () {
     $admin = User::factory()->admin()->create();
     $data = setupTryoutF4();
-    $data['payload']['mapel_wajib_2'] = $data['mapels']['wajib1']->id;
-    $data['payload']['paket_soal_wajib_2_id'] = $data['pakets']['wajib1']->id;
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['mapel_wajib_2']);
+        ->assertSessionHasNoErrors();
+
+    $paketTryout = PaketTryout::sole();
+
+    // Mapel berpindah sasaran ke SD, sehingga berhenti ditawarkan form dan
+    // barisnya harus ikut terbuang, bukan ditinggal sebagai sisa.
+    $dibuang = $data['mapels']['wajib3'];
+    $dibuang->update(['tingkat' => Mapel::TINGKAT_SD]);
+    unset($data['payload']['paket_soal'][$dibuang->getKey()]);
+
+    $this->actingAs($admin)->put(route('admin.paket-tryout.update', $paketTryout), $data['payload'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $tersimpan = isiPaketTryoutAdmin($paketTryout);
+
+    expect($tersimpan)->toHaveCount(4)
+        ->and($tersimpan->has($dibuang->getKey()))->toBeFalse();
 });
 
 it('tryout SMK tanpa pilihan kejuruan/PKK ditolak', function () {
@@ -175,7 +193,7 @@ it('tryout SMK tanpa pilihan kejuruan/PKK ditolak', function () {
     $data = setupTryoutF4('SMK', false);
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['mapel_pilihan_1']);
+        ->assertSessionHasErrors(['paket_soal']);
 });
 
 it('tryout SMK dengan dua pilihan kejuruan sah', function () {
@@ -185,10 +203,10 @@ it('tryout SMK dengan dua pilihan kejuruan sah', function () {
         ->state(['jenis' => Mapel::JENIS_PILIHAN_KEJURUAN])
         ->create(['tingkat' => 'SMK']);
     $paket2Kejuruan = paketSoalF4($pilihan2Kejuruan);
-    $data['payload']['mapel_pilihan_2'] = $pilihan2Kejuruan->id;
-    $data['payload']['paket_soal_pilihan_2_id'] = $paket2Kejuruan->id;
+    $data['payload']['paket_soal'][$pilihan2Kejuruan->getKey()] = $paket2Kejuruan->getKey();
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasNoErrors()
         ->assertRedirect(route('admin.paket-tryout.index'));
 });
 
@@ -215,8 +233,10 @@ it('tryout SMK dapat memakai mapel ber-tingkat SMA (satu arah)', function () {
     $this->assertDatabaseHas('paket_tryout', [
         'nama_paket' => $data['payload']['nama_paket'],
         'tingkat' => 'SMK',
-        'mapel_wajib_1' => $data['payload']['mapel_wajib_1'],
     ]);
+
+    expect(isiPaketTryoutAdmin(PaketTryout::sole())->get($data['mapels']['wajib1']->getKey()))
+        ->toBe($data['pakets']['wajib1']->getKey());
 });
 
 it('mapel ber-tingkat SMK ditolak pada tryout SMA', function () {
@@ -224,7 +244,9 @@ it('mapel ber-tingkat SMK ditolak pada tryout SMA', function () {
     $data = setupTryoutF4('SMA', false, 'SMK');
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['mapel_wajib_1']);
+        ->assertSessionHasErrors([
+            'paket_soal.'.$data['mapels']['wajib1']->getKey(),
+        ]);
 });
 
 it('mapel ber-tingkat all dapat dipakai pada tryout SMK', function () {
@@ -240,36 +262,53 @@ it('mapel ber-tingkat all dapat dipakai pada tryout SMK', function () {
     ]);
 });
 
-it('paket soal pada slot harus berasal dari mapel yang sama dengan slot', function () {
+it('menolak paket soal yang sudah tidak ada lagi', function () {
     $admin = User::factory()->admin()->create();
     $data = setupTryoutF4();
-    $data['payload']['paket_soal_pilihan_1_id'] = $data['pakets']['wajib1']->id;
+    $dihapus = paketSoalF4($data['mapels']['pilihan2']);
+    $dihapus->soal()->detach();
+    $dihapus->delete();
+
+    $data['payload']['paket_soal'][$data['mapels']['pilihan2']->getKey()] = $dihapus->getKey();
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['paket_soal_pilihan_1_id']);
+        ->assertSessionHasErrors([
+            'paket_soal.'.$data['mapels']['pilihan2']->getKey(),
+        ]);
+
+    expect(PaketTryout::count())->toBe(0);
 });
 
 it('paket soal tanpa soal ditolak (minimal 1 soal per mapel)', function () {
     $admin = User::factory()->admin()->create();
     $data = setupTryoutF4();
     $paketKosong = PaketSoal::factory()->create(['mapel_id' => $data['mapels']['pilihan2']->id]);
-    $data['payload']['paket_soal_pilihan_2_id'] = $paketKosong->id;
+    $data['payload']['paket_soal'][$data['mapels']['pilihan2']->getKey()] = $paketKosong->getKey();
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
-        ->assertSessionHasErrors(['paket_soal_pilihan_2_id']);
+        ->assertSessionHasErrors([
+            'paket_soal.'.$data['mapels']['pilihan2']->getKey(),
+        ]);
 });
 
 it('validasi berlaku juga saat mengedit paket tryout', function () {
     $admin = User::factory()->admin()->create();
-    $existing = PaketTryout::factory()->create();
-    $data = setupTryoutF4('SMK', false);
+    $data = setupTryoutF4();
 
-    $this->actingAs($admin)->put("/admin/paket-tryout/{$existing->id}", $data['payload'])
-        ->assertSessionHasErrors(['mapel_pilihan_1']);
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasNoErrors();
+
+    $paketTryout = PaketTryout::sole();
+    $payload = $data['payload'];
+    $payload['nama_paket'] = 'Tidak boleh tersimpan';
+    unset($payload['paket_soal'][$data['mapels']['wajib3']->getKey()]);
+
+    $this->actingAs($admin)->put(route('admin.paket-tryout.update', $paketTryout), $payload)
+        ->assertSessionHasErrors(['paket_soal.'.$data['mapels']['wajib3']->getKey()]);
 
     $this->assertDatabaseHas('paket_tryout', [
-        'id' => $existing->id,
-        'nama_paket' => $existing->nama_paket,
+        'id' => $paketTryout->id,
+        'nama_paket' => $data['payload']['nama_paket'],
     ]);
 });
 
@@ -387,15 +426,19 @@ it('form paket tryout tidak menawarkan mapel ber-tingkat SD atau SMP', function 
 });
 
 /**
- * Posisi `selected` pada opsi paket soal — opsi punya `value` lalu
- * `data-mapel`, sehingga keduanya dipakai bersama supaya tidak tertuker
- * dengan opsi `mapel` yang `value`-nya bisa sama.
+ * Posisi `selected` pada opsi paket soal — dicari di dalam `<select>`
+ * milik mapel itu lebih dulu, supaya opsi paket milik mapel lain tidak
+ * ikut terbaca.
  */
 function opsiPaketTerpilih(string $html, int $paketId, int $mapelId): bool
 {
+    if (preg_match('/<select\b[^>]*name="paket_soal\['.$mapelId.'\]".*?<\/select>/s', $html, $blok) !== 1) {
+        return false;
+    }
+
     return preg_match(
-        '/<option\b[^>]*\bvalue="'.$paketId.'"[^>]*\bdata-mapel="'.$mapelId.'"[^>]*\bselected\b/',
-        $html
+        '/<option\b[^>]*\bvalue="'.$paketId.'"[^>]*\bselected\b/',
+        $blok[0]
     ) === 1;
 }
 
@@ -404,7 +447,7 @@ function urutOpsiPaket(string $html, int ...$paketIds): array
 {
     $posisi = [];
     foreach ($paketIds as $id) {
-        $posisi[$id] = strpos($html, 'value="'.$id.'" data-mapel=');
+        $posisi[$id] = strpos($html, '<option value="'.$id.'"');
     }
 
     return $posisi;
@@ -424,7 +467,7 @@ it('paket soal default ke paket terbaru milik mapel yang dipilih slot itu', func
     expect(opsiPaketTerpilih($html, $baru->id, $mapel->id))->toBeTrue()
         ->and(opsiPaketTerpilih($html, $lama->id, $mapel->id))->toBeFalse();
 
-    // Urutan menurun supaya saringan di sisi klien ikut memilih yang terbaru.
+    // Urutan menurun supaya keputusan bawaan baris jatuh ke paket terbaru.
     $urut = urutOpsiPaket($html, $lama->id, $baru->id);
     expect($urut[$baru->id])->toBeLessThan($urut[$lama->id]);
 });
@@ -447,4 +490,98 @@ it('form edit mempertahankan paket soal yang tersimpan meski bukan yang terbaru'
 
     expect(opsiPaketTerpilih($html, $tersimpan->id, $mapelWajib1->id))->toBeTrue()
         ->and(opsiPaketTerpilih($html, $lebihBaru->id, $mapelWajib1->id))->toBeFalse();
+});
+
+it('form paket tryout mengelompokkan mapel wajib dan pilihan tanpa dropdown mapel', function () {
+    $admin = User::factory()->admin()->create();
+
+    $dibuat = [];
+
+    foreach ([
+        ['WJA', Mapel::JENIS_WAJIB, Mapel::TINGKAT_SMA],
+        ['WJB', Mapel::JENIS_WAJIB, Mapel::TINGKAT_SMA],
+        ['PSA', Mapel::JENIS_PILIHAN_UMUM, Mapel::TINGKAT_SMA],
+        ['PSK', Mapel::JENIS_PILIHAN_UMUM, Mapel::TINGKAT_SMK],
+    ] as [$kode, $jenis, $tingkat]) {
+        $dibuat[] = Mapel::factory()->create([
+            'kode' => $kode,
+            'jenis' => $jenis,
+            'tingkat' => $tingkat,
+            'is_pkk' => false,
+        ]);
+    }
+
+    // Tiap mapel punya daftar paket soal miliknya sendiri; tanpa itu barisnya
+    // justru tampil sebagai keterangan dan tidak punya dropdown.
+    foreach ($dibuat as $mapel) {
+        paketSoalF4($mapel);
+    }
+
+    $html = $this->actingAs($admin)->get('/admin/paket-tryout/create')
+        ->assertOk()
+        ->getContent();
+
+    expect($html)
+        ->not->toMatch('/<select[^>]*name="mapel_/')
+        ->not->toMatch('/name="mapel_wajib_/')
+        ->and($html)->toContain('Mapel wajib')
+        ->and($html)->toContain('Mapel pilihan · SMA')
+        ->and($html)->toContain('Mapel pilihan · SMK');
+
+    // Tiap mapel punya daftar paket soal miliknya sendiri, bukan satu daftar
+    // bersama yang disaring menurut mapel terpilih.
+    foreach (Mapel::query()->whereNull('deleted_at')->whereNotIn('tingkat', [Mapel::TINGKAT_SD, Mapel::TINGKAT_SMP])->pluck('id') as $mapelId) {
+        expect($html)->toMatch('/<select[^>]*name="paket_soal\['.$mapelId.'\]"/');
+    }
+});
+
+it('menyimpan satu paket soal untuk setiap mapel yang ditawarkan', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $tersimpan = isiPaketTryoutAdmin(PaketTryout::sole());
+
+    expect($tersimpan)->toHaveCount(5);
+
+    foreach (['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'] as $slot) {
+        expect($tersimpan->get($data['mapels'][$slot]->getKey()))
+            ->toBe($data['pakets'][$slot]->getKey());
+    }
+});
+
+it('menolak penyimpanan ketika ada mapel berpaket soal yang belum dipilih', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+    unset($data['payload']['paket_soal'][$data['mapels']['wajib2']->getKey()]);
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasErrors(['paket_soal.'.$data['mapels']['wajib2']->getKey()]);
+
+    expect(PaketTryout::count())->toBe(0);
+});
+
+it('menolak mapel yang tidak ditawarkan pada form', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+    $sd = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SD]);
+    $data['payload']['paket_soal'][$sd->getKey()] = paketSoalF4($sd)->getKey();
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasErrors(['paket_soal.'.$sd->getKey()]);
+
+    expect(PaketTryout::count())->toBe(0);
+});
+
+it('paket soal pada satu baris harus milik mapel baris itu', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+    $mapel = $data['mapels']['pilihan2'];
+    $data['payload']['paket_soal'][$mapel->getKey()] = $data['pakets']['wajib1']->getKey();
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasErrors(['paket_soal.'.$mapel->getKey()]);
 });

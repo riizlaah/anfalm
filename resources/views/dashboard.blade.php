@@ -61,13 +61,7 @@
                             muncul begitu admin menerbitkan paketnya.
                         </p>
                     @else
-                        @php($namaMapel = collect([
-                            $paketTryout->wajib1,
-                            $paketTryout->wajib2,
-                            $paketTryout->wajib3,
-                            $paketTryout->pilihan1,
-                            $paketTryout->pilihan2,
-                        ])->filter()->pluck('nama')->implode(', '))
+                        @php($namaMapel = $paketTryout->namaMapel())
 
                         <h2 class="mt-1 text-lg font-semibold text-ink">{{ $paketTryout->nama_paket }}</h2>
 
@@ -106,15 +100,12 @@
                         @if ($hasil === null)
                             {{--
                                 Tombol yang sama dengan halaman daftar tryout,
-                                untuk kondisi yang sama pula: `mulai()` mengembalikan
-                                percobaan yang sedang berjalan bila sudah ada, jadi
+                                untuk kondisi yang sama pula: `pilih()` memeriksa
+                                percobaan yang masih berjalan lebih dulu, jadi
                                 peserta yang setengah mengerjakan justru langsung
-                                dibawa melanjutkan, bukan diberi pesan galat.
+                                dibawa melanjutkan, bukan diminta memilih ulang.
                             --}}
-                            <form method="POST" action="{{ route('tryout.mulai', $paketTryout) }}">
-                                @csrf
-                                <button type="submit" class="btn btn-primary">Mulai Tryout</button>
-                            </form>
+                            <a href="{{ route('tryout.pilih', $paketTryout) }}" class="btn btn-primary">Mulai Tryout</a>
                         @else
                             <a href="{{ route('tryout.hasil', $paketTryout) }}" class="btn btn-primary">Lihat hasil</a>
                         @endif

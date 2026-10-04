@@ -20,15 +20,7 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @forelse ($paketTryouts as $paketTryout)
-                    @php
-                        $namaMapel = collect([
-                            $paketTryout->wajib1,
-                            $paketTryout->wajib2,
-                            $paketTryout->wajib3,
-                            $paketTryout->pilihan1,
-                            $paketTryout->pilihan2,
-                        ])->filter()->pluck('nama')->implode(', ');
-                    @endphp
+                    @php($namaMapel = $paketTryout->namaMapel())
                     <tr>
                         <td class="px-4 py-3 font-medium text-ink">{{ $paketTryout->nama_paket }}</td>
                         <td class="px-4 py-3">{{ $paketTryout->labelTingkat() }}</td>

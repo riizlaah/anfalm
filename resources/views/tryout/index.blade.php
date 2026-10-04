@@ -6,14 +6,6 @@
     <div class="mt-5 space-y-4">
         @forelse ($paketTryouts as $paketTryout)
             @php
-                $namaMapel = collect([
-                    $paketTryout->wajib1,
-                    $paketTryout->wajib2,
-                    $paketTryout->wajib3,
-                    $paketTryout->pilihan1,
-                    $paketTryout->pilihan2,
-                ])->filter()->pluck('nama')->implode(', ');
-
                 $adaHasil = $sudahDinilai->has($paketTryout->getKey());
                 $masihBerjalan = $berjalan->has($paketTryout->getKey());
             @endphp
@@ -33,7 +25,7 @@
                         <p class="mt-2 text-xs text-slate-500">
                             Tingkat {{ $paketTryout->labelTingkat() }} ·
                             {{ $paketTryout->batas_waktu_menit }} menit ·
-                            {{ $namaMapel }}
+                            {{ $paketTryout->namaMapel() }}
                         </p>
                     </div>
 
@@ -50,10 +42,9 @@
 
                             <a href="{{ route('tryout.kerja', $paketTryout) }}" class="btn btn-primary">Lanjutkan Tryout</a>
                         @else
-                            <form method="POST" action="{{ route('tryout.mulai', $paketTryout) }}">
-                                @csrf
-                                <button type="submit" class="btn btn-primary">Mulai Tryout</button>
-                            </form>
+                            {{-- Peserta memilih sendiri dua mapel pilihan pada
+                                 halaman berikutnya sebelum percobaan dibuat. --}}
+                            <a href="{{ route('tryout.pilih', $paketTryout) }}" class="btn btn-primary">Mulai Tryout</a>
                         @endif
                     </div>
                 </div>

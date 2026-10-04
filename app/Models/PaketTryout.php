@@ -5,7 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PaketTryout extends Model
 {
@@ -26,33 +29,7 @@ class PaketTryout extends Model
         'deskripsi',
         'tingkat',
         'batas_waktu_menit',
-        'mapel_wajib_1',
-        'mapel_wajib_2',
-        'mapel_wajib_3',
-        'mapel_pilihan_1',
-        'mapel_pilihan_2',
-        'paket_soal_wajib_1_id',
-        'paket_soal_wajib_2_id',
-        'paket_soal_wajib_3_id',
-        'paket_soal_pilihan_1_id',
-        'paket_soal_pilihan_2_id',
         'created_by',
-    ];
-
-    /**
-     * Slot mapel dan paket soal yang berpasangan, menurut urutan mapel
-     * dikerjakan oleh peserta. Semua tempat yang membaca slot (validasi,
-     * seeder, dan penyusunan soal percobaan) memakai daftar ini agar tidak
-     * ada yang tertinggal ketika urutan slot berubah.
-     *
-     * @var array<int, array{mapel: string, paket: string}>
-     */
-    public const SLOT = [
-        ['mapel' => 'mapel_wajib_1', 'paket' => 'paket_soal_wajib_1_id'],
-        ['mapel' => 'mapel_wajib_2', 'paket' => 'paket_soal_wajib_2_id'],
-        ['mapel' => 'mapel_wajib_3', 'paket' => 'paket_soal_wajib_3_id'],
-        ['mapel' => 'mapel_pilihan_1', 'paket' => 'paket_soal_pilihan_1_id'],
-        ['mapel' => 'mapel_pilihan_2', 'paket' => 'paket_soal_pilihan_2_id'],
     ];
 
     public function created_by_user(): BelongsTo
@@ -60,54 +37,72 @@ class PaketTryout extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function wajib1(): BelongsTo
+    /**
+     * Seluruh mapel yang masuk paket ini beserta paket soalnya — satu baris
+     * per mapel, bukan lima slot tetap, sehingga jumlahnya mengikuti katalog.
+     */
+    public function daftarMapel(): HasMany
     {
-        return $this->belongsTo(Mapel::class, 'mapel_wajib_1');
+        return $this->hasMany(PaketTryoutMapel::class);
     }
 
-    public function wajib2(): BelongsTo
+    /**
+     * Isi paket terurut seperti peserta mengerjakannya: seluruh mapel wajib
+     * dahulu menurut kode mapel, baru mapel pilihan menurut kode mapel.
+     *
+     * Relasinya ikut dimuat di sini supaya penyusunan ulang tidak menambah
+     * query per baris pada halaman daftar dan kartu tryout.
+     *
+     * @return Collection<int, PaketTryoutMapel>
+     */
+    public function daftarMapelUrut(): Collection
     {
-        return $this->belongsTo(Mapel::class, 'mapel_wajib_2');
+        $isi = $this->daftarMapel->loadMissing('mapel')->filter(
+            fn (PaketTryoutMapel $baris): bool => $baris->mapel !== null
+        );
+
+        $urut = fn (Collection $baris): Collection => $baris
+            ->sortBy(fn (PaketTryoutMapel $baris): string => $baris->mapel->kode)
+            ->values();
+
+        $wajib = $urut($isi->filter(
+            fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis === Mapel::JENIS_WAJIB
+        ));
+        $pilihan = $urut($isi->filter(
+            fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis !== Mapel::JENIS_WAJIB
+        ));
+
+        return $wajib->concat($pilihan);
     }
 
-    public function wajib3(): BelongsTo
+    /**
+     * Nama seluruh mapel pada paket ini, dipisah koma — dipakai kartu dan
+     * tabel daftar tryout yang hanya perlu ikhtisar, bukan perinciannya.
+     */
+    public function namaMapel(): string
     {
-        return $this->belongsTo(Mapel::class, 'mapel_wajib_3');
+        return $this->daftarMapelUrut()->pluck('mapel.nama')->implode(', ');
     }
 
-    public function pilihan1(): BelongsTo
+    /**
+     * Menyusun ulang isi paket: satu baris per mapel dengan paket soalnya.
+     *
+     * @param  array<int|string, int|string>  $paketPerMapel  peta `mapel_id` => `paket_soal_id`
+     */
+    public function susunIsiMapel(array $paketPerMapel): void
     {
-        return $this->belongsTo(Mapel::class, 'mapel_pilihan_1');
-    }
+        DB::transaction(function () use ($paketPerMapel): void {
+            $this->daftarMapel()
+                ->whereNotIn('mapel_id', array_map('intval', array_keys($paketPerMapel)))
+                ->delete();
 
-    public function pilihan2(): BelongsTo
-    {
-        return $this->belongsTo(Mapel::class, 'mapel_pilihan_2');
-    }
-
-    public function soalWajib1(): BelongsTo
-    {
-        return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_1_id');
-    }
-
-    public function soalWajib2(): BelongsTo
-    {
-        return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_2_id');
-    }
-
-    public function soalWajib3(): BelongsTo
-    {
-        return $this->belongsTo(PaketSoal::class, 'paket_soal_wajib_3_id');
-    }
-
-    public function soalPilihan1(): BelongsTo
-    {
-        return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_1_id');
-    }
-
-    public function soalPilihan2(): BelongsTo
-    {
-        return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_2_id');
+            foreach ($paketPerMapel as $mapelId => $paketSoalId) {
+                $this->daftarMapel()->updateOrCreate(
+                    ['mapel_id' => (int) $mapelId],
+                    ['paket_soal_id' => (int) $paketSoalId],
+                );
+            }
+        });
     }
 
     /**
@@ -121,13 +116,5 @@ class PaketTryout extends Model
             self::TINGKAT_SMA, self::TINGKAT_SMK => 'SMA/SMK/Sederajat',
             default => (string) $this->tingkat,
         };
-    }
-
-    public function getSemuaMapelIdsAttribute(): array
-    {
-        return array_filter([
-            $this->mapel_wajib_1, $this->mapel_wajib_2, $this->mapel_wajib_3,
-            $this->mapel_pilihan_1, $this->mapel_pilihan_2,
-        ]);
     }
 }

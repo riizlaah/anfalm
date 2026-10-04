@@ -23,17 +23,32 @@ class PaketTryoutFactory extends Factory
             'deskripsi' => fake()->sentence(),
             'tingkat' => 'SMK',
             'batas_waktu_menit' => 120,
-            'mapel_wajib_1' => Mapel::factory()->wajib(),
-            'mapel_wajib_2' => Mapel::factory()->wajib(),
-            'mapel_wajib_3' => Mapel::factory()->wajib(),
-            'mapel_pilihan_1' => Mapel::factory()->pkk(),
-            'mapel_pilihan_2' => Mapel::factory()->pilihanUmum(),
-            'paket_soal_wajib_1_id' => PaketSoal::factory(),
-            'paket_soal_wajib_2_id' => PaketSoal::factory(),
-            'paket_soal_wajib_3_id' => PaketSoal::factory(),
-            'paket_soal_pilihan_1_id' => PaketSoal::factory(),
-            'paket_soal_pilihan_2_id' => PaketSoal::factory(),
             'created_by' => null,
         ];
+    }
+
+    /**
+     * Isinya disusun setelah barisnya ada, persis seperti yang dilakukan form
+     * admin: satu baris per mapel beserta paket soal miliknya. Tiga mapel
+     * wajib, satu PKK, dan satu pilihan umum — komposisi yang membuat paket
+     * ini selalu punya pasangan mapel pilihan untuk dipilih peserta.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (PaketTryout $paketTryout): void {
+            $paketPerMapel = collect([
+                Mapel::factory()->wajib()->create(),
+                Mapel::factory()->wajib()->create(),
+                Mapel::factory()->wajib()->create(),
+                Mapel::factory()->pkk()->create(),
+                Mapel::factory()->pilihanUmum()->create(),
+            ])->mapWithKeys(fn (Mapel $mapel): array => [
+                $mapel->getKey() => PaketSoal::factory()
+                    ->create(['mapel_id' => $mapel->getKey()])
+                    ->getKey(),
+            ]);
+
+            $paketTryout->susunIsiMapel($paketPerMapel->all());
+        });
     }
 }
