@@ -31,7 +31,7 @@
                         @endif
 
                         <p class="mt-2 text-xs text-slate-500">
-                            Tingkat {{ $paketTryout->tingkat }} ·
+                            Tingkat {{ $paketTryout->labelTingkat() }} ·
                             {{ $paketTryout->batas_waktu_menit }} menit ·
                             {{ $namaMapel }}
                         </p>

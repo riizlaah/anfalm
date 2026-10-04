@@ -30,6 +30,15 @@ it('menampilkan daftar paket tryout yang tersedia', function () {
         ->assertSee($paket->nama_paket);
 });
 
+it('daftar tryout menampilkan tingkat sebagai SMA/SMK/Sederajat', function () {
+    PaketTryout::firstOrFail();
+
+    $this->actingAs(User::factory()->peserta()->create())
+        ->get(route('tryout.index'))
+        ->assertOk()
+        ->assertSee('Tingkat SMA/SMK/Sederajat');
+});
+
 it('tetap menampilkan daftar tryout selama ada latihan yang belum selesai', function () {
     $peserta = User::factory()->peserta()->create();
     $mapel = Mapel::query()->whereNull('deleted_at')->orderBy('id')->firstOrFail();

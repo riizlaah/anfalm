@@ -259,3 +259,15 @@ it('index mapel tidak lagi menampilkan tombol Hapus Semua', function () {
         ->assertDontSee('Hapus Semua')
         ->assertSee('Hapus Terpilih');
 });
+
+it('form mapel tidak lagi menawarkan tingkat SD dan SMP', function () {
+    $admin = User::factory()->admin()->create();
+
+    $html = $this->actingAs($admin)->get('/admin/mapel')->assertOk()->getContent();
+
+    expect($html)
+        ->not->toMatch('/<option value="SD"/')
+        ->not->toMatch('/<option value="SMP"/')
+        ->toMatch('/<option value="SMA"/')
+        ->toMatch('/<option value="SMK"/');
+});

@@ -31,7 +31,7 @@
                     @endphp
                     <tr>
                         <td class="px-4 py-3 font-medium text-ink">{{ $paketTryout->nama_paket }}</td>
-                        <td class="px-4 py-3">{{ $paketTryout->tingkat }}</td>
+                        <td class="px-4 py-3">{{ $paketTryout->labelTingkat() }}</td>
                         <td class="px-4 py-3">{{ $paketTryout->batas_waktu_menit }} menit</td>
                         <td class="px-4 py-3 text-slate-600">{{ \Illuminate\Support\Str::limit($namaMapel, 80) }}</td>
                         <td class="px-4 py-3">

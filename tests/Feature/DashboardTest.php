@@ -292,3 +292,11 @@ it('dashboard tidak menampilkan kartu latihan di admin', function () {
 
     expect($html)->not->toContain('data-kartu-latihan');
 });
+
+it('kartu paket tryout di dashboard menampilkan tingkat SMA/SMK/Sederajat', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Tingkat SMA/SMK/Sederajat');
+});

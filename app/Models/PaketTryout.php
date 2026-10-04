@@ -110,6 +110,19 @@ class PaketTryout extends Model
         return $this->belongsTo(PaketSoal::class, 'paket_soal_pilihan_2_id');
     }
 
+    /**
+     * Label tingkat untuk ditampilkan. Tingkat SMA dan SMK kini menyatu
+     * sebagai satu sasaran, sehingga keduanya ditulis sama; nilai yang
+     * tersimpan di kolom tetap tidak diubah.
+     */
+    public function labelTingkat(): string
+    {
+        return match ($this->tingkat) {
+            self::TINGKAT_SMA, self::TINGKAT_SMK => 'SMA/SMK/Sederajat',
+            default => (string) $this->tingkat,
+        };
+    }
+
     public function getSemuaMapelIdsAttribute(): array
     {
         return array_filter([

@@ -16,9 +16,14 @@
     <x-textarea label="Deskripsi" name="deskripsi" :value="$paketTryout?->deskripsi" />
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <x-select label="Tingkat" name="tingkat" id="tingkat-select" required
-            :options="['SD' => 'SD', 'SMP' => 'SMP', 'SMA' => 'SMA', 'SMK' => 'SMK']"
-            :value="old('tingkat', $paketTryout?->tingkat ?? 'SMK')" />
+        <label class="block">
+            <span class="label">Tingkat</span>
+            {{-- Sasaran paket tryout sudah menyatu, jadi tingkat bukan pilihan
+                 yang bisa diubah. Nilai lama tetap terkirim apa adanya. --}}
+            <input type="hidden" name="tingkat" id="tingkat-select"
+                value="{{ old('tingkat', $paketTryout?->tingkat ?? \App\Models\PaketTryout::TINGKAT_SMK) }}">
+            <p class="input cursor-default bg-slate-50 text-slate-600">SMA/SMK/Sederajat</p>
+        </label>
 
         <label class="block">
             <span class="label">Batas Waktu (menit)</span>

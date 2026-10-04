@@ -12,6 +12,7 @@ use App\Models\RiwayatPengerjaan;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator as ValidatorFacade;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -29,7 +30,7 @@ class PaketTryoutController extends Controller
 
     public function create(): View
     {
-        $mapels = Mapel::orderBy('kode')->get();
+        $mapels = $this->mapelsUntukForm();
         $paketSoals = PaketSoal::with('mapel')->orderBy('nama_paket')->get();
 
         return view('admin.paket-tryout.create', compact('mapels', 'paketSoals'));
@@ -51,7 +52,7 @@ class PaketTryoutController extends Controller
 
     public function edit(PaketTryout $paketTryout): View
     {
-        $mapels = Mapel::orderBy('kode')->get();
+        $mapels = $this->mapelsUntukForm();
         $paketSoals = PaketSoal::with('mapel')->orderBy('nama_paket')->get();
 
         return view('admin.paket-tryout.edit', compact('paketTryout', 'mapels', 'paketSoals'));
@@ -85,6 +86,20 @@ class PaketTryoutController extends Controller
 
         return redirect()->route('admin.paket-tryout.index')
             ->with('success', 'Paket tryout berhasil dihapus.');
+    }
+
+    /**
+     * Mapel yang ditawarkan pada form paket tryout. SD/SMP bukan lagi sasaran
+     * aplikasi, jadi keduanya tidak ditawarkan — jumlahnya nol di basis data,
+     * sehingga tidak ada baris yang tersingkir.
+     *
+     * @return Collection<int, Mapel>
+     */
+    private function mapelsUntukForm(): Collection
+    {
+        return Mapel::orderBy('kode')
+            ->whereNotIn('tingkat', [Mapel::TINGKAT_SD, Mapel::TINGKAT_SMP])
+            ->get();
     }
 
     /**

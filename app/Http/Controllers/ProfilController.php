@@ -36,14 +36,12 @@ class ProfilController extends Controller
     public const MAKS_PILIHAN = 2;
 
     /**
-     * Opsi tingkat pada form, sama dengan nilai yang bisa dimiliki kolom
-     * `users.tingkat`.
+     * Opsi tingkat yang ditawarkan pada form peserta. Sasaran aplikasi kini
+     * SMA/SMK/Sederajat, sehingga SD/SMP berhenti ditawarkan di sini.
      *
      * @var array<int, string>
      */
     public const TINGKAT_OPSI = [
-        Mapel::TINGKAT_SD,
-        Mapel::TINGKAT_SMP,
         Mapel::TINGKAT_SMA,
         Mapel::TINGKAT_SMK,
     ];

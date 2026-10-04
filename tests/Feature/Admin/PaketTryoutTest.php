@@ -313,3 +313,75 @@ it('paket tryout dengan percobaan diblokir dari hapus', function () {
 
     $this->assertNotSoftDeleted('paket_tryout', ['id' => $paketTryout->id]);
 });
+
+it('form paket tryout menampilkan tingkat sebagai keterangan, bukan pilihan', function () {
+    $admin = User::factory()->admin()->create();
+
+    $html = $this->actingAs($admin)->get('/admin/paket-tryout/create')
+        ->assertOk()
+        ->assertSee('SMA/SMK/Sederajat')
+        ->getContent();
+
+    expect($html)
+        ->toMatch('/type="hidden"[^>]*name="tingkat"[^>]*value="SMK"/')
+        ->not->toMatch('/<select[^>]*name="tingkat"/');
+});
+
+it('mengedit paket tryout mempertahankan tingkat SMA yang tersimpan', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4('SMA', false);
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $paketTryout = PaketTryout::where('nama_paket', $data['payload']['nama_paket'])->sole();
+
+    $html = $this->actingAs($admin)->get(route('admin.paket-tryout.edit', $paketTryout))
+        ->assertOk()
+        ->assertSee('SMA/SMK/Sederajat')
+        ->getContent();
+
+    expect($html)->toMatch('/type="hidden"[^>]*name="tingkat"[^>]*value="SMA"/');
+
+    $this->actingAs($admin)->put(route('admin.paket-tryout.update', $paketTryout), $data['payload'])
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $this->assertDatabaseHas('paket_tryout', [
+        'id' => $paketTryout->getKey(),
+        'tingkat' => 'SMA',
+    ]);
+});
+
+it('index paket tryout menampilkan tingkat sebagai SMA/SMK/Sederajat', function () {
+    $admin = User::factory()->admin()->create();
+    PaketTryout::factory()->create(['tingkat' => PaketTryout::TINGKAT_SMA]);
+
+    $this->actingAs($admin)->get('/admin/paket-tryout')
+        ->assertOk()
+        ->assertSee('SMA/SMK/Sederajat');
+});
+
+it('form paket tryout tidak menawarkan mapel ber-tingkat SD atau SMP', function () {
+    $admin = User::factory()->admin()->create();
+    $sd = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SD]);
+    $smp = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SMP]);
+    $smk = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SMK]);
+
+    $tertawakan = function ($mapels) use ($sd, $smp, $smk) {
+        $ids = $mapels->pluck('id');
+
+        return ! $ids->contains($sd->id)
+            && ! $ids->contains($smp->id)
+            && $ids->contains($smk->id);
+    };
+
+    $this->actingAs($admin)->get('/admin/paket-tryout/create')
+        ->assertOk()
+        ->assertViewHas('mapels', $tertawakan);
+
+    $paketTryout = PaketTryout::factory()->create();
+
+    $this->actingAs($admin)->get(route('admin.paket-tryout.edit', $paketTryout))
+        ->assertOk()
+        ->assertViewHas('mapels', $tertawakan);
+});

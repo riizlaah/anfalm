@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ProfilController;
 use App\Http\Middleware\EnsureSingleSession;
 use App\Models\Mapel;
 use App\Models\PaketTryout;
@@ -269,4 +270,15 @@ it('ganti kata sandi menolak sandi baru yang terlalu pendek atau tanpa konfirmas
 
     expect($peserta->refresh()->password)->toBe($hashLama)
         ->and($peserta->session_token)->toBe($tokenLama);
+});
+
+it('profil tidak lagi menawarkan tingkat SD dan SMP', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $html = $this->actingAs($peserta)->get(route('profil.show'))->assertOk()->getContent();
+
+    expect(ProfilController::TINGKAT_OPSI)->toBe(['SMA', 'SMK'])
+        ->and($html)
+        ->not->toMatch('/<option value="SD"/')
+        ->not->toMatch('/<option value="SMP"/');
 });

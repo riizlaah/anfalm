@@ -17,7 +17,7 @@
     <div class="mt-5 flex flex-wrap items-end justify-between gap-3">
         <form method="GET" action="{{ route('admin.mapel.index') }}" class="flex flex-wrap items-end gap-3">
             <x-select label="Tingkat" name="tingkat" :value="request('tingkat')" empty-option="Semua"
-                :options="['SD' => 'SD', 'SMP' => 'SMP', 'SMA' => 'SMA', 'SMK' => 'SMK', 'all' => 'Semua']"
+                :options="['SMA' => 'SMA', 'SMK' => 'SMK', 'all' => 'Semua']"
                 onchange="this.form.submit()" />
 
             <x-select label="Jenis" name="jenis" :value="request('jenis')" empty-option="Semua"
@@ -110,7 +110,7 @@
             <x-input label="Nama" name="nama" :value="$isi('create-mapel', 'nama')" required maxlength="100" />
 
             <x-select label="Tingkat" name="tingkat" :value="$isi('create-mapel', 'tingkat')" required
-                :options="['SD' => 'SD', 'SMP' => 'SMP', 'SMA' => 'SMA', 'SMK' => 'SMK', 'all' => 'Semua']" />
+                :options="['SMA' => 'SMA', 'SMK' => 'SMK', 'all' => 'Semua']" />
 
             <x-select label="Jenis" name="jenis" :value="$isi('create-mapel', 'jenis')" required
                 :options="['wajib' => 'Wajib', 'pilihan_umum' => 'Pilihan Umum', 'pilihan_kejuruan' => 'Pilihan Kejuruan']" />
@@ -142,7 +142,7 @@
                 <x-input label="Nama" name="nama" :value="$isi($dialogId, 'nama', $mapel->nama)" required maxlength="100" />
 
                 <x-select label="Tingkat" name="tingkat" :value="$isi($dialogId, 'tingkat', $mapel->tingkat)" required
-                    :options="['SD' => 'SD', 'SMP' => 'SMP', 'SMA' => 'SMA', 'SMK' => 'SMK', 'all' => 'Semua']" />
+                    :options="['SMA' => 'SMA', 'SMK' => 'SMK', 'all' => 'Semua']" />
 
                 <x-select label="Jenis" name="jenis" :value="$isi($dialogId, 'jenis', $mapel->jenis)" required
                     :options="['wajib' => 'Wajib', 'pilihan_umum' => 'Pilihan Umum', 'pilihan_kejuruan' => 'Pilihan Kejuruan']" />
