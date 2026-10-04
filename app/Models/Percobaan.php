@@ -35,6 +35,7 @@ class Percobaan extends Model
         'posisi_soal',
         'urutan_mapel',
         'waktu_mulai',
+        'mulai_mapel',
         'waktu_selesai',
         'durasi_detik',
     ];
@@ -49,6 +50,7 @@ class Percobaan extends Model
             'batas_waktu_menit' => 'integer',
             'durasi_detik' => 'integer',
             'waktu_mulai' => 'datetime',
+            'mulai_mapel' => 'datetime',
             'waktu_selesai' => 'datetime',
         ];
     }

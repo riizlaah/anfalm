@@ -28,7 +28,6 @@ class PaketTryout extends Model
         'nama_paket',
         'deskripsi',
         'tingkat',
-        'batas_waktu_menit',
         'created_by',
     ];
 
@@ -85,21 +84,28 @@ class PaketTryout extends Model
     }
 
     /**
-     * Menyusun ulang isi paket: satu baris per mapel dengan paket soalnya.
+     * Menyusun ulang isi paket: satu baris per mapel, lengkap dengan paket
+     * soal yang dipakainya beserta batas waktu mengerjakan baris itu.
      *
-     * @param  array<int|string, int|string>  $paketPerMapel  peta `mapel_id` => `paket_soal_id`
+     * @param  array<int|string, array{paket_soal_id: int|string, menit: int|string}>  $isiPerMapel
+     *                                                                                               peta `mapel_id` => isian barisnya
      */
-    public function susunIsiMapel(array $paketPerMapel): void
+    public function susunIsiMapel(array $isiPerMapel): void
     {
-        DB::transaction(function () use ($paketPerMapel): void {
+        $barisDipakai = array_map('intval', array_keys($isiPerMapel));
+
+        DB::transaction(function () use ($isiPerMapel, $barisDipakai): void {
             $this->daftarMapel()
-                ->whereNotIn('mapel_id', array_map('intval', array_keys($paketPerMapel)))
+                ->whereNotIn('mapel_id', $barisDipakai)
                 ->delete();
 
-            foreach ($paketPerMapel as $mapelId => $paketSoalId) {
+            foreach ($isiPerMapel as $mapelId => $isi) {
                 $this->daftarMapel()->updateOrCreate(
                     ['mapel_id' => (int) $mapelId],
-                    ['paket_soal_id' => (int) $paketSoalId],
+                    [
+                        'paket_soal_id' => (int) $isi['paket_soal_id'],
+                        'menit' => (int) $isi['menit'],
+                    ],
                 );
             }
         });
@@ -116,5 +122,50 @@ class PaketTryout extends Model
             self::TINGKAT_SMA, self::TINGKAT_SMK => 'SMA/SMK/Sederajat',
             default => (string) $this->tingkat,
         };
+    }
+
+    /**
+     * Waktu pengerjaan untuk ditampilkan — batas tiap mapel, bukan satu angka
+     * untuk seluruh tryout. Bila seluruh baris sepakat satu angka, ditulis
+     * ringkas "75 menit per mapel"; kalau berbeda, dipisah per jenis mapelnya.
+     */
+    public function labelWaktuPerMapel(): string
+    {
+        $isi = $this->daftarMapelUrut();
+
+        if ($isi->isEmpty()) {
+            return '—';
+        }
+
+        $sekali = $isi->pluck('menit')->unique()->sort()->values();
+
+        if ($sekali->count() === 1) {
+            return $sekali->first().' menit per mapel';
+        }
+
+        $wajib = $this->menitTerpakai(
+            $isi->filter(fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis === Mapel::JENIS_WAJIB)
+        );
+        $pilihan = $this->menitTerpakai(
+            $isi->filter(fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis !== Mapel::JENIS_WAJIB)
+        );
+
+        $bagian = array_filter([
+            $wajib === '' ? null : $wajib.' menit wajib',
+            $pilihan === '' ? null : $pilihan.' menit pilihan',
+        ]);
+
+        return implode(' · ', $bagian);
+    }
+
+    /**
+     * Angka menit unik pada sekelompok baris, terurut naik dan dipisah garis
+     * miring supaya campuran nilai tetap terbaca ("75/90").
+     *
+     * @param  Collection<int, PaketTryoutMapel>  $baris
+     */
+    private function menitTerpakai(Collection $baris): string
+    {
+        return $baris->pluck('menit')->unique()->sort()->values()->implode('/');
     }
 }

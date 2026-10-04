@@ -420,7 +420,10 @@ it('menutup latihan sendiri saat batas waktu sudah terlampaui', function () {
     ]);
 
     $percobaan = Percobaan::sole();
-    $percobaan->update(['waktu_mulai' => now()->subMinutes(15)]);
+    // Latihan hanya punya satu mapel, jadi awal percobaan dan awal
+    // hitung mundurnya sama.
+    $mulaiLama = now()->subMinutes(15);
+    $percobaan->update(['waktu_mulai' => $mulaiLama, 'mulai_mapel' => $mulaiLama]);
 
     // Peserta kembali setelah tutup: halaman tidak menampilkan soal lagi.
     $this->actingAs($peserta)
@@ -443,7 +446,8 @@ it('menyimpan jawaban yang telat lalu tetap menutup latihan', function () {
     ]);
 
     $percobaan = Percobaan::sole();
-    $percobaan->update(['waktu_mulai' => now()->subMinutes(15)]);
+    $mulaiLama = now()->subMinutes(15);
+    $percobaan->update(['waktu_mulai' => $mulaiLama, 'mulai_mapel' => $mulaiLama]);
 
     $aktif = soalMapelAktif($percobaan);
 

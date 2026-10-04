@@ -24,7 +24,7 @@
 
                         <p class="mt-2 text-xs text-slate-500">
                             Tingkat {{ $paketTryout->labelTingkat() }} ·
-                            {{ $paketTryout->batas_waktu_menit }} menit ·
+                            {{ $paketTryout->labelWaktuPerMapel() }} ·
                             {{ $paketTryout->namaMapel() }}
                         </p>
                     </div>

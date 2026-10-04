@@ -161,6 +161,20 @@ it('melempar error yang jelas ketika mapel tidak mencukupi', function () {
         ->toThrow(RuntimeException::class, 'minimal 2 mapel pilihan');
 });
 
+it('memberi batas waktu 75 menit pada mapel wajib dan 60 menit pada mapel pilihan', function () {
+    $this->seed();
+
+    $isi = isiPaketTryout(PaketTryout::firstOrFail());
+
+    $wajib = $isi->filter(fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis === Mapel::JENIS_WAJIB);
+    $pilihan = $isi->filter(fn (PaketTryoutMapel $baris): bool => $baris->mapel->jenis !== Mapel::JENIS_WAJIB);
+
+    expect($wajib)->not->toBeEmpty()
+        ->and($pilihan)->not->toBeEmpty()
+        ->and($wajib->pluck('menit')->unique()->values()->all())->toBe([75])
+        ->and($pilihan->pluck('menit')->unique()->values()->all())->toBe([60]);
+});
+
 it('nilai hasil seeder lolos validasi yang sama dengan form admin', function () {
     $this->seed();
 
@@ -171,7 +185,9 @@ it('nilai hasil seeder lolos validasi yang sama dengan form admin', function () 
         'nama_paket' => 'Percobaan simpan ulang hasil seeder',
         'deskripsi' => 'Memastikan aturan seeder tidak berbeda dengan aturan controller.',
         'tingkat' => $paketTryout->tingkat,
-        'batas_waktu_menit' => $paketTryout->batas_waktu_menit,
+        'menit' => $isi->mapWithKeys(
+            fn ($baris) => [(int) $baris->mapel_id => (int) $baris->menit]
+        )->all(),
         'paket_soal' => $isi->mapWithKeys(
             fn ($baris) => [(int) $baris->mapel_id => (int) $baris->paket_soal_id]
         )->all(),

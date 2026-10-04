@@ -7,6 +7,7 @@ use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
+use App\Models\PaketTryoutMapel;
 use App\Models\Soal;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -33,8 +34,6 @@ class TryoutSeeder extends Seeder
 
     private const TINGKAT = PaketTryout::TINGKAT_SMK;
 
-    private const WAKTU_MENIT = 120;
-
     private const SOAL_PER_PAKET = 6;
 
     private const TIPE_SOAL = [
@@ -52,16 +51,18 @@ class TryoutSeeder extends Seeder
             [
                 'deskripsi' => 'Paket tryout uji coba untuk memvalidasi alur pengerjaan Fase 6.',
                 'tingkat' => self::TINGKAT,
-                'batas_waktu_menit' => self::WAKTU_MENIT,
                 'created_by' => $this->adminId(),
             ]
         );
 
-        $paketPerMapel = collect($mapels)->mapWithKeys(fn (Mapel $mapel): array => [
-            $mapel->getKey() => $this->paketSoalUntuk($mapel)->getKey(),
+        $isiPerMapel = collect($mapels)->mapWithKeys(fn (Mapel $mapel): array => [
+            $mapel->getKey() => [
+                'paket_soal_id' => $this->paketSoalUntuk($mapel)->getKey(),
+                'menit' => PaketTryoutMapel::menitBawaan($mapel->jenis),
+            ],
         ]);
 
-        $paketTryout->susunIsiMapel($paketPerMapel->all());
+        $paketTryout->susunIsiMapel($isiPerMapel->all());
     }
 
     /**

@@ -6,7 +6,7 @@
     <div class="card mt-5 max-w-3xl space-y-5 p-6">
         <p class="text-sm text-slate-600">
             {{ $paketTryout->nama_paket }} ·
-            {{ $paketTryout->batas_waktu_menit }} menit ·
+            {{ $paketTryout->labelWaktuPerMapel() }} ·
             Tingkat {{ $paketTryout->labelTingkat() }}
         </p>
 

@@ -9,6 +9,7 @@ use App\Models\HasilTryout;
 use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\PaketTryout;
+use App\Models\PaketTryoutMapel;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
@@ -113,7 +114,7 @@ class PercobaanService
             $berjalan = $this->cariAktif($paket, $user, true);
 
             if ($berjalan !== null) {
-                return $ulang ? $this->kosongkan($berjalan) : $berjalan;
+                return $ulang ? $this->kosongkan($berjalan, $paket) : $berjalan;
             }
 
             $daftarSoal = $this->susunDaftarSoal($paket, $pilihanMapelIds);
@@ -127,14 +128,36 @@ class PercobaanService
                 'jenis' => Percobaan::JENIS_TRYOUT,
                 'paket_tryout_id' => $paket->getKey(),
                 'jumlah_soal' => array_sum(array_map(fn (array $grup): int => count($grup['soal_ids']), $daftarSoal)),
-                'batas_waktu_menit' => $paket->batas_waktu_menit,
+                'batas_waktu_menit' => $this->menitBaris(
+                    (int) $paket->getKey(),
+                    (int) ($daftarSoal[0]['mapel_id'] ?? 0)
+                ),
                 'status' => Percobaan::STATUS_BERJALAN,
                 'daftar_soal' => $daftarSoal,
                 'urutan_mapel' => 0,
                 'posisi_soal' => 0,
                 'waktu_mulai' => now(),
+                'mulai_mapel' => now(),
             ]);
         });
+    }
+
+    /**
+     * Batas waktu sebuah baris mapel pada paket tryout — diambil dari barisnya
+     * sendiri, bukan dari satu angka milik paket, karena tiap mapel kini punya
+     * batas waktu pengerjaannya sendiri (2b).
+     *
+     * Bila barisnya tidak ada, dipakai batas bawaan mapel wajib supaya
+     * percobaan tidak pernah kehilangan hitung mundurnya.
+     */
+    private function menitBaris(int $paketTryoutId, int $mapelId): int
+    {
+        $menit = PaketTryoutMapel::query()
+            ->where('paket_tryout_id', $paketTryoutId)
+            ->where('mapel_id', $mapelId)
+            ->value('menit');
+
+        return $menit !== null ? (int) $menit : PaketTryoutMapel::MENIT_WAJIB;
     }
 
     /**
@@ -143,7 +166,7 @@ class PercobaanService
      * `daftar_soal` sengaja dibiarkan: urutan soal hanya diacak sekali per
      * percobaan, bukan pada tiap percobaan ulang.
      */
-    private function kosongkan(Percobaan $percobaan): Percobaan
+    private function kosongkan(Percobaan $percobaan, PaketTryout $paket): Percobaan
     {
         $percobaan->riwayatPengerjaan()->delete();
 
@@ -152,6 +175,11 @@ class PercobaanService
             'urutan_mapel' => 0,
             'posisi_soal' => 0,
             'waktu_mulai' => now(),
+            'mulai_mapel' => now(),
+            'batas_waktu_menit' => $this->menitBaris(
+                (int) $paket->getKey(),
+                (int) ($percobaan->daftar_soal[0]['mapel_id'] ?? 0)
+            ),
             'waktu_selesai' => null,
             'durasi_detik' => null,
         ]);
@@ -211,6 +239,7 @@ class PercobaanService
             'urutan_mapel' => 0,
             'posisi_soal' => 0,
             'waktu_mulai' => now(),
+            'mulai_mapel' => now(),
         ]);
     }
 
@@ -320,27 +349,44 @@ class PercobaanService
             return false;
         }
 
-        $percobaan->update(['urutan_mapel' => $posisi + 1]);
+        $grupBerikut = $percobaan->daftar_soal[$posisi + 1];
+
+        $percobaan->update([
+            'urutan_mapel' => $posisi + 1,
+            // Hitung mundur berjalan ulang dari nol untuk mapel baru ini,
+            // dengan batas menit milik baris mapelnya sendiri.
+            'mulai_mapel' => now(),
+            'batas_waktu_menit' => $this->menitBaris(
+                (int) $percobaan->paket_tryout_id,
+                (int) ($grupBerikut['mapel_id'] ?? 0)
+            ),
+        ]);
 
         return true;
     }
 
     /**
-     * Batas waktu sudah terlampaui.
+     * Batas waktu mapel yang sedang dibuka sudah terlampaui.
      *
      * Aplikasi tidak punya scheduler, jadi penutupan percobaan bergantung pada
      * request. Tiap masuk ke halaman pengerjaan atau mengirim jawaban,
-     * kondisi ini dicek lebih dulu sehingga tryout tetap terkumpul walau
+     * kondisi ini dicek lebih dulu supaya percobaan tetap tertutup walau
      * peserta menutup browser di tengah jalan.
+     *
+     * Acuannya `mulai_mapel` — saat mapel ini mulai dihitung — karena tiap
+     * pindah mapel waktunya diulang; baris yang belum punya nilai (percobaan
+     * lama) jatuh ke `waktu_mulai`.
      */
     public function kadaluarsa(Percobaan $percobaan): bool
     {
-        if ($percobaan->batas_waktu_menit === null || $percobaan->waktu_mulai === null) {
+        $mulai = $percobaan->mulai_mapel ?? $percobaan->waktu_mulai;
+
+        if ($percobaan->batas_waktu_menit === null || $mulai === null) {
             return false;
         }
 
         return now()->greaterThanOrEqualTo(
-            $percobaan->waktu_mulai->copy()->addMinutes($percobaan->batas_waktu_menit)
+            $mulai->copy()->addMinutes($percobaan->batas_waktu_menit)
         );
     }
 
@@ -789,19 +835,50 @@ class PercobaanService
     }
 
     /**
-     * Durasi pengerjaan dalam detik, tidak pernah melewati batas waktu paket
-     * agar peserta yang terlambat mengumpulkan tidak keunggulan di leaderboard.
+     * Durasi pengerjaan dalam detik, tidak pernah melewati total menit seluruh
+     * mapel yang dikerjakan agar peserta yang terlambat mengumpulkan tidak
+     * memperoleh keunggulan di leaderboard.
+     *
+     * Pagunya kini dijumlahkan per mapel, bukan satu angka milik paket: karena
+     * waktunya dihitung ulang tiap pindah mapel, pagu yang sah bagi satu
+     * percobaan adalah jumlah waktu yang memang tersedia padanya.
      */
     private function hitungDurasi(Percobaan $percobaan, DateTimeInterface $selesaiPada): int
     {
         $mulai = $percobaan->waktu_mulai ?? $selesaiPada;
         $durasi = max(0, (int) round($mulai->diffInSeconds($selesaiPada)));
 
-        if ($percobaan->batas_waktu_menit !== null) {
-            $durasi = min($durasi, (int) $percobaan->batas_waktu_menit * 60);
+        $pagu = $this->totalMenitPercobaan($percobaan);
+
+        if ($pagu !== null) {
+            $durasi = min($durasi, $pagu * 60);
         }
 
         return $durasi;
+    }
+
+    /**
+     * Pagu durasi sebuah percobaan dalam menit: jumlah batas waktu tiap baris
+     * mapel yang memang dikerjakannya.
+     *
+     * Latihan tidak punya baris tryout, jadi pagunya tetap satu angka
+     * `batas_waktu_menit` milik percobaan itu. Mengembalikan `null` bila
+     * tidak ada pagu yang bisa dipakai.
+     */
+    private function totalMenitPercobaan(Percobaan $percobaan): ?int
+    {
+        if ($percobaan->paket_tryout_id === null) {
+            return $percobaan->batas_waktu_menit;
+        }
+
+        $mapelIds = collect($percobaan->daftar_soal ?? [])->pluck('mapel_id');
+
+        $total = (int) PaketTryoutMapel::query()
+            ->where('paket_tryout_id', $percobaan->paket_tryout_id)
+            ->whereIn('mapel_id', $mapelIds)
+            ->sum('menit');
+
+        return $total > 0 ? $total : $percobaan->batas_waktu_menit;
     }
 
     /**

@@ -121,8 +121,14 @@ class TryoutController extends Controller
             return $this->alihkanSetelahTidakAktif($request, $paketTryout);
         }
 
-        // Waktu habis: tutup dulu sebelum halaman sempat menampilkan soal lagi.
+        // Waktu mapel habis: baris ini dianggap terkunci dengan jawaban yang
+        // sudah ada, lalu peserta langsung dibawa ke mapel berikutnya.
+        // Percobaan baru ditutup pada mapel terakhir.
         if ($this->percobaan->kadaluarsa($percobaan)) {
+            if ($this->percobaan->lanjut($percobaan)) {
+                return redirect()->route('tryout.kerja', $paketTryout);
+            }
+
             $this->percobaan->akhirkan($percobaan);
 
             return redirect()->route('tryout.hasil', $paketTryout);
@@ -174,8 +180,13 @@ class TryoutController extends Controller
 
     /**
      * Menyimpan jawaban mapel yang sedang dikerjakan lalu maju ke mapel
-     * berikutnya. Pada mapel terakhir, atau bila peserta meminta selesai
-     * (auto-submit saat waktu habis), percobaan ditutup dan hasil dihitung.
+     * berikutnya.
+     *
+     * `aksi` masih divalidasi karena form pengerjaan dipakai bersama dengan
+     * latihan, tetapi ia tidak lagi menentukan kapan percobaan ditutup: batas
+     * waktu kini menempel per mapel, jadi apa pun pemicunya — tombol pindah
+     * mapel maupun auto-submit hitung mundur — mapel yang habis dikunci dan
+     * percobaan hanya ditutup pada mapel terakhir.
      */
     public function jawab(Request $request, PaketTryout $paketTryout): RedirectResponse
     {
@@ -191,13 +202,11 @@ class TryoutController extends Controller
 
         $this->percobaan->simpanJawaban($percobaan, (array) $request->input('jawaban', []));
 
-        // Jawaban yang masuk tetap tersimpan walau terlambat, lalu percobaan
-        // ditutup; penilaian memakai jawaban yang sudah ada saja.
-        $adaMapelBerikut = ! $this->percobaan->kadaluarsa($percobaan)
-            && $request->input('aksi', 'lanjut') === 'lanjut'
-            && $this->percobaan->lanjut($percobaan);
-
-        if ($adaMapelBerikut) {
+        // Jawaban yang masuk tetap tersimpan walau terlambat; mapel ini lalu
+        // dikunci dan peserta dibuka ke mapel berikutnya dengan hitung mundur
+        // yang baru. Bila tidak ada lagi mapel, barulah percobaan ditutup dan
+        // hasilnya dihitung dari jawaban yang sudah ada saja.
+        if ($this->percobaan->lanjut($percobaan)) {
             return redirect()->route('tryout.kerja', $paketTryout);
         }
 

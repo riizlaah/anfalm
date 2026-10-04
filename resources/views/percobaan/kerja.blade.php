@@ -17,8 +17,12 @@
 --}}
 <x-layouts.app :title="$title" :tabbar="false">
     @php
-        $batasAkhir = $percobaan->batas_waktu_menit !== null && $percobaan->waktu_mulai !== null
-            ? $percobaan->waktu_mulai->copy()->addMinutes($percobaan->batas_waktu_menit)
+        // Acuannya awal mapel ini dimulai, bukan awal percobaan, karena
+        // hitung mundur diulang tiap kali peserta pindah mapel (2b).
+        $mulaiMapel = $percobaan->mulai_mapel ?? $percobaan->waktu_mulai;
+
+        $batasAkhir = $percobaan->batas_waktu_menit !== null && $mulaiMapel !== null
+            ? $mulaiMapel->copy()->addMinutes($percobaan->batas_waktu_menit)
             : null;
 
         // Pakai jawaban yang tadi dikirim ulang bila ada error validasi, kalau
@@ -187,8 +191,8 @@
                 return String(n).padStart(2, '0');
             }
 
-            // Hitung mundur global. Basisnya waktu mulai di server, jadi muat
-            // ulang halaman tidak mengulang waktu dari nol.
+            // Hitung mundur global. Basisnya waktu mulai mapel di server,
+            // jadi muat ulang halaman tidak mengulang waktu dari nol.
             const hitungMundur = document.getElementById('hitung-mundur');
 
             if (hitungMundur) {

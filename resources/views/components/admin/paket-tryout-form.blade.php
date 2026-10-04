@@ -1,5 +1,6 @@
 @use('App\Models\Mapel')
 @use('App\Models\PaketSoal')
+@use('App\Models\PaketTryoutMapel')
 
 @props(['paketTryout' => null, 'mapels' => [], 'paketSoals' => []])
 
@@ -15,6 +16,13 @@
     $isianTersimpan = collect($paketTryout?->daftarMapel)
         ->mapWithKeys(fn ($baris) => [(int) $baris->mapel_id => (int) $baris->paket_soal_id]);
     $isian = old('paket_soal', $isianTersimpan->all());
+
+    // Batas waktu juga menempel di baris, bukan di paketnya: 75 menit untuk
+    // mapel wajib dan 60 menit untuk pilihan adalah nilai bawaan yang hanya
+    // dipakai ketika belum pernah disunting.
+    $menitTersimpan = collect($paketTryout?->daftarMapel)
+        ->mapWithKeys(fn ($baris) => [(int) $baris->mapel_id => (int) $baris->menit]);
+    $menit = old('menit', $menitTersimpan->all());
 
     $paketPerMapel = $paketSoals->groupBy(fn (PaketSoal $paketSoal) => (int) $paketSoal->mapel_id);
 
@@ -37,20 +45,14 @@
 
     <x-textarea label="Deskripsi" name="deskripsi" :value="$paketTryout?->deskripsi" />
 
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <label class="block">
+    <div>
+        <label class="block max-w-sm">
             <span class="label">Tingkat</span>
             {{-- Sasaran paket tryout sudah menyatu, jadi tingkat bukan pilihan
                  yang bisa diubah. Nilai lama tetap terkirim apa adanya. --}}
             <input type="hidden" name="tingkat" id="tingkat-select"
                 value="{{ old('tingkat', $paketTryout?->tingkat ?? \App\Models\PaketTryout::TINGKAT_SMK) }}">
             <p class="input cursor-default bg-slate-50 text-slate-600">SMA/SMK/Sederajat</p>
-        </label>
-
-        <label class="block">
-            <span class="label">Batas Waktu (menit)</span>
-            <input type="number" name="batas_waktu_menit" min="1" class="input"
-                value="{{ old('batas_waktu_menit', $paketTryout?->batas_waktu_menit ?? 120) }}">
         </label>
     </div>
 
@@ -85,19 +87,32 @@
                                         Belum ada paket soal yang bisa dipakai.
                                     </p>
                                 @else
-                                    <label class="block">
-                                        <span class="label">Paket Soal</span>
-                                        <select name="paket_soal[{{ $mapel->getKey() }}]" class="select" required>
-                                            <option value="">— pilih paket soal —</option>
+                                    <div class="flex flex-wrap items-end gap-3">
+                                        {{-- Batas waktu menempel di baris ini:
+                                             angka bawaannya wajib 75 menit dan
+                                             pilihan 60 menit, tetapi admin boleh
+                                             menyesuaikan per mapel. --}}
+                                        <label class="block shrink-0">
+                                            <span class="label">Menit</span>
+                                            <input type="number" name="menit[{{ $mapel->getKey() }}]" min="1" max="600"
+                                                class="input w-24 text-center"
+                                                value="{{ $menit[$mapel->getKey()] ?? PaketTryoutMapel::menitBawaan($mapel->jenis) }}" required>
+                                        </label>
 
-                                            @foreach ($opsi as $paketSoal)
-                                                <option value="{{ $paketSoal->getKey() }}"
-                                                    @selected($terpilih === (string) $paketSoal->getKey())>
-                                                    {{ $paketSoal->nama_paket }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    </label>
+                                        <label class="block grow min-w-48">
+                                            <span class="label">Paket Soal</span>
+                                            <select name="paket_soal[{{ $mapel->getKey() }}]" class="select" required>
+                                                <option value="">— pilih paket soal —</option>
+
+                                                @foreach ($opsi as $paketSoal)
+                                                    <option value="{{ $paketSoal->getKey() }}"
+                                                        @selected($terpilih === (string) $paketSoal->getKey())>
+                                                        {{ $paketSoal->nama_paket }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                    </div>
                                 @endif
                             </div>
                         </div>
@@ -109,8 +124,9 @@
 
     <p class="hint">
         Seluruh mapel pada tingkat ini ikut masuk paket, dan peserta nanti memilih
-        sendiri dua mapel pilihan yang ia kerjakan. SMK: minimal satu mapel pilihan
-        berjenis pilihan_kejuruan atau berstatus PKK. Mapel ber-tingkat SMA juga
-        dapat dipakai pada tryout SMK.
+        sendiri dua mapel pilihan yang ia kerjakan. Batas waktu juga menempel per
+        baris — bawaannya 75 menit untuk mapel wajib dan 60 menit untuk mapel
+        pilihan. SMK: minimal satu mapel pilihan berjenis pilihan_kejuruan atau
+        berstatus PKK. Mapel ber-tingkat SMA juga dapat dipakai pada tryout SMK.
     </p>
 </div>

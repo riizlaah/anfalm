@@ -42,12 +42,11 @@ class PaketTryoutController extends Controller
 
         DB::transaction(function () use ($data, $request): void {
             $paketTryout = PaketTryout::create([
-                ...collect($data)->except('paket_soal')->all(),
-                'batas_waktu_menit' => $data['batas_waktu_menit'] ?? 120,
+                ...collect($data)->except(['paket_soal', 'menit'])->all(),
                 'created_by' => $request->user()->id,
             ]);
 
-            $paketTryout->susunIsiMapel($data['paket_soal']);
+            $paketTryout->susunIsiMapel($this->isiBaris($data));
         });
 
         return redirect()->route('admin.paket-tryout.index')
@@ -67,12 +66,9 @@ class PaketTryoutController extends Controller
         $data = $this->validateData($request);
 
         DB::transaction(function () use ($data, $paketTryout): void {
-            $paketTryout->update([
-                ...collect($data)->except('paket_soal')->all(),
-                'batas_waktu_menit' => $data['batas_waktu_menit'] ?? 120,
-            ]);
+            $paketTryout->update(collect($data)->except(['paket_soal', 'menit'])->all());
 
-            $paketTryout->susunIsiMapel($data['paket_soal']);
+            $paketTryout->susunIsiMapel($this->isiBaris($data));
         });
 
         return redirect()->route('admin.paket-tryout.index')
@@ -148,6 +144,25 @@ class PaketTryoutController extends Controller
     }
 
     /**
+     * Menggabungkan dua peta form — paket soal dan batas waktu — menjadi satu
+     * isian per baris mapel, sesuai kontrak `PaketTryout::susunIsiMapel()`.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<int|string, array{paket_soal_id: mixed, menit: mixed}>
+     */
+    private function isiBaris(array $data): array
+    {
+        $menit = (array) ($data['menit'] ?? []);
+
+        return collect($data['paket_soal'])
+            ->map(fn ($paketSoalId, $mapelId): array => [
+                'paket_soal_id' => $paketSoalId,
+                'menit' => $menit[$mapelId] ?? null,
+            ])
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validateData(Request $request): array
@@ -163,7 +178,8 @@ class PaketTryoutController extends Controller
                 PaketTryout::TINGKAT_SMA,
                 PaketTryout::TINGKAT_SMK,
             ])],
-            'batas_waktu_menit' => ['nullable', 'integer', 'min:1'],
+            'menit' => ['required', 'array'],
+            'menit.*' => ['required', 'integer', 'min:1', 'max:600'],
             'paket_soal' => ['required', 'array'],
         ];
 
@@ -202,6 +218,7 @@ class PaketTryoutController extends Controller
 
         $ditawarkan = $this->mapelsUntukForm($tingkat);
         $paketSoals = $this->paketSoalsUntukForm();
+        $menit = (array) $request->input('menit');
 
         foreach ($ditawarkan as $mapel) {
             $kunci = 'paket_soal.'.$mapel->getKey();
@@ -217,6 +234,15 @@ class PaketTryoutController extends Controller
                 }
 
                 continue;
+            }
+
+            // Baris ini akan tersimpan, jadi batas waktunya wajib ikut terkirim —
+            // aturan `menit.*` hanya menilai yang benar-benar hadir.
+            if (! isset($menit[$mapel->getKey()])) {
+                $validator->errors()->add(
+                    'menit.'.$mapel->getKey(),
+                    'Batas waktu mengerjakan mapel '.$mapel->nama.' wajib diisi.'
+                );
             }
 
             if ($kosong) {

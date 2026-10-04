@@ -4,6 +4,7 @@ use App\Models\DetailPaketSoal;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
+use App\Models\PaketTryoutMapel;
 use App\Models\User;
 
 it('tamu yang membuka /admin/paket-soal dialihkan ke login', function () {
@@ -120,7 +121,12 @@ it('paket soal yang dipakai tryout diblokir dari hapus', function () {
 
     // Menempelkan paket itu ke satu baris isinya, persis seperti yang dilakukan
     // form admin saat memilih paket soal untuk sebuah mapel.
-    $paketTryout->susunIsiMapel([(int) $paket->mapel_id => $paket->getKey()]);
+    $paketTryout->susunIsiMapel([
+        (int) $paket->mapel_id => [
+            'paket_soal_id' => $paket->getKey(),
+            'menit' => PaketTryoutMapel::MENIT_WAJIB,
+        ],
+    ]);
 
     $this->actingAs($admin)->delete("/admin/paket-soal/{$paket->id}")
         ->assertRedirect(route('admin.paket-soal.index'))

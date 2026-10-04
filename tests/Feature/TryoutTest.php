@@ -78,7 +78,11 @@ it('membuat percobaan berjalan berisi daftar soal tiap mapel sesuai paket', func
         ->and($percobaan->jenis)->toBe(Percobaan::JENIS_TRYOUT)
         ->and($percobaan->status)->toBe(Percobaan::STATUS_BERJALAN)
         ->and($percobaan->urutan_mapel)->toBe(0)
-        ->and($percobaan->batas_waktu_menit)->toBe($paket->batas_waktu_menit)
+        ->and($percobaan->batas_waktu_menit)->toBe(
+            (int) $paket->daftarMapel()
+                ->where('mapel_id', (int) $percobaan->daftar_soal[0]['mapel_id'])
+                ->value('menit')
+        )
         ->and($percobaan->waktu_mulai)->not->toBeNull();
 
     $daftarSoal = $percobaan->daftar_soal;
@@ -101,6 +105,20 @@ it('membuat percobaan berjalan berisi daftar soal tiap mapel sesuai paket', func
     }
 
     expect($percobaan->jumlah_soal)->toBe($totalSoal);
+});
+
+it('percobaan memakai batas waktu menit milik mapel yang sedang dikerjakan', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $barisPertama = $paket->daftarMapelUrut()->first();
+    $barisPertama->update(['menit' => 42]);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)])
+        ->assertRedirect(route('tryout.kerja', $paket));
+
+    expect(Percobaan::sole()->batas_waktu_menit)->toBe(42);
 });
 
 it('mengacak urutan soal tiap percobaan tanpa mengurangi isinya', function () {
@@ -460,7 +478,7 @@ it('menghitung ulang theta mapel dari latihan tanpa menambah jumlah tryout', fun
         ->and($baris[(int) $terakhir['urut']]->total_tryout_diikuti)->toBe(1);
 });
 
-it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman', function () {
+it('menghitung batas akhir pengerjaan dari waktu mulai mapel, bukan dari muat halaman', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
@@ -468,7 +486,7 @@ it('menghitung batas akhir pengerjaan dari waktu mulai, bukan dari muat halaman'
     $percobaan = Percobaan::sole();
     $waktuMulai = $percobaan->waktu_mulai->toIso8601String();
 
-    $batasAkhir = $percobaan->waktu_mulai
+    $batasAkhir = $percobaan->mulai_mapel
         ->copy()
         ->addMinutes((int) $percobaan->batas_waktu_menit)
         ->toIso8601String();
@@ -517,13 +535,40 @@ it('mengunci mapel yang sudah ditinggalkan', function () {
         ->assertDontSee($pertanyaanMapelPertama);
 });
 
-it('menutup percobaan otomatis ketika batas waktu sudah lewat', function () {
+it('waktu habis mengunci mapel lalu lanjut ke mapel berikutnya, bukan menutup percobaan', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
     $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
     $percobaan = Percobaan::sole();
-    $percobaan->update(['waktu_mulai' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
+    $percobaan->update(['mulai_mapel' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertRedirect(route('tryout.kerja', $paket));
+
+    $percobaan->refresh();
+    $mapelBerikut = (int) $percobaan->daftar_soal[(int) $percobaan->urutan_mapel]['mapel_id'];
+
+    expect($percobaan->urutan_mapel)->toBe(1)
+        ->and($percobaan->status)->toBe(Percobaan::STATUS_BERJALAN)
+        ->and($percobaan->mulai_mapel->greaterThan(now()->subMinute()))->toBeTrue()
+        ->and($percobaan->batas_waktu_menit)->toBe(
+            (int) $paket->daftarMapel()->where('mapel_id', $mapelBerikut)->value('menit')
+        )
+        ->and(HasilTryout::count())->toBe(0);
+});
+
+it('waktu habis pada mapel terakhir menutup percobaan dan menghitung hasil', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $percobaan->update([
+        'urutan_mapel' => count($percobaan->daftar_soal) - 1,
+        'mulai_mapel' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5),
+    ]);
 
     $this->actingAs($peserta)
         ->get(route('tryout.kerja', $paket))
@@ -533,7 +578,7 @@ it('menutup percobaan otomatis ketika batas waktu sudah lewat', function () {
         ->and(HasilTryout::count())->toBe(1);
 });
 
-it('tetap menyimpan jawaban yang terkirim setelah batas waktu lewat', function () {
+it('jawaban tetap tersimpan lalu mapel dikunci ketika batas waktunya lewat', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
@@ -541,15 +586,41 @@ it('tetap menyimpan jawaban yang terkirim setelah batas waktu lewat', function (
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
 
-    $percobaan->update(['waktu_mulai' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
+    $percobaan->update(['mulai_mapel' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
 
     $this->actingAs($peserta)
         ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']))
-        ->assertRedirect(route('tryout.hasil', $paket));
+        ->assertRedirect(route('tryout.kerja', $paket));
 
     expect(RiwayatPengerjaan::count())->toBe($aktif['soal']->count())
-        ->and($percobaan->refresh()->status)->toBe(Percobaan::STATUS_SELESAI)
-        ->and($percobaan->durasi_detik)->toBe((int) $percobaan->batas_waktu_menit * 60);
+        ->and($percobaan->refresh()->status)->toBe(Percobaan::STATUS_BERJALAN)
+        ->and($percobaan->urutan_mapel)->toBe(1);
+});
+
+it('durasi percobaan tidak melewati total menit seluruh mapel yang dikerjakan', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+
+    $totalMenit = (int) $paket->daftarMapel()
+        ->whereIn('mapel_id', collect($percobaan->daftar_soal)->pluck('mapel_id'))
+        ->sum('menit');
+
+    expect($totalMenit)->toBeGreaterThan((int) $percobaan->batas_waktu_menit);
+
+    $percobaan->update([
+        'urutan_mapel' => count($percobaan->daftar_soal) - 1,
+        'waktu_mulai' => now()->subDays(3),
+        'mulai_mapel' => now()->subDays(3),
+    ]);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), ['aksi' => 'selesai'])
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    expect($percobaan->refresh()->durasi_detik)->toBe($totalMenit * 60);
 });
 
 it('menawarkan mulai ulang saat percobaan masih berjalan', function () {
@@ -580,7 +651,7 @@ it('mengosongkan jawaban ketika peserta memilih mulai ulang', function () {
 
     // Majukan waktu mulai supaya jelas terlihat bahwa hitung mundur diulang.
     $waktuMulaiLama = now()->subMinutes(30);
-    $percobaan->update(['waktu_mulai' => $waktuMulaiLama]);
+    $percobaan->update(['waktu_mulai' => $waktuMulaiLama, 'mulai_mapel' => $waktuMulaiLama]);
 
     $this->actingAs($peserta)
         ->post(route('tryout.ulang', $paket))
@@ -591,7 +662,8 @@ it('mengosongkan jawaban ketika peserta memilih mulai ulang', function () {
         ->and($percobaan->refresh()->urutan_mapel)->toBe(0);
 
     // Hitung mundur ikut diulang bersama jawabannya.
-    expect($percobaan->waktu_mulai->greaterThan($waktuMulaiLama))->toBeTrue();
+    expect($percobaan->waktu_mulai->greaterThan($waktuMulaiLama))->toBeTrue()
+        ->and($percobaan->mulai_mapel->greaterThan($waktuMulaiLama))->toBeTrue();
 });
 
 it('tetap menolak mulai ulang pada paket yang sudah menghasilkan nilai', function () {
@@ -611,7 +683,7 @@ it('tetap menolak mulai ulang pada paket yang sudah menghasilkan nilai', functio
     expect(Percobaan::count())->toBe(0);
 });
 
-it('menutup percobaan ketika peserta memilih selesai di tengah mapel', function () {
+it('aksi selesai pada mapel pertama tetap membuka mapel berikutnya', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
 
@@ -619,14 +691,17 @@ it('menutup percobaan ketika peserta memilih selesai di tengah mapel', function 
     $percobaan = Percobaan::sole();
     $aktif = soalMapelAktif($percobaan);
 
+    // Auto-submit hitung mundur mengirim `selesai` bahkan sebelum waktunya
+    // lewat menurut server; ia tidak boleh menutup percobaan di tengah mapel
+    // karena batas waktunya kini menempel per mapel.
     $this->actingAs($peserta)
         ->post(route('tryout.jawab', $paket), [...payloadSemuaBenar($aktif['soal']), 'aksi' => 'selesai'])
-        ->assertRedirect(route('tryout.hasil', $paket));
+        ->assertRedirect(route('tryout.kerja', $paket));
 
     $percobaan->refresh();
 
-    expect($percobaan->status)->toBe(Percobaan::STATUS_SELESAI)
-        ->and($percobaan->urutan_mapel)->toBe(0)
+    expect($percobaan->status)->toBe(Percobaan::STATUS_BERJALAN)
+        ->and($percobaan->urutan_mapel)->toBe(1)
         ->and(RiwayatPengerjaan::count())->toBe($aktif['soal']->count());
 });
 

@@ -13,7 +13,7 @@
                 <tr class="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
                     <th class="px-4 py-3">Nama Tryout</th>
                     <th class="px-4 py-3">Tingkat</th>
-                    <th class="px-4 py-3">Batas Waktu</th>
+                    <th class="px-4 py-3">Waktu per Mapel</th>
                     <th class="px-4 py-3">Mapel</th>
                     <th class="px-4 py-3 text-right">Aksi</th>
                 </tr>
@@ -24,7 +24,7 @@
                     <tr>
                         <td class="px-4 py-3 font-medium text-ink">{{ $paketTryout->nama_paket }}</td>
                         <td class="px-4 py-3">{{ $paketTryout->labelTingkat() }}</td>
-                        <td class="px-4 py-3">{{ $paketTryout->batas_waktu_menit }} menit</td>
+                        <td class="px-4 py-3">{{ $paketTryout->labelWaktuPerMapel() }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ \Illuminate\Support\Str::limit($namaMapel, 80) }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">

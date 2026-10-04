@@ -28,17 +28,19 @@ function setupTryoutF4(string $tingkat = 'SMK', bool $pilihanPertamaKejuruan = t
 
     $pakets = [];
     $paketPerMapel = [];
+    $menitPerMapel = [];
 
     foreach (['wajib1', 'wajib2', 'wajib3', 'pilihan1', 'pilihan2'] as $slot) {
         $pakets[$slot] = paketSoalF4($mapels[$slot]);
         $paketPerMapel[$mapels[$slot]->getKey()] = $pakets[$slot]->getKey();
+        $menitPerMapel[$mapels[$slot]->getKey()] = $mapels[$slot]->jenis === Mapel::JENIS_WAJIB ? 75 : 60;
     }
 
     $payload = [
         'nama_paket' => 'Tryout '.$tingkat.' '.fake()->word(),
         'deskripsi' => null,
         'tingkat' => $tingkat,
-        'batas_waktu_menit' => 120,
+        'menit' => $menitPerMapel,
         'paket_soal' => $paketPerMapel,
     ];
 
@@ -83,37 +85,100 @@ it('admin dapat membuat paket tryout SMK yang valid (kejuruan + umum)', function
     $this->assertDatabaseHas('paket_tryout', [
         'nama_paket' => $data['payload']['nama_paket'],
         'tingkat' => 'SMK',
-        'batas_waktu_menit' => 120,
     ]);
 
-    expect(PaketTryout::sole()->daftarMapel()->count())->toBe(5);
+    $paketTryout = PaketTryout::sole();
+
+    expect($paketTryout->daftarMapel()->count())->toBe(5)
+        ->and($paketTryout->daftarMapel->pluck('menit')->unique()->values()->all())
+        ->toEqualCanonicalizing([75, 60]);
 });
 
-it('batas waktu default 120 menit saat dikosongkan', function () {
+it('form paket tryout menawarkan batas waktu menit tersendiri tiap baris mapel', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+
+    $html = $this->actingAs($admin)->get('/admin/paket-tryout/create')
+        ->assertOk()
+        ->getContent();
+
+    foreach ($data['mapels'] as $mapel) {
+        $bawaan = $mapel->jenis === Mapel::JENIS_WAJIB ? 75 : 60;
+
+        expect($html)->toMatch(
+            '/<input[^>]*name="menit\['.$mapel->getKey().'\]"[^>]*value="'.$bawaan.'"/'
+        );
+    }
+
+    // Tidak ada lagi satu angka waktu yang dipakai seluruh paket.
+    expect($html)->not->toContain('name="batas_waktu_menit"');
+});
+
+it('menyimpan batas waktu menit yang berbeda untuk tiap mapel', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+    $wajib1 = $data['mapels']['wajib1']->getKey();
+    $data['payload']['menit'][$wajib1] = 90;
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $tersimpan = PaketTryout::sole()->daftarMapel()
+        ->pluck('menit', 'mapel_id')
+        ->map(fn ($menit): int => (int) $menit);
+
+    expect($tersimpan->get($wajib1))->toBe(90)
+        ->and($tersimpan->get($data['mapels']['wajib2']->getKey()))->toBe(75)
+        ->and($tersimpan->get($data['mapels']['pilihan1']->getKey()))->toBe(60);
+});
+
+it('menolak batas waktu menit yang kosong atau di luar rentang', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+    unset($data['payload']['menit'][$data['mapels']['wajib2']->getKey()]);
+    $data['payload']['menit'][$data['mapels']['pilihan1']->getKey()] = 0;
+    $data['payload']['menit'][$data['mapels']['pilihan2']->getKey()] = 601;
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasErrors([
+            'menit.'.$data['mapels']['wajib2']->getKey(),
+            'menit.'.$data['mapels']['pilihan1']->getKey(),
+            'menit.'.$data['mapels']['pilihan2']->getKey(),
+        ]);
+
+    expect(PaketTryout::count())->toBe(0);
+});
+
+it('form edit mempertahankan batas waktu menit yang tersimpan', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+    $wajib1 = $data['mapels']['wajib1']->getKey();
+    $data['payload']['menit'][$wajib1] = 90;
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertSessionHasNoErrors();
+
+    $paketTryout = PaketTryout::sole();
+
+    $html = $this->actingAs($admin)->get(route('admin.paket-tryout.edit', $paketTryout))
+        ->assertOk()
+        ->getContent();
+
+    expect($html)->toMatch('/<input[^>]*name="menit\['.$wajib1.'\]"[^>]*value="90"/');
+});
+
+it('batas waktu yang disunting admin tetap dihormati', function () {
     $admin = User::factory()->admin()->create();
     $payload = setupTryoutF4()['payload'];
-    $payload['batas_waktu_menit'] = null;
+    $payload['menit'] = array_fill_keys(array_keys($payload['menit']), 90);
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $payload)
         ->assertRedirect(route('admin.paket-tryout.index'));
 
-    $this->assertDatabaseHas('paket_tryout', [
-        'nama_paket' => $payload['nama_paket'],
-        'batas_waktu_menit' => 120,
-    ]);
-});
+    $tersimpan = PaketTryout::sole()->daftarMapel->pluck('menit');
 
-it('batas waktu yang diisi admin tetap dihormati', function () {
-    $admin = User::factory()->admin()->create();
-    $payload = setupTryoutF4()['payload'];
-    $payload['batas_waktu_menit'] = 90;
-
-    $this->actingAs($admin)->post('/admin/paket-tryout', $payload);
-
-    $this->assertDatabaseHas('paket_tryout', [
-        'nama_paket' => $payload['nama_paket'],
-        'batas_waktu_menit' => 90,
-    ]);
+    expect($tersimpan->unique()->values()->all())->toBe([90]);
 });
 
 it('validasi paket tryout: field wajib', function () {
@@ -124,6 +189,7 @@ it('validasi paket tryout: field wajib', function () {
             'nama_paket',
             'tingkat',
             'paket_soal',
+            'menit',
         ]);
 });
 
@@ -204,6 +270,7 @@ it('tryout SMK dengan dua pilihan kejuruan sah', function () {
         ->create(['tingkat' => 'SMK']);
     $paket2Kejuruan = paketSoalF4($pilihan2Kejuruan);
     $data['payload']['paket_soal'][$pilihan2Kejuruan->getKey()] = $paket2Kejuruan->getKey();
+    $data['payload']['menit'][$pilihan2Kejuruan->getKey()] = 60;
 
     $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
         ->assertSessionHasNoErrors()
@@ -398,6 +465,16 @@ it('index paket tryout menampilkan tingkat sebagai SMA/SMK/Sederajat', function 
     $this->actingAs($admin)->get('/admin/paket-tryout')
         ->assertOk()
         ->assertSee('SMA/SMK/Sederajat');
+});
+
+it('index paket tryout menampilkan waktu per mapel, bukan satu batas waktu tryout', function () {
+    $admin = User::factory()->admin()->create();
+    PaketTryout::factory()->create();
+
+    $this->actingAs($admin)->get('/admin/paket-tryout')
+        ->assertOk()
+        ->assertSee('75 menit wajib · 60 menit pilihan')
+        ->assertDontSee('120 menit');
 });
 
 it('form paket tryout tidak menawarkan mapel ber-tingkat SD atau SMP', function () {
