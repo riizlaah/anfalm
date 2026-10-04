@@ -31,7 +31,7 @@ class PaketTryoutController extends Controller
     public function create(): View
     {
         $mapels = $this->mapelsUntukForm();
-        $paketSoals = PaketSoal::with('mapel')->orderBy('nama_paket')->get();
+        $paketSoals = PaketSoal::with('mapel')->orderByDesc('id')->get();
 
         return view('admin.paket-tryout.create', compact('mapels', 'paketSoals'));
     }
@@ -53,7 +53,7 @@ class PaketTryoutController extends Controller
     public function edit(PaketTryout $paketTryout): View
     {
         $mapels = $this->mapelsUntukForm();
-        $paketSoals = PaketSoal::with('mapel')->orderBy('nama_paket')->get();
+        $paketSoals = PaketSoal::with('mapel')->orderByDesc('id')->get();
 
         return view('admin.paket-tryout.edit', compact('paketTryout', 'mapels', 'paketSoals'));
     }

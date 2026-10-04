@@ -8,6 +8,27 @@
         ['mapel' => 'mapel_pilihan_1', 'paket' => 'paket_soal_pilihan_1_id', 'label' => 'Pilihan 1', 'paketSel' => 'paket-sel-3'],
         ['mapel' => 'mapel_pilihan_2', 'paket' => 'paket_soal_pilihan_2_id', 'label' => 'Pilihan 2', 'paketSel' => 'paket-sel-4'],
     ];
+
+    // Default tiap slot: pilihan lama lebih dulu (old input menang atas data
+    // tersimpan), baru jatuh ke mapel pertama beserta paket soal terbarunya —
+    // daftar `$paketSoals` sudah diurut menurun di controller, jadi yang
+    // pertama sejajar dengan "paling baru".
+    foreach ($slots as $i => $slot) {
+        $mapelTerpilih = old($slot['mapel'], $paketTryout?->getAttribute($slot['mapel']));
+        if (! (is_scalar($mapelTerpilih) && filled($mapelTerpilih))) {
+            $mapelTerpilih = $mapels->first()?->id;
+        }
+
+        $paketTerpilih = old($slot['paket'], $paketTryout?->getAttribute($slot['paket']));
+        if (! (is_scalar($paketTerpilih) && filled($paketTerpilih))) {
+            $paketTerpilih = $paketSoals->first(
+                fn ($paketSoal) => (string) $paketSoal->mapel_id === (string) $mapelTerpilih
+            )?->id;
+        }
+
+        $slots[$i]['mapelTerpilih'] = (string) $mapelTerpilih;
+        $slots[$i]['paketTerpilih'] = (string) $paketTerpilih;
+    }
 @endphp
 
 <div class="space-y-4">
@@ -41,7 +62,7 @@
                     <select name="{{ $slot['mapel'] }}" class="select mapel-slot" data-paket-sel="{{ $slot['paketSel'] }}" required>
                         @foreach ($mapels as $mapel)
                             <option value="{{ $mapel->id }}" data-tingkat="{{ $mapel->tingkat }}"
-                                @selected((string) old($slot['mapel'], $paketTryout?->getAttribute($slot['mapel'])) === (string) $mapel->id)>
+                                @selected($slot['mapelTerpilih'] === (string) $mapel->id)>
                                 {{ $mapel->nama }} · {{ $mapel->tingkat === 'all' ? 'Semua' : $mapel->tingkat }}
                             </option>
                         @endforeach
@@ -53,7 +74,7 @@
                     <select name="{{ $slot['paket'] }}" id="{{ $slot['paketSel'] }}" class="select paket-sel" required>
                         @foreach ($paketSoals as $paketSoal)
                             <option value="{{ $paketSoal->id }}" data-mapel="{{ $paketSoal->mapel_id }}" data-tingkat="{{ $paketSoal->mapel?->tingkat }}"
-                                @selected((string) old($slot['paket'], $paketTryout?->getAttribute($slot['paket'])) === (string) $paketSoal->id)>
+                                @selected($slot['paketTerpilih'] === (string) $paketSoal->id)>
                                 {{ $paketSoal->nama_paket }}
                             </option>
                         @endforeach
@@ -83,11 +104,23 @@
         }
 
         function filterPaketPerMapel(mapelSelect) {
+            const paketSelect = document.getElementById(mapelSelect.dataset.paketSel);
             const mapelId = mapelSelect.value;
-            document.getElementById(mapelSelect.dataset.paketSel).querySelectorAll('option').forEach(function (option) {
+            let terbaruTampak = null;
+
+            paketSelect.querySelectorAll('option').forEach(function (option) {
                 const cocok = cocokTingkat(option.dataset.tingkat) && (mapelId === '' || option.dataset.mapel === mapelId);
                 option.hidden = !cocok;
+                if (cocok && terbaruTampak === null) terbaruTampak = option;
             });
+
+            // Daftar menurun dari server, jadi opsi tampak pertama = paket
+            // terbaru milik mapel itu. Dipakai hanya bila pilihan sekarang
+            // gugur oleh saringan — pilihan tersimpan tidak diganti.
+            const terpilih = paketSelect.selectedOptions[0];
+            if (terbaruTampak && (!terpilih || terpilih.hidden)) {
+                paketSelect.value = terbaruTampak.value;
+            }
         }
 
         document.querySelectorAll('.mapel-slot').forEach(function (select) {

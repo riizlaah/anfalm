@@ -385,3 +385,66 @@ it('form paket tryout tidak menawarkan mapel ber-tingkat SD atau SMP', function 
         ->assertOk()
         ->assertViewHas('mapels', $tertawakan);
 });
+
+/**
+ * Posisi `selected` pada opsi paket soal — opsi punya `value` lalu
+ * `data-mapel`, sehingga keduanya dipakai bersama supaya tidak tertuker
+ * dengan opsi `mapel` yang `value`-nya bisa sama.
+ */
+function opsiPaketTerpilih(string $html, int $paketId, int $mapelId): bool
+{
+    return preg_match(
+        '/<option\b[^>]*\bvalue="'.$paketId.'"[^>]*\bdata-mapel="'.$mapelId.'"[^>]*\bselected\b/',
+        $html
+    ) === 1;
+}
+
+/** Urutan opsi paket soal pada HTML, dipakai untuk memastikan yang terbaru didahulukan. */
+function urutOpsiPaket(string $html, int ...$paketIds): array
+{
+    $posisi = [];
+    foreach ($paketIds as $id) {
+        $posisi[$id] = strpos($html, 'value="'.$id.'" data-mapel=');
+    }
+
+    return $posisi;
+}
+
+it('paket soal default ke paket terbaru milik mapel yang dipilih slot itu', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create(['kode' => 'AAA', 'jenis' => Mapel::JENIS_WAJIB]);
+    Mapel::factory()->create(['kode' => 'ZZZ', 'jenis' => Mapel::JENIS_WAJIB]);
+    $lama = paketSoalF4($mapel);
+    $baru = paketSoalF4($mapel);
+
+    $html = $this->actingAs($admin)->get('/admin/paket-tryout/create')
+        ->assertOk()
+        ->getContent();
+
+    expect(opsiPaketTerpilih($html, $baru->id, $mapel->id))->toBeTrue()
+        ->and(opsiPaketTerpilih($html, $lama->id, $mapel->id))->toBeFalse();
+
+    // Urutan menurun supaya saringan di sisi klien ikut memilih yang terbaru.
+    $urut = urutOpsiPaket($html, $lama->id, $baru->id);
+    expect($urut[$baru->id])->toBeLessThan($urut[$lama->id]);
+});
+
+it('form edit mempertahankan paket soal yang tersimpan meski bukan yang terbaru', function () {
+    $admin = User::factory()->admin()->create();
+    $data = setupTryoutF4();
+
+    $this->actingAs($admin)->post('/admin/paket-tryout', $data['payload'])
+        ->assertRedirect(route('admin.paket-tryout.index'));
+
+    $paketTryout = PaketTryout::where('nama_paket', $data['payload']['nama_paket'])->sole();
+    $mapelWajib1 = $data['mapels']['wajib1'];
+    $tersimpan = $data['pakets']['wajib1'];
+    $lebihBaru = paketSoalF4($mapelWajib1);
+
+    $html = $this->actingAs($admin)->get(route('admin.paket-tryout.edit', $paketTryout))
+        ->assertOk()
+        ->getContent();
+
+    expect(opsiPaketTerpilih($html, $tersimpan->id, $mapelWajib1->id))->toBeTrue()
+        ->and(opsiPaketTerpilih($html, $lebihBaru->id, $mapelWajib1->id))->toBeFalse();
+});
