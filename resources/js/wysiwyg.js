@@ -155,8 +155,30 @@ export function inisialisasiWysiwyg(wadah) {
 
 /** Inisialisasi seluruh editor dalam dokumen (dipanggil dari app.js). */
 export function inisialisasiSemuaWysiwyg() {
-    document.querySelectorAll('[data-wysiwyg]').forEach((wadah) => {
-        if (wadah.__wysiwyg) return
-        inisialisasiWysiwyg(wadah)
+    const kandidat = Array.from(document.querySelectorAll('[data-wysiwyg]'))
+        .filter((wadah) => !wadah.__wysiwyg)
+
+    if (kandidat.length === 0) return
+
+    // Editor disiapkan saat ia tampil, bukan seluruh halaman sekaligus.
+    // Halaman kurasi memuat dua editor per soal (pertanyaan + pembahasan) dan
+    // hanya satu soal yang tampil pada satu waktu, jadi menyala semua di awal
+    // hanya membuang waktu untuk editor yang sedang tersembunyi. Nilai editor
+    // yang belum tersentuh tetap dibaca dari input tersembunyinya oleh form.
+    if (!('IntersectionObserver' in window)) {
+        kandidat.forEach((wadah) => inisialisasiWysiwyg(wadah))
+
+        return
+    }
+
+    const pengamat = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) return
+
+            pengamat.unobserve(entry.target)
+            inisialisasiWysiwyg(entry.target)
+        })
     })
+
+    kandidat.forEach((wadah) => pengamat.observe(wadah))
 }

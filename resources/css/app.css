@@ -103,6 +103,17 @@
     .rail-soal[data-aktif='1'] {
         @apply ring-2 ring-ink ring-offset-1;
     }
+    /* Keadaan rail kurasi soal: hijau bila pertanyaan sudah terisi, abu bila
+       masih kosong, dan dicoret bila soal ditandai untuk dihapus. */
+    .rail-soal[data-terisi='1'] {
+        @apply bg-emerald-600 text-white;
+    }
+    .rail-soal[data-terisi='0'] {
+        @apply bg-slate-200 text-slate-600;
+    }
+    .rail-soal[data-hapus='1'] {
+        @apply bg-slate-100 text-slate-400 line-through;
+    }
 
     /* Baris tab bawah (Fase 10): menu admin yang jumlahnya tujuh digeser
        mendatar, tapi bilah gulir bawaan browser menyedot 15px tinggi sehingga

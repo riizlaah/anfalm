@@ -419,9 +419,15 @@ it('kurasi memetakan kode KD walau ditulis AI berbeda format', function () {
 
     $html = $this->actingAs($admin)->get('/admin/paket-soal/kurasi')->assertOk()->getContent();
 
-    expect(kdTerpilih(blokSelectKd($html, 0)))->toBe((string) $kd31->id)
-        ->and(kdTerpilih(blokSelectKd($html, 1)))->toBe((string) $kd32->id)
-        ->and(kdTerpilih(blokSelectKd($html, 2)))->toBe((string) $kd31->id);
+    expect(kdTerpilih($html, 0))->toBe((string) $kd31->id)
+        ->and(kdTerpilih($html, 1))->toBe((string) $kd32->id)
+        ->and(kdTerpilih($html, 2))->toBe((string) $kd31->id);
+
+    // Kolomnya menampilkan kode terbersih ("3.1", bukan " KD 3.1 ") persis
+    // seperti form soal manual, supaya datalist bisa menemukannya kembali.
+    expect(kodeKdTampil($html, 0))->toBe('3.1')
+        ->and(kodeKdTampil($html, 1))->toBe('3.2')
+        ->and(kodeKdTampil($html, 2))->toBe('3.1');
 });
 
 it('kurasi menandai soal yang kode KD-nya tidak dikenal alih-alih membiarkannya diam-diam', function () {
@@ -445,9 +451,92 @@ it('kurasi menandai soal yang kode KD-nya tidak dikenal alih-alih membiarkannya 
         ->assertSee('2 soal belum punya KD yang cocok', false)
         ->getContent();
 
-    // Pilihan tetap pada placeholder supaya admin sadar harus memilih sendiri.
-    expect(kdTerpilih(blokSelectKd($html, 0)))->toBeNull()
-        ->and(kdTerpilih(blokSelectKd($html, 1)))->toBeNull();
+    // Kolom KD tetap kosong id-nya supaya admin sadar harus memilih sendiri,
+    // sementara kode kiriman AI tetap terbaca — bukan dikosongkan diam-diam.
+    expect(kdTerpilih($html, 0))->toBeNull()
+        ->and(kdTerpilih($html, 1))->toBeNull()
+        ->and(kodeKdTampil($html, 0))->toBe('9.9')
+        ->and(kodeKdTampil($html, 1))->toBe('');
+});
+
+it('halaman kurasi memfokuskan satu soal dengan navigasi di atasnya', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel] = setupKurasiMapel();
+
+    session(['ai_draft' => [
+        'mapel_id' => $mapel->id,
+        'nama_paket' => 'Paket AI Matematika',
+        'deskripsi' => null,
+        'daftar_soal' => [
+            ['id_soal_sementara' => 'S001', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '3.1', 'pertanyaan' => 'Q1'],
+            ['id_soal_sementara' => 'S002', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '3.1', 'pertanyaan' => 'Q2'],
+            ['id_soal_sementara' => 'S003', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '3.2', 'pertanyaan' => 'Q3'],
+        ],
+    ]]);
+
+    $html = $this->actingAs($admin)->get('/admin/paket-soal/kurasi')
+        ->assertOk()
+        ->assertSee('Soal 1 dari 3', false)
+        ->assertSee('Sebelumnya')
+        ->assertSee('Berikutnya')
+        ->assertSee('aria-label="Navigasi soal"', false)
+        ->getContent();
+
+    // Rail berada di atas kartu soal, bukan di bawahnya.
+    expect(posisiTeks($html, 'aria-label="Navigasi soal"'))
+        ->toBeGreaterThan(-1)
+        ->toBeLessThan(posisiTeks($html, 'data-blok-soal="0"'));
+
+    expect(posisiTeks($html, 'id="kurasi-sebelumnya"'))
+        ->toBeGreaterThan(posisiTeks($html, 'data-blok-soal="2"'));
+
+    // Hanya satu kartu yang tampil; sisanya disembunyikan.
+    expect(tagBlokSoal($html, 0))->not->toContain(' hidden')
+        ->and(tagBlokSoal($html, 1))->toContain(' hidden')
+        ->and(tagBlokSoal($html, 2))->toContain(' hidden');
+
+    // Tombol rail menunjuk urutan soal yang sama.
+    foreach ([0, 1, 2] as $index) {
+        expect($html)->toContain('data-indeks="'.$index.'"');
+    }
+});
+
+it('editor kurasi memakai bentuk yang sama dengan form soal manual', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel] = setupKurasiMapel();
+
+    session(['ai_draft' => [
+        'mapel_id' => $mapel->id,
+        'nama_paket' => 'Paket AI Matematika',
+        'deskripsi' => null,
+        'daftar_soal' => [
+            ['id_soal_sementara' => 'S001', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '3.1', 'pertanyaan' => 'Q1'],
+            ['id_soal_sementara' => 'S002', 'tipe_soal' => 'pg', 'kompetensi_dasar_kode' => '3.1', 'pertanyaan' => 'Q2'],
+        ],
+    ]]);
+
+    $html = $this->actingAs($admin)->get('/admin/paket-soal/kurasi')->assertOk()->getContent();
+
+    // Pertanyaan dan pembahasan memakai editor kaya yang sama seperti form manual.
+    expect($html)
+        ->toContain('data-wysiwyg-nama="daftar_soal[0][pertanyaan]"')
+        ->toContain('data-wysiwyg-nama="daftar_soal[1][pembahasan]"');
+
+    // Kompetensi Dasar memakai pemilih kode + datalist, bukan <select>.
+    expect(preg_match('/<select[^>]*name="daftar_soal\[0\]\[kompetensi_dasar_id\]"/u', $html))->toBe(0)
+        ->and(preg_match('/<input[^>]*name="daftar_soal\[0\]\[kompetensi_dasar_id\]"/u', $html))->toBe(1)
+        ->and($html)->toContain('list="kurasi-kd-list-0"')
+        ->and($html)->toContain('id="kurasi-kd-list-1"');
+
+    // Opsi memakai baris teks satu baris seperti form manual…
+    expect($html)
+        ->toContain('type="text" name="daftar_soal[0][opsi_jawaban][0][teks_opsi]"')
+        ->toContain('type="text" name="daftar_soal[1][opsi_jawaban][4][teks_opsi]"');
+
+    // …sementara parameter IRT per opsi, khusus kurasi, tetap tersimpan.
+    expect($html)
+        ->toContain('name="daftar_soal[0][opsi_jawaban][0][a_diskriminasi]"')
+        ->toContain('name="daftar_soal[0][a_diskriminasi]"');
 });
 
 it('kurasi tanpa draft dialihkan ke halaman generate', function () {
@@ -932,24 +1021,49 @@ function seedAiDraft(Mapel $mapel): void
 }
 
 /**
- * Blok <select> Kompetensi Dasar milik satu kartu soal, untuk memeriksa opsi
- * mana yang terpilih.
+ * Tag pembuka kartu soal bernomor $index, untuk memeriksa apakah tampilan
+ * satu-soal sedang menyembunyikannya.
  */
-function blokSelectKd(string $html, int $index): string
+function tagBlokSoal(string $html, int $index): string
 {
-    preg_match('/<select name="daftar_soal\['.$index.'\]\[kompetensi_dasar_id\]".*?<\/select>/su', $html, $cocok);
+    preg_match('/<section\b[^>]*\bdata-blok-soal="'.$index.'"[^>]*>/u', $html, $cocok);
 
     return $cocok[0] ?? '';
 }
 
 /**
- * ID KD yang terpilih pada blok select, atau null kalau masih pada placeholder.
+ * Posisi teks dalam halaman; -1 bila tidak ada, supaya urutan dua blok bisa
+ * dibandingkan.
  */
-function kdTerpilih(string $blok): ?string
+function posisiTeks(string $html, string $teks): int
 {
-    preg_match('/<option value="(\d+)"[^>]*selected[^>]*>/su', $blok, $cocok);
+    $pos = mb_strpos($html, $teks);
 
-    return $cocok[1] ?? null;
+    return $pos === false ? -1 : $pos;
+}
+
+/**
+ * Nilai input tersembunyi Kompetensi Dasar milik satu kartu soal: id KD yang
+ * terpilih, atau null bila masih kosong (belum dipilih / kode tak dikenal).
+ */
+function kdTerpilih(string $html, int $index): ?string
+{
+    preg_match('/<input[^>]*name="daftar_soal\['.$index.'\]\[kompetensi_dasar_id\]"[^>]*>/u', $html, $cocok);
+    preg_match('/value="([^"]*)"/', $cocok[0] ?? '', $nilai);
+
+    return ($nilai[1] ?? '') === '' ? null : $nilai[1];
+}
+
+/**
+ * Kode yang tertulis di kolom pemilih KD satu kartu — yang dilihat dan bisa
+ * diketik ulang admin, sehingga format kiriman AI tidak pernah terselubung.
+ */
+function kodeKdTampil(string $html, int $index): ?string
+{
+    preg_match('/<input[^>]*class="[^"]*kurasi-kd-picker[^"]*"[^>]*list="kurasi-kd-list-'.$index.'"[^>]*>/u', $html, $cocok);
+    preg_match('/value="([^"]*)"/', $cocok[0] ?? '', $nilai);
+
+    return $nilai[1] ?? null;
 }
 
 /**
