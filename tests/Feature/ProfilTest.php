@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnsureSingleSession;
 use App\Models\Mapel;
 use App\Models\PaketTryout;
 use App\Models\Percobaan;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * Butir 96: pilihan mapel adalah *filter tampilan* — ia menentukan mapel apa
@@ -180,4 +182,91 @@ it('mapel wajib tetap ditawarkan meski peserta memilih pilihan lain', function (
         expect($halaman->viewData('mapels')->pluck('nama')->all())
             ->toEqualCanonicalizing(['Matematika', 'Kimia']);
     }
+});
+
+it('halaman profil menyediakan form ganti kata sandi sendiri', function () {
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->get(route('profil.show'))
+        ->assertOk()
+        ->assertSee(route('profil.password'))
+        ->assertSee('Kata sandi lama')
+        ->assertSee('Kata sandi baru');
+});
+
+it('ganti kata sandi memutarkan sesi dan tetap masuk di perangkat ini', function () {
+    $peserta = User::factory()->peserta()->create();
+    // Nilai awal diisi sama seperti hasil login — factory tidak menyetelnya,
+    // padahal tanpa token lama "perangkat lain ikut terbubarkan" tidak ada
+    // artinya.
+    $peserta->forceFill(['session_token' => 'token-perangkat-lama'])->save();
+    $tokenLama = $peserta->session_token;
+
+    // Sesi ini meniru perangkat yang sudah masuk: ia memegang token yang sama
+    // dengan basis data, jadi `EnsureSingleSession` membiarkannya lewat —
+    // kalau tidak, PUT-nya akan dibubarkan sebelum menyentuh controller.
+    $this->withSession([EnsureSingleSession::SESSION_TOKEN_KEY => $tokenLama]);
+
+    $this->actingAs($peserta)->put(route('profil.password'), [
+        'password_lama' => 'password',
+        'password' => 'kunci-baru-99',
+        'password_confirmation' => 'kunci-baru-99',
+    ])->assertRedirect(route('profil.show'));
+
+    $peserta->refresh();
+
+    // Dua hal yang harus terjadi bersamaan: seluruh sesi lain ikut terbubarkan
+    // karena mereka masih memegang token lama, sementara perangkat yang sedang
+    // dipakai justru diberi token yang baru.
+    expect($peserta->session_token)->not->toBe($tokenLama)
+        ->and(Hash::check('kunci-baru-99', $peserta->password))->toBeTrue();
+
+    $this->get(route('profil.show'))->assertOk();
+
+    $this->withSession([EnsureSingleSession::SESSION_TOKEN_KEY => $tokenLama])
+        ->get(route('profil.show'))
+        ->assertRedirect(route('login'));
+});
+
+it('ganti kata sandi menolak kata sandi lama yang salah', function () {
+    $peserta = User::factory()->peserta()->create();
+    $hashLama = $peserta->password;
+
+    $this->from(route('profil.show'))
+        ->actingAs($peserta)->put(route('profil.password'), [
+            'password_lama' => 'bukan-ini',
+            'password' => 'kunci-baru-99',
+            'password_confirmation' => 'kunci-baru-99',
+        ])->assertRedirect(route('profil.show'))
+        ->assertSessionHasErrors('password_lama');
+
+    expect($peserta->refresh()->password)->toBe($hashLama);
+});
+
+it('ganti kata sandi menolak sandi baru yang terlalu pendek atau tanpa konfirmasi', function () {
+    $peserta = User::factory()->peserta()->create();
+    // Token diisi lebih dulu supaya "tidak ikut berputar" bisa benar-benar
+    // diperiksa — kalau nilainya null, kegagalan validasi memang tak akan
+    // mengubah apa pun dan test ini jadi tidak membuktikan apa-apa.
+    $peserta->forceFill(['session_token' => 'token-lama'])->save();
+    // Sesi disemai seperti perangkat yang sudah masuk; tanpa ini
+    // `EnsureSingleSession` membubarkan permintaan sebelum validasi berjalan.
+    $this->withSession([EnsureSingleSession::SESSION_TOKEN_KEY => 'token-lama']);
+    $hashLama = $peserta->password;
+    $tokenLama = $peserta->session_token;
+
+    $this->actingAs($peserta)->put(route('profil.password'), [
+        'password_lama' => 'password',
+        'password' => 'pendek',
+        'password_confirmation' => 'pendek',
+    ])->assertSessionHasErrors('password');
+
+    $this->actingAs($peserta)->put(route('profil.password'), [
+        'password_lama' => 'password',
+        'password' => 'kunci-baru-99',
+        'password_confirmation' => 'beda-lagi',
+    ])->assertSessionHasErrors('password');
+
+    expect($peserta->refresh()->password)->toBe($hashLama)
+        ->and($peserta->session_token)->toBe($tokenLama);
 });

@@ -35,6 +35,7 @@ Route::middleware(['auth', 'single.session'])->group(function () {
 
     Route::get('profil', [ProfilController::class, 'show'])->name('profil.show');
     Route::put('profil', [ProfilController::class, 'update'])->name('profil.update');
+    Route::put('profil/password', [ProfilController::class, 'ubahPassword'])->name('profil.password');
 
     Route::get('tryout', [TryoutController::class, 'index'])->name('tryout.index');
     Route::post('tryout/{paketTryout}/mulai', [TryoutController::class, 'mulai'])->name('tryout.mulai');

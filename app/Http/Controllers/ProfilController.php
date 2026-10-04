@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\EnsureSingleSession;
 use App\Models\Mapel;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -98,6 +101,56 @@ class ProfilController extends Controller
         $peserta->mapelPilihan()->sync((array) $request->input('mapel_pilihan', []));
 
         return redirect()->route('profil.show')->with('success', 'Profil berhasil disimpan.');
+    }
+
+    /**
+     * Ganti kata sandi sendiri (butir laporan), tanpa campur tangan admin.
+     *
+     * `session_token` ikut diputar — sama seperti reset oleh admin — tetapi
+     * sesi yang sedang dipakai **menerima token yang baru**. Dua akibatnya
+     * datang bersamaan: perangkat lain yang masih memegang token lama langsung
+     * terbubarkan oleh `EnsureSingleSession`, sementara peserta yang baru saja
+     * mengganti sandinya tetap masuk. Memutar tanpa memperbarui sesi aktif
+     * akan mengeluarkan pemiliknya sendiri dari halaman yang baru saja ia isi;
+     * tidak memutar sama sekali berarti orang yang sudah masuk tetap duduk di
+     * akun itu dengan sandi yang sudah tidak berlaku.
+     *
+     * `password_lama` sengaja dicek dengan `Hash::check` di sini, bukan lewat
+     * aturan validasi: galatnya butuh pesan sendiri ("tidak sesuai", bukan
+     * "wajib diisi"), dan nilainya harus diambil dari basis data — bukan dari
+     * input. Field sandi tidak pernah dirender dari `old()` (lihat
+     * `components/input.blade.php`), jadi nilai yang tadi dikirim tidak pernah
+     * muncul kembali di layar.
+     */
+    public function ubahPassword(Request $request): RedirectResponse
+    {
+        $peserta = $request->user();
+
+        $validated = $request->validate([
+            'password_lama' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'password_lama.required' => 'Isi kata sandi kamu yang sekarang.',
+            'password.confirmed' => 'Konfirmasi kata sandi baru tidak cocok.',
+        ]);
+
+        if (! Hash::check($validated['password_lama'], $peserta->password)) {
+            return back()->withErrors([
+                'password_lama' => 'Kata sandi lama tidak sesuai.',
+            ]);
+        }
+
+        $tokenBaru = Str::random(64);
+
+        $peserta->update([
+            'password' => Hash::make($validated['password']),
+            'session_token' => $tokenBaru,
+        ]);
+
+        $request->session()->put(EnsureSingleSession::SESSION_TOKEN_KEY, $tokenBaru);
+
+        return redirect()->route('profil.show')
+            ->with('success', 'Kata sandi berhasil diubah. Perangkat lain diminta masuk kembali.');
     }
 
     /**

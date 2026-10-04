@@ -113,10 +113,49 @@
             </script>
         </section>
 
-        <x-errors />
+        {{-- Dibatasi kunci form ini saja; galat form kata sandi di bawah
+             ditampilkan di tempatnya masing-masing, bukan dua kali. --}}
+        <x-errors :only="['nama_lengkap', 'sekolah', 'tingkat', 'jurusan', 'mapel_pilihan']" />
 
         <div class="flex justify-end">
             <button type="submit" class="btn btn-primary">Simpan Profil</button>
         </div>
+    </form>
+
+    {{--
+        Form kedua, terpisah dari "Simpan Profil": tidak ada satu pun alasan
+        untuk memperbarui profil sambil mengganti kata sandi, dan menggabungkan
+        keduanya berarti menekan satu tombol bisa berbuat dua hal yang akibatnya
+        berbeda. Sengaja setelah form utama — ganti kata sandi adalah tindakan
+        yang jarang dan menyebabkan perangkat lain keluar, jadi ia tidak boleh
+        berdiri di depan pilihan mapel yang justru dikerjakan setiap hari.
+    --}}
+    <form method="POST" action="{{ route('profil.password') }}" class="mt-5 space-y-5">
+        @csrf
+        @method('PUT')
+
+        <section class="card p-6">
+            <h2 class="card-title">Kata sandi</h2>
+
+            <p class="mt-1.5 text-sm text-slate-600">
+                Mengganti kata sandi mengeluarkan seluruh perangkat lain dari
+                akunmu. Perangkat yang sedang kamu pakai tetap masuk.
+            </p>
+
+            <div class="mt-4 grid gap-5 sm:grid-cols-2">
+                <x-input label="Kata sandi lama" name="password_lama" type="password" required />
+
+                <div class="space-y-5">
+                    <x-input label="Kata sandi baru (minimal 8 karakter)" name="password" type="password" required />
+                    <x-input label="Ulangi kata sandi baru" name="password_confirmation" type="password" required />
+                </div>
+            </div>
+
+            <x-errors :only="['password_lama', 'password', 'password_confirmation']" />
+
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary">Ubah Kata Sandi</button>
+            </div>
+        </section>
     </form>
 </x-layouts.app>
