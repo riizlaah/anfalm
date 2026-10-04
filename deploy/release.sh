@@ -58,6 +58,10 @@ rsync -a \
     --exclude='seed.spec.ts' \
     --exclude='contoh-pg-kategori.png' \
     --exclude='public/storage' \
+    --exclude='.env' \
+    --exclude='.env.production' \
+    --exclude='.env.backup' \
+    --exclude='auth.json' \
     --exclude='storage/logs/*' \
     --exclude='storage/framework/cache/*' \
     --exclude='storage/framework/sessions/*' \
@@ -66,8 +70,10 @@ rsync -a \
     "$ROOT/" "$STAGE/"
 
 # InfinityFree tidak mendukung symlink, jadi pengganti public/storage ini
-# diletakkan langsung di root paket.
+# diletakkan langsung di root paket. Template .env produksi menggantikan
+# .env.example bawaan agar tinggal disalin jadi .env di server.
 cp "$ROOT/deploy/htdocs.htaccess" "$STAGE/.htaccess"
+cp "$ROOT/deploy/env.production.example" "$STAGE/.env.example"
 
 printf '\n== 3/5 Dependensi produksi ==\n'
 composer install --no-dev --optimize-autoloader --no-interaction --working-dir="$STAGE"

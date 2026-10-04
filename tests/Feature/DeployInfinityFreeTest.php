@@ -43,7 +43,9 @@ it('menyiapkan skrip paket rilis yang memeriksa batas berkas php hosting', funct
     expect($isi)
         ->toContain('--no-dev')
         ->toContain('BATAS_PHP')
-        ->toContain('public/build/manifest.json');
+        ->toContain('public/build/manifest.json')
+        ->toContain("--exclude='.env'")
+        ->toContain('env.production.example');
 });
 
 it('menyiapkan skrip pembuat database produksi yang menyaring data uji', function () {
