@@ -2,6 +2,7 @@
 
 use App\Domain\Ai\AiFake;
 use App\Domain\Ai\AiProviderException;
+use App\Domain\Ai\AiProviderFactory;
 use App\Domain\Ai\GeminiAiProvider;
 use App\Domain\Ai\JsonRepairService;
 use Illuminate\Support\Facades\Http;
@@ -232,6 +233,32 @@ it('memakai timeout 180 detik secara bawaan', function () {
 
     expect($parameter->getDefaultValue())->toBe(180);
 });
+
+it('rantai gemini mengikuti GEMINI_MODELS ketika daftar itu diisi', function () {
+    config()->set('services.gemini.models', 'gemini-3.5-flash, gemini-2.0-flash ,');
+
+    expect(AiProviderFactory::rantaiGemini())->toBe(['gemini-3.5-flash', 'gemini-2.0-flash']);
+});
+
+it('rantai gemini tetap memakai urutan bawaan ketika GEMINI_MODELS kosong', function () {
+    config()->set('services.gemini.models', null);
+
+    expect(AiProviderFactory::rantaiGemini())->toBe(
+        GeminiAiProvider::rantai((string) config('services.gemini.model'))
+    )->toHaveCount(8);
+});
+
+it('timeout gemini mengikuti GEMINI_TIMEOUT', function () {
+    config()->set('services.gemini.timeout', 45);
+
+    expect(AiProviderFactory::timeoutGemini())->toBe(45);
+});
+
+it('timeout gemini jatuh ke 180 detik ketika env tidak terisi atau tidak sah', function (mixed $nilai) {
+    config()->set('services.gemini.timeout', $nilai);
+
+    expect(AiProviderFactory::timeoutGemini())->toBe(180);
+})->with([null, '', 0, -5]);
 
 it('melempar AiProviderException saat respons kosong', function () {
     Http::fake(['generativelanguage.googleapis.com/*' => Http::response(['candidates' => []], 200)]);

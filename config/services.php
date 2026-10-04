@@ -38,6 +38,15 @@ return [
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
+
+        // Daftar model dipisah koma. Kosong = rantai bawaan (model utama lalu
+        // cadangan). Diisi untuk membatasi jumlah percobaan pada hosting yang
+        // mematikan request lebih cepat dari 180 detik.
+        'models' => env('GEMINI_MODELS'),
+
+        // Detik tunggu tiap satu percobaan. Nol atau kosong dianggap tidak
+        // sah dan jatuh kembali ke 180.
+        'timeout' => env('GEMINI_TIMEOUT', 180),
     ],
 
 ];
