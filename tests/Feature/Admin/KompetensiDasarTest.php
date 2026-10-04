@@ -293,7 +293,7 @@ it('bulk delete KD dibatasi pada mapel di rute', function () {
     $kdLain = KompetensiDasar::factory()->create();
 
     $this->actingAs($admin)->post("/admin/mapel/{$mapel->id}/kompetensi-dasar/bulk-delete", [
-        'all' => true,
+        'ids' => [$kdMilikMapel->id, $kdLain->id],
     ])->assertRedirect(route('admin.mapel.kompetensi-dasar.index', $mapel));
 
     $this->assertSoftDeleted('kompetensi_dasar', ['id' => $kdMilikMapel->id]);
@@ -316,7 +316,7 @@ it('bulk delete KD melewati KD yang memiliki soal', function () {
     $this->assertNotSoftDeleted('kompetensi_dasar', ['id' => $kdDipakai->id]);
 });
 
-it('bulk delete semua KD menghormati filter level kognitif', function () {
+it('parameter all tidak lagi menghapus KD tanpa ids', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create();
     $kdPenalaran = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id, 'level_kognitif' => 'penalaran']);
@@ -325,8 +325,20 @@ it('bulk delete semua KD menghormati filter level kognitif', function () {
     $this->actingAs($admin)->post("/admin/mapel/{$mapel->id}/kompetensi-dasar/bulk-delete", [
         'all' => true,
         'level_kognitif' => 'penalaran',
-    ])->assertRedirect(route('admin.mapel.kompetensi-dasar.index', $mapel));
+    ])->assertRedirect(route('admin.mapel.kompetensi-dasar.index', $mapel))
+        ->assertSessionHas('error', 'Tidak ada kompetensi dasar yang dipilih.');
 
-    $this->assertSoftDeleted('kompetensi_dasar', ['id' => $kdPenalaran->id]);
+    $this->assertNotSoftDeleted('kompetensi_dasar', ['id' => $kdPenalaran->id]);
     $this->assertNotSoftDeleted('kompetensi_dasar', ['id' => $kdGabungan->id]);
+});
+
+it('index KD tidak lagi menampilkan tombol Hapus Semua', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $this->actingAs($admin)->get("/admin/mapel/{$mapel->id}/kompetensi-dasar")
+        ->assertOk()
+        ->assertDontSee('Hapus Semua')
+        ->assertSee('Hapus Terpilih');
 });

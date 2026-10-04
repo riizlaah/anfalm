@@ -28,23 +28,18 @@
         <button type="button" class="btn btn-primary" data-dialog-open="create-mapel">+ Tambah Mapel</button>
     </div>
 
+    {{--
+        "Hapus Semua" tidak lagi ada (butir laporan). Tombol itu sudah lama tidak
+        bekerja — form mengirim `all` sebagai string "1" sementara controller
+        membandingkannya dengan boolean, sehingga permintaannya selalu ditolak
+        diam-diam. Pilih semua + Hapus Terpilih sudah menutup kebutuhan yang sama,
+        dengan jumlah yang persis dilihat admin di layar.
+    --}}
     <div class="mt-3 flex flex-wrap items-center gap-2">
         <form method="POST" action="{{ route('admin.mapel.bulk-delete') }}" id="bulk-delete-mapel"
             onsubmit="return confirm('Hapus mapel yang dipilih?')">
             @csrf
             <button type="submit" class="btn btn-danger px-2.5 py-1 text-xs" id="bulk-delete-btn" disabled>Hapus Terpilih</button>
-        </form>
-        <form method="POST" action="{{ route('admin.mapel.bulk-delete') }}"
-            onsubmit="return confirm('Hapus semua mapel yang tampil?')">
-            @csrf
-            <input type="hidden" name="all" value="1">
-            @if (request('tingkat'))
-                <input type="hidden" name="tingkat" value="{{ request('tingkat') }}">
-            @endif
-            @if (request('jenis'))
-                <input type="hidden" name="jenis" value="{{ request('jenis') }}">
-            @endif
-            <button type="submit" class="btn btn-ghost px-2.5 py-1 text-xs">Hapus Semua</button>
         </form>
     </div>
 

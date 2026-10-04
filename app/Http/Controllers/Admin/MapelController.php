@@ -80,22 +80,13 @@ class MapelController extends Controller
     public function bulkDestroy(Request $request): RedirectResponse
     {
         try {
+            // Hanya `ids`. Parameter `all` dan penyaringannya ikut dihapus
+            // bersama tombol "Hapus Semua": tidak ada lagi permintaan untuk
+            // "semua yang tampil", jadi yang bisa dituju hanya baris yang
+            // admin beri centang — jumlahnya sudah terbaca di layar.
             $data = $request->validate([
                 'ids' => ['nullable', 'array'],
                 'ids.*' => ['integer'],
-                'all' => ['nullable', 'boolean'],
-                'tingkat' => ['nullable', Rule::in([
-                    Mapel::TINGKAT_SD,
-                    Mapel::TINGKAT_SMP,
-                    Mapel::TINGKAT_SMA,
-                    Mapel::TINGKAT_SMK,
-                    Mapel::TINGKAT_ALL,
-                ])],
-                'jenis' => ['nullable', Rule::in([
-                    Mapel::JENIS_WAJIB,
-                    Mapel::JENIS_PILIHAN_UMUM,
-                    Mapel::JENIS_PILIHAN_KEJURUAN,
-                ])],
             ]);
         } catch (ValidationException $e) {
             // Index tidak memakai old(), jadi error ditampilkan lewat flash biasa
@@ -104,15 +95,13 @@ class MapelController extends Controller
                 ->with('error', $e->errors()->first());
         }
 
-        if (($data['all'] ?? false) !== true && empty($data['ids'])) {
+        if (empty($data['ids'])) {
             return redirect()->route('admin.mapel.index')
                 ->with('error', 'Tidak ada mapel yang dipilih.');
         }
 
         $kandidatIds = Mapel::query()
-            ->when($request->filled('tingkat'), fn (Builder $q) => $q->where('tingkat', $data['tingkat']))
-            ->when($request->filled('jenis'), fn (Builder $q) => $q->where('jenis', $data['jenis']))
-            ->when(($data['all'] ?? false) !== true, fn (Builder $q) => $q->whereIn('id', $data['ids']))
+            ->whereIn('id', $data['ids'])
             ->pluck('id');
 
         $dipakaiIds = Mapel::query()

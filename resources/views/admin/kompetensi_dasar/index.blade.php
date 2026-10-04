@@ -29,20 +29,12 @@
         <button type="button" class="btn btn-primary" data-dialog-open="create-kd">+ Tambah KD</button>
     </div>
 
+    {{-- "Hapus Semua" dihapus bersama ketiga halaman admin; lihat catatan di admin/mapel/index. --}}
     <div class="mt-3 flex flex-wrap items-center gap-2">
         <form method="POST" action="{{ route('admin.mapel.kompetensi-dasar.bulk-delete', $mapel) }}" id="bulk-delete-kd"
             onsubmit="return confirm('Hapus kompetensi dasar yang dipilih?')">
             @csrf
             <button type="submit" class="btn btn-danger px-2.5 py-1 text-xs" id="bulk-delete-btn" disabled>Hapus Terpilih</button>
-        </form>
-        <form method="POST" action="{{ route('admin.mapel.kompetensi-dasar.bulk-delete', $mapel) }}"
-            onsubmit="return confirm('Hapus semua kompetensi dasar yang tampil?')">
-            @csrf
-            <input type="hidden" name="all" value="1">
-            @if (request('level_kognitif'))
-                <input type="hidden" name="level_kognitif" value="{{ request('level_kognitif') }}">
-            @endif
-            <button type="submit" class="btn btn-ghost px-2.5 py-1 text-xs">Hapus Semua</button>
         </form>
     </div>
 

@@ -599,7 +599,7 @@ it('bulk delete soal melewati soal yang masih dipakai paket', function () {
     $this->assertNotSoftDeleted('soal', ['id' => $soalDipakai->id]);
 });
 
-it('bulk delete semua soal menghormati filter kompetensi dasar dan batas mapel', function () {
+it('parameter all tidak lagi menghapus soal tanpa ids', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create();
     $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
@@ -612,11 +612,24 @@ it('bulk delete semua soal menghormati filter kompetensi dasar dan batas mapel',
     $this->actingAs($admin)->post(route('admin.mapel.soal.bulk-delete', $mapel), [
         'all' => true,
         'kompetensi_dasar_id' => $kd->id,
-    ])->assertRedirect(route('admin.mapel.soal.index', $mapel));
+    ])->assertRedirect(route('admin.mapel.soal.index', $mapel))
+        ->assertSessionHas('error', 'Tidak ada soal yang dipilih.');
 
-    $this->assertSoftDeleted('soal', ['id' => $soal->id]);
+    $this->assertNotSoftDeleted('soal', ['id' => $soal->id]);
     $this->assertNotSoftDeleted('soal', ['id' => $soalLainFilter->id]);
     $this->assertNotSoftDeleted('soal', ['id' => $soalMapelLain->id]);
+});
+
+it('index soal tidak lagi menampilkan tombol Hapus Semua', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+    Soal::factory()->create(['kompetensi_dasar_id' => $kd->id]);
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.index', $mapel))
+        ->assertOk()
+        ->assertDontSee('Hapus Semua')
+        ->assertSee('Hapus Terpilih');
 });
 
 it('bulk delete soal tanpa pilihan menampilkan error', function () {

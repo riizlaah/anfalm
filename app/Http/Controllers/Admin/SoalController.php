@@ -102,28 +102,21 @@ class SoalController extends Controller
 
     public function bulkDestroy(Request $request, Mapel $mapel): RedirectResponse
     {
+        // Hanya `ids`; `all` dan filternya ikut dihapus bersama tombol
+        // "Hapus Semua" — lihat catatan di MapelController::bulkDestroy().
         $data = $request->validate([
             'ids' => ['nullable', 'array'],
             'ids.*' => ['integer'],
-            'all' => ['nullable', 'boolean'],
-            'kompetensi_dasar_id' => ['nullable', 'integer'],
-            'tipe_soal' => ['nullable', Rule::in([
-                Soal::TIPE_PG,
-                Soal::TIPE_PG_KOMPLEKS,
-                Soal::TIPE_PG_KATEGORI,
-            ])],
         ]);
 
-        if (($data['all'] ?? false) !== true && empty($data['ids'])) {
+        if (empty($data['ids'])) {
             return redirect()->route('admin.mapel.soal.index', $mapel)
                 ->with('error', 'Tidak ada soal yang dipilih.');
         }
 
         $kandidatIds = Soal::query()
             ->whereHas('kompetensiDasar', fn (Builder $q) => $q->where('mapel_id', $mapel->getKey()))
-            ->when($request->filled('kompetensi_dasar_id'), fn (Builder $q) => $q->where('kompetensi_dasar_id', $data['kompetensi_dasar_id']))
-            ->when($request->filled('tipe_soal'), fn (Builder $q) => $q->where('tipe_soal', $data['tipe_soal']))
-            ->when(($data['all'] ?? false) !== true, fn (Builder $q) => $q->whereIn('id', $data['ids']))
+            ->whereIn('id', $data['ids'])
             ->pluck('id');
 
         $dipakaiIds = DetailPaketSoal::query()

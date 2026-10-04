@@ -74,11 +74,11 @@ class KompetensiDasarController extends Controller
     public function bulkDestroy(Request $request, Mapel $mapel): RedirectResponse
     {
         try {
+            // Hanya `ids`; `all` dan filternya ikut dihapus bersama tombol
+            // "Hapus Semua" — lihat catatan di MapelController::bulkDestroy().
             $data = $request->validate([
                 'ids' => ['nullable', 'array'],
                 'ids.*' => ['integer'],
-                'all' => ['nullable', 'boolean'],
-                'level_kognitif' => ['nullable', Rule::in(array_keys(KompetensiDasar::LEVEL_KOGNITIF))],
             ]);
         } catch (ValidationException $e) {
             // Index tidak memakai old(), jadi error ditampilkan lewat flash biasa
@@ -89,13 +89,12 @@ class KompetensiDasarController extends Controller
 
         $redirect = redirect()->route('admin.mapel.kompetensi-dasar.index', $mapel);
 
-        if (($data['all'] ?? false) !== true && empty($data['ids'])) {
+        if (empty($data['ids'])) {
             return $redirect->with('error', 'Tidak ada kompetensi dasar yang dipilih.');
         }
 
         $kandidatIds = $mapel->kompetensiDasars()
-            ->when($request->filled('level_kognitif'), fn (Builder $q) => $q->where('level_kognitif', $data['level_kognitif']))
-            ->when(($data['all'] ?? false) !== true, fn (Builder $q) => $q->whereIn('id', $data['ids']))
+            ->whereIn('id', $data['ids'])
             ->pluck('id');
 
         $dipakaiIds = KompetensiDasar::query()

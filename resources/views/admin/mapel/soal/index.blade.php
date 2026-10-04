@@ -29,18 +29,6 @@
             @csrf
             <button type="submit" class="btn btn-danger px-2.5 py-1 text-xs" id="bulk-delete-btn" disabled>Hapus Terpilih</button>
         </form>
-        <form method="POST" action="{{ route('admin.mapel.soal.bulk-delete', $mapel) }}"
-            onsubmit="return confirm('Hapus semua soal yang tampil?')">
-            @csrf
-            <input type="hidden" name="all" value="1">
-            @if (request('kompetensi_dasar_id'))
-                <input type="hidden" name="kompetensi_dasar_id" value="{{ request('kompetensi_dasar_id') }}">
-            @endif
-            @if (request('tipe_soal'))
-                <input type="hidden" name="tipe_soal" value="{{ request('tipe_soal') }}">
-            @endif
-            <button type="submit" class="btn btn-ghost px-2.5 py-1 text-xs">Hapus Semua</button>
-        </form>
     </div>
 
     <p class="mt-3 text-sm text-slate-600">Menampilkan {{ $jumlahSoal }} soal.</p>

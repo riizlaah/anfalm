@@ -232,16 +232,30 @@ it('bulk delete mapel melewati mapel yang memiliki KD atau paket soal', function
     $this->assertNotSoftDeleted('mapel', ['id' => $mapelDipakai->id]);
 });
 
-it('bulk delete semua mapel menghormati filter tingkat', function () {
+it('parameter all tidak lagi menghapus apa pun tanpa ids', function () {
     $admin = User::factory()->admin()->create();
     $mapelSMA = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SMA]);
     $mapelSMP = Mapel::factory()->create(['tingkat' => Mapel::TINGKAT_SMP]);
 
+    // "Hapus Semua" dihapus dari halaman (butir laporan): tombol itu sudah lama
+    // tidak bekerja — form mengirim `all` sebagai string "1" sementara controller
+    // membandingkannya dengan boolean, sehingga permintaannya selalu ditolak
+    // diam-diam. Pilih semua + hapus terpilih menutup kebutuhan yang sama.
     $this->actingAs($admin)->post('/admin/mapel/bulk-delete', [
         'all' => true,
         'tingkat' => Mapel::TINGKAT_SMA,
-    ])->assertRedirect(route('admin.mapel.index'));
+    ])->assertRedirect(route('admin.mapel.index'))
+        ->assertSessionHas('error', 'Tidak ada mapel yang dipilih.');
 
-    $this->assertSoftDeleted('mapel', ['id' => $mapelSMA->id]);
+    $this->assertNotSoftDeleted('mapel', ['id' => $mapelSMA->id]);
     $this->assertNotSoftDeleted('mapel', ['id' => $mapelSMP->id]);
+});
+
+it('index mapel tidak lagi menampilkan tombol Hapus Semua', function () {
+    $admin = User::factory()->admin()->create();
+
+    $this->actingAs($admin)->get('/admin/mapel')
+        ->assertOk()
+        ->assertDontSee('Hapus Semua')
+        ->assertSee('Hapus Terpilih');
 });
