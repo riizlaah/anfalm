@@ -1,0 +1,17 @@
+# InfinityFree selalu menyajikan folder htdocs sebagai web root dan tidak
+# menyediakan symlink, sementara Laravel mengharapkan public/ sebagai web root
+# dan memakai `php artisan storage:link` untuk unggahan. Dua aturan di bawah
+# menutup kedua selisih itu sekaligus menyembunyikan berkas rahasia: permintaan
+# ke /.env atau /storage/logs/laravel.log diarahkan ke public/ yang memang tidak
+# memilikinya, sehingga berakhir 404.
+#
+# Berkas ini diletakkan sebagai htdocs/.htaccess. public/.htaccess bawaan
+# Laravel tidak diubah — keduanya bekerja berurutan.
+RewriteEngine On
+
+# /storage/gambar-soal/x.webp -> /storage/app/public/gambar-soal/x.webp
+# (pengganti storage:link; [END] menghentikan siklus rewrite)
+RewriteRule ^storage/(.*)$ /storage/app/public/$1 [END]
+
+# sisanya diserahkan ke folder public/ lalu diteruskan public/.htaccess
+RewriteRule (.*) /public/$1 [L]
