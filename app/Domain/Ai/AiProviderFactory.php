@@ -11,7 +11,7 @@ class AiProviderFactory
         if (! app()->runningUnitTests() && is_string($apiKey) && $apiKey !== '') {
             return new GeminiAiProvider(
                 $apiKey,
-                (string) (config('services.gemini.model') ?? 'gemini-3.5-flash'),
+                GeminiAiProvider::rantai((string) (config('services.gemini.model') ?? 'gemini-3.5-flash')),
             );
         }
 

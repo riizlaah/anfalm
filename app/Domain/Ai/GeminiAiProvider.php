@@ -24,18 +24,88 @@ class GeminiAiProvider implements AiProvider
      */
     private const MAKS_TUNGGU_ULANG = 60;
 
+    /**
+     * Rantai model ketika batas laju menolak permintaan (butir S3): yang utama
+     * lebih dulu, lalu varian lite yang lebih murah, lalu model gratis Google
+     * lain. Satu permintaan hanya menempuh rantai ini sejauh model sebelumnya
+     * benar-benar ditolak, jadi jalur yang lolos pada percobaan pertama tidak
+     * pernah menyentuh model cadangan mana pun.
+     *
+     * @var array<int, string>
+     */
+    public const MODEL_BAWAAN = [
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-2.0-flash',
+    ];
+
+    /**
+     * @param  array<int, string>  $models  kosong memakai `MODEL_BAWAAN`
+     */
     public function __construct(
         private string $apiKey,
-        private string $model = 'gemini-3.5-flash',
+        private array $models = [],
         private int $timeoutSeconds = 180,
-    ) {}
+    ) {
+        $this->models = array_values(array_filter(
+            $models,
+            fn ($model): bool => is_string($model) && $model !== ''
+        ));
+
+        if ($this->models === []) {
+            $this->models = self::MODEL_BAWAAN;
+        }
+    }
+
+    /**
+     * Rantai yang diawali model utama lalu cadangan bawaan, tanpa mengulang
+     * nama yang sama bila model utama kebetulan sudah ada di dalam daftar.
+     *
+     * @return array<int, string>
+     */
+    public static function rantai(string $utama): array
+    {
+        return array_values(array_unique([$utama, ...self::MODEL_BAWAAN]));
+    }
 
     public function generate(string $prompt): string
+    {
+        // Alasan paling informatif yang terkumpul di sepanjang rantai. Kuota
+        // harian pada model pertama, misalnya, tetap layak dilaporkan walaupun
+        // model terakhir justru ditolak tanpa keterangan.
+        $alasan = null;
+
+        foreach ($this->models as $model) {
+            $hasil = $this->cobaModel($model, $prompt, $alasan);
+
+            if ($hasil !== null) {
+                return $hasil;
+            }
+        }
+
+        throw new AiProviderException($alasan ?? $this->pesanStatus(429));
+    }
+
+    /**
+     * Menjalankan prompt pada satu model sampai jawabannya jadi.
+     *
+     * @param  string|null  $alasan  diisi saat model ini ditolak karena kuota
+     *                               harian atau antrean panjang — pesan yang
+     *                               dipakai kembali bila seluruh rantai habis
+     * @return string|null teks respons, atau null kalau model ini harus
+     *                     digantikan model berikutnya pada rantai
+     */
+    private function cobaModel(string $model, string $prompt, ?string &$alasan): ?string
     {
         for ($percobaan = 1; $percobaan <= self::MAKS_PERCOBAAN; $percobaan++) {
             try {
                 $response = Http::timeout($this->timeoutSeconds)
-                    ->post($this->url(), $this->payload($prompt));
+                    ->post($this->url($model), $this->payload($prompt));
             } catch (ConnectionException) {
                 if ($percobaan === self::MAKS_PERCOBAAN) {
                     throw new AiProviderException('Gagal menghubungi layanan AI. Periksa koneksi, lalu coba lagi.');
@@ -52,20 +122,30 @@ class GeminiAiProvider implements AiProvider
                 $jeda = $this->jedaRateLimit($response);
                 $harian = $this->kuotaHarian($response);
 
-                $this->catatRateLimit($response, $jeda, $harian);
+                $this->catatRateLimit($model, $response, $jeda, $harian);
 
-                // Kuota harian atau antrean panjang: percobaan ulang berikutnya
-                // pasti ditolak lagi, jadi lebih baik memberi tahu admin sekarang
-                // beserta jam yang bisa dituju.
-                if ($harian || ($jeda !== null && $jeda > self::MAKS_TUNGGU_ULANG)) {
-                    throw new AiProviderException($this->pesanAntrean($harian, $jeda));
+                $perluMenunggu = ! $harian && $jeda !== null && $jeda <= self::MAKS_TUNGGU_ULANG;
+
+                if (! $perluMenunggu) {
+                    // Kuota harian atau antrean panjang: model ini memang tidak
+                    // punya ruang sekarang. Tanpa petunjuk jeda pun demikian —
+                    // bila server tidak menyebut kapan boleh kembali, bertanya
+                    // ke model lain lebih cepat daripada menebak waktunya.
+                    if ($harian || ($jeda !== null && $jeda > self::MAKS_TUNGGU_ULANG)) {
+                        $alasan ??= $this->pesanAntrean($harian, $jeda);
+                    }
+
+                    break;
                 }
 
-                if ($percobaan === self::MAKS_PERCOBAAN) {
-                    throw new AiProviderException($this->pesanStatus($status));
+                // Jeda pendek hanya dihormati sekali pada model yang sama:
+                // setelah itu bertanya ke model berikutnya lebih cepat daripada
+                // menunggu lagi di model yang barusan menolak.
+                if ($percobaan > 1) {
+                    break;
                 }
 
-                Sleep::sleep($jeda ?? self::BACKOFF_DETIK[$percobaan - 1]);
+                Sleep::sleep($jeda);
 
                 continue;
             }
@@ -81,7 +161,7 @@ class GeminiAiProvider implements AiProvider
             }
 
             if ($response->failed()) {
-                throw new AiProviderException('Gagal menghubungi layanan AI (kode status '.$response->status().').');
+                throw new AiProviderException('Gagal menghubungi layanan AI (kode status '.$status.').');
             }
 
             $body = $response->json();
@@ -98,11 +178,13 @@ class GeminiAiProvider implements AiProvider
 
             return $text;
         }
+
+        return null;
     }
 
-    private function url(): string
+    private function url(string $model): string
     {
-        return "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key={$this->apiKey}";
+        return "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}";
     }
 
     /**
@@ -187,13 +269,16 @@ class GeminiAiProvider implements AiProvider
 
     /**
      * Setiap penolakan 429 dicatat lengkap ke ai.log: tanpa ini penyebabnya
-     * hanya terlihat dari pesan yang sudah disederhanakan untuk admin.
+     * hanya terlihat dari pesan yang sudah disederhanakan untuk admin. Nama
+     * model ikut dicatat karena sekarang satu permintaan bisa melewati
+     * beberapa model, dan baris-baris inilah yang menunjukkan di mana rantai
+     * berhenti.
      */
-    private function catatRateLimit(Response $response, ?int $jeda, bool $harian): void
+    private function catatRateLimit(string $model, Response $response, ?int $jeda, bool $harian): void
     {
         Log::channel('ai')->warning('Permintaan AI ditolak karena batas laju.', [
             'status' => $response->status(),
-            'model' => $this->model,
+            'model' => $model,
             'jeda_detik' => $jeda,
             'kuota_harian' => $harian,
             'retry_after' => $response->header('Retry-After'),

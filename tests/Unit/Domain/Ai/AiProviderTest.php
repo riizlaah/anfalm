@@ -8,6 +8,23 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 
+/**
+ * Nama model pada tiap permintaan yang tercatat, berurutan seperti dikirim.
+ *
+ * @return array<int, string|null>
+ */
+function modelDikutip(): array
+{
+    return Http::recorded()
+        ->map(function ($pasangan): ?string {
+            preg_match('#/models/([^:]+):#', $pasangan[0]->url(), $cocok);
+
+            return $cocok[1] ?? null;
+        })
+        ->values()
+        ->all();
+}
+
 it('mengirim prompt ke API Gemini dan mengembalikan teks respons', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([
@@ -15,7 +32,7 @@ it('mengirim prompt ke API Gemini dan mengembalikan teks respons', function () {
         ], 200),
     ]);
 
-    $hasil = (new GeminiAiProvider('kunci-rahasia', 'gemini-3.5-flash'))->generate('buatkan 5 soal');
+    $hasil = (new GeminiAiProvider('kunci-rahasia'))->generate('buatkan 5 soal');
 
     expect($hasil)->toBe('{"daftar_soal":[]}');
 
@@ -64,6 +81,44 @@ it('mencoba ulang saat layanan sibuk lalu berhasil', function () {
     Http::assertSentCount(2);
 });
 
+it('menyusuri rantai model sesuai urutan yang ditentukan ketika kena batas laju', function () {
+    Sleep::fake();
+    Log::shouldReceive('channel')->with('ai')->andReturnSelf();
+    Log::shouldReceive('warning');
+
+    // Urutan yang diminta: 3.5 flash, 3.5 flash lite, 3.1 flash lite, 3 flash,
+    // lalu model gratis Google lain — diakhiri satu model yang belum tersentuh
+    // batas laju supaya perpindahannya terlihat berhenti di mana.
+    $rantai = [
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3-flash-preview',
+        'gemini-2.0-flash',
+    ];
+
+    Http::fakeSequence()
+        ->push([], 429)
+        ->push([], 429)
+        ->push([], 429)
+        ->push([], 429)
+        ->push(['candidates' => [['content' => ['parts' => [['text' => '{"ok":true}']]]]]], 200);
+
+    $hasil = (new GeminiAiProvider('kunci-rahasia', $rantai))->generate('prompt');
+
+    expect($hasil)->toBe('{"ok":true}')
+        ->and(modelDikutip())->toBe($rantai);
+});
+
+it('empat model pertama mengikuti urutan yang ditentukan butir fallback', function () {
+    expect(array_slice(GeminiAiProvider::MODEL_BAWAAN, 0, 4))->toBe([
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3-flash-preview',
+    ]);
+});
+
 it('berhenti setelah percobaan habis dengan pesan ramah saat 503', function () {
     Sleep::fake();
 
@@ -87,7 +142,7 @@ it('memberi pesan ramah saat kena rate limit 429', function () {
 it('berhenti langsung saat kuota harian habis, bukan membuang percobaan berikutnya', function () {
     Sleep::fake();
     Log::shouldReceive('channel')->with('ai')->andReturnSelf();
-    Log::shouldReceive('warning')->once();
+    Log::shouldReceive('warning')->times(count(GeminiAiProvider::MODEL_BAWAAN));
 
     Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
         'error' => [
@@ -106,13 +161,13 @@ it('berhenti langsung saat kuota harian habis, bukan membuang percobaan berikutn
     expect(fn () => (new GeminiAiProvider('kunci-rahasia'))->generate('prompt'))
         ->toThrow(AiProviderException::class, 'Kuota AI harian habis');
 
-    Http::assertSentCount(1);
+    expect(modelDikutip())->toBe(GeminiAiProvider::MODEL_BAWAAN);
 });
 
 it('menyerah pada Retry-After panjang dengan jam yang bisa dituju', function () {
     Sleep::fake();
     Log::shouldReceive('channel')->with('ai')->andReturnSelf();
-    Log::shouldReceive('warning')->once();
+    Log::shouldReceive('warning')->times(count(GeminiAiProvider::MODEL_BAWAAN));
 
     Http::fake(['generativelanguage.googleapis.com/*' => Http::response([], 429, ['Retry-After' => '300'])]);
 
@@ -128,7 +183,7 @@ it('menyerah pada Retry-After panjang dengan jam yang bisa dituju', function () 
         ->toContain('±5 menit')
         ->toContain('Coba lagi sekitar pukul');
 
-    Http::assertSentCount(1);
+    expect(modelDikutip())->toBe(GeminiAiProvider::MODEL_BAWAAN);
 });
 
 it('mencatat header x-ratelimit dan badan respons saat kena batas laju', function () {
