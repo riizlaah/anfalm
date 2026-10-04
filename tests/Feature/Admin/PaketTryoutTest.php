@@ -1,9 +1,16 @@
 <?php
 
+use App\Domain\Scoring\KompetensiLevel;
+use App\Models\HasilTryout;
+use App\Models\KompetensiDasar;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
 use App\Models\Percobaan;
+use App\Models\RiwayatPengerjaan;
+use App\Models\Soal;
+use App\Models\TrackingKompetensi;
+use App\Models\TrackingMapel;
 use App\Models\User;
 
 /**
@@ -418,6 +425,118 @@ it('paket tryout dengan percobaan diblokir dari hapus', function () {
         ->assertSessionHas('error', 'Paket tryout masih memiliki riwayat pengerjaan, tidak dapat dihapus.');
 
     $this->assertNotSoftDeleted('paket_tryout', ['id' => $paketTryout->id]);
+});
+
+it('mereset seluruh riwayat peserta atas paket tryout supaya paketnya bisa dihapus', function () {
+    $admin = User::factory()->admin()->create();
+    $peserta = User::factory()->peserta()->create();
+    $paketTryout = PaketTryout::factory()->create();
+
+    // Riwayat dibangun seperti hasil menutup tryout: satu percobaan selesai
+    // beserta jawabannya, satu baris hasil, dan angka tracking yang
+    // diturunkan dari keduanya.
+    $mapel = $paketTryout->daftarMapel()->firstOrFail()->mapel;
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->getKey()]);
+    $soal = Soal::factory()->create(['kompetensi_dasar_id' => $kd->getKey()]);
+
+    $percobaan = Percobaan::factory()->tryout()->selesai()->create([
+        'user_id' => $peserta->getKey(),
+        'paket_tryout_id' => $paketTryout->getKey(),
+        'daftar_soal' => [['mapel_id' => $mapel->getKey(), 'soal_ids' => [$soal->getKey()]]],
+    ]);
+
+    RiwayatPengerjaan::factory()->create([
+        'user_id' => $peserta->getKey(),
+        'percobaan_id' => $percobaan->getKey(),
+        'soal_id' => $soal->getKey(),
+        'paket_tryout_id' => $paketTryout->getKey(),
+        'mode' => 'tryout',
+    ]);
+
+    HasilTryout::factory()->create([
+        'user_id' => $peserta->getKey(),
+        'paket_tryout_id' => $paketTryout->getKey(),
+    ]);
+
+    TrackingMapel::query()->create([
+        'user_id' => $peserta->getKey(),
+        'mapel_id' => $mapel->getKey(),
+        'theta_estimasi' => 1.250,
+        'level_kompetensi' => KompetensiLevel::MAHIR,
+        'total_tryout_diikuti' => 1,
+        'rata_rata_skor_irt' => 0.800,
+        'last_updated' => now(),
+    ]);
+
+    TrackingKompetensi::query()->create([
+        'user_id' => $peserta->getKey(),
+        'kompetensi_dasar_id' => $kd->getKey(),
+        'total_soal_dikerjakan' => 4,
+        'total_benar' => 3,
+        'persentase_benar' => 75.0,
+        'theta_estimasi' => 1.250,
+        'last_updated' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get('/admin/paket-tryout')
+        ->assertOk()
+        ->assertSee('Reset Riwayat');
+
+    $this->actingAs($admin)
+        ->post("/admin/paket-tryout/{$paketTryout->getKey()}/reset-riwayat")
+        ->assertRedirect(route('admin.paket-tryout.index'))
+        ->assertSessionHas('success');
+
+    expect(Percobaan::count())->toBe(0)
+        ->and(RiwayatPengerjaan::count())->toBe(0)
+        ->and(HasilTryout::count())->toBe(0);
+
+    // Tracking ikut dihitung ulang dari riwayat yang tersisa, bukan ditinggal
+    // membawa angka percobaan yang sudah dihapus (S2).
+    $barisMapel = TrackingMapel::query()->where('user_id', $peserta->getKey())->sole();
+    expect($barisMapel->total_tryout_diikuti)->toBe(0)
+        ->and($barisMapel->theta_estimasi)->toBeNull()
+        ->and($barisMapel->rata_rata_skor_irt)->toBeNull()
+        ->and($barisMapel->level_kompetensi)->toBe(KompetensiLevel::BELUM_TERIDENTIFIKASI);
+
+    $barisKd = TrackingKompetensi::query()->where('user_id', $peserta->getKey())->sole();
+    expect($barisKd->total_soal_dikerjakan)->toBe(0)
+        ->and($barisKd->theta_estimasi)->toBeNull();
+
+    $this->actingAs($admin)
+        ->delete("/admin/paket-tryout/{$paketTryout->getKey()}")
+        ->assertRedirect(route('admin.paket-tryout.index'))
+        ->assertSessionHas('success', 'Paket tryout berhasil dihapus.');
+
+    $this->assertSoftDeleted('paket_tryout', ['id' => $paketTryout->getKey()]);
+});
+
+it('tidak menawarkan reset riwayat pada paket yang belum pernah dikerjakan', function () {
+    $admin = User::factory()->admin()->create();
+    $paketTryout = PaketTryout::factory()->create();
+
+    $this->actingAs($admin)
+        ->get('/admin/paket-tryout')
+        ->assertOk()
+        ->assertDontSee('Reset Riwayat');
+
+    // Dilewati pun, tombolnya tidak menghapus apa pun dan tidak menyesatkan.
+    $this->actingAs($admin)
+        ->post("/admin/paket-tryout/{$paketTryout->getKey()}/reset-riwayat")
+        ->assertRedirect(route('admin.paket-tryout.index'))
+        ->assertSessionHas('success', 'Paket tryout tidak memiliki riwayat pengerjaan.');
+
+    $this->assertNotSoftDeleted('paket_tryout', ['id' => $paketTryout->getKey()]);
+});
+
+it('peserta tidak dapat mereset riwayat paket tryout (403)', function () {
+    $peserta = User::factory()->peserta()->create();
+    $paketTryout = PaketTryout::factory()->create();
+
+    $this->actingAs($peserta)
+        ->post("/admin/paket-tryout/{$paketTryout->getKey()}/reset-riwayat")
+        ->assertForbidden();
 });
 
 it('form paket tryout menampilkan tingkat sebagai keterangan, bukan pilihan', function () {

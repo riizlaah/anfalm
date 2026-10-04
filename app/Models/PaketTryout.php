@@ -75,6 +75,28 @@ class PaketTryout extends Model
     }
 
     /**
+     * Percobaan peserta atas paket ini — baik yang masih berjalan maupun yang
+     * sudah selesai. Inilah yang membuat paketnya tidak bisa dihapus sebelum
+     * riwayatnya direset (S2).
+     */
+    public function percobaan(): HasMany
+    {
+        return $this->hasMany(Percobaan::class);
+    }
+
+    /** Nilai akhir tiap peserta pada paket ini, dipakai daftar leaderboard. */
+    public function hasilTryout(): HasMany
+    {
+        return $this->hasMany(HasilTryout::class);
+    }
+
+    /** Jawaban per soal yang menunjuk paket ini, termasuk yang sedang berjalan. */
+    public function riwayatPengerjaan(): HasMany
+    {
+        return $this->hasMany(RiwayatPengerjaan::class);
+    }
+
+    /**
      * Nama seluruh mapel pada paket ini, dipisah koma — dipakai kartu dan
      * tabel daftar tryout yang hanya perlu ikhtisar, bukan perinciannya.
      */

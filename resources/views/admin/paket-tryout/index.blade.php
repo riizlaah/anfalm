@@ -29,6 +29,13 @@
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
                                 <a href="{{ route('admin.paket-tryout.edit', $paketTryout) }}" class="btn btn-ghost px-2.5 py-1 text-xs">Edit</a>
+                                @if ($paketTryout->percobaan_count > 0 || $paketTryout->hasil_tryout_count > 0 || $paketTryout->riwayat_pengerjaan_count > 0)
+                                    <form method="POST" action="{{ route('admin.paket-tryout.reset-riwayat', $paketTryout) }}"
+                                        onsubmit="return confirm('Hapus SELURUH riwayat pengerjaan paket ini? Nilai, jawaban, dan riwayat peserta pada paket ini akan hilang dan tidak dapat dikembalikan.')">
+                                        @csrf
+                                        <button type="submit" class="btn btn-ghost px-2.5 py-1 text-xs">Reset Riwayat</button>
+                                    </form>
+                                @endif
                                 <form method="POST" action="{{ route('admin.paket-tryout.destroy', $paketTryout) }}"
                                     onsubmit="return confirm('Hapus paket tryout ini?')">
                                     @csrf

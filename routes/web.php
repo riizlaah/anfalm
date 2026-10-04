@@ -80,6 +80,8 @@ Route::middleware(['auth', 'single.session', 'role:admin'])->group(function () {
     Route::resource('admin/paket-soal', PaketSoalController::class)
         ->except(['show'])
         ->names('admin.paket-soal');
+    Route::post('admin/paket-tryout/{paketTryout}/reset-riwayat', [PaketTryoutController::class, 'resetRiwayat'])
+        ->name('admin.paket-tryout.reset-riwayat');
     Route::resource('admin/paket-tryout', PaketTryoutController::class)
         ->except(['show'])
         ->names('admin.paket-tryout');

@@ -17,6 +17,7 @@ use App\Models\TrackingKompetensi;
 use App\Models\TrackingMapel;
 use App\Models\User;
 use DateTimeInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -521,6 +522,86 @@ class PercobaanService
                 'selesai_pada' => $selesaiPada,
             ]);
         });
+    }
+
+    /**
+     * Menghapus seluruh riwayat peserta atas satu paket tryout — percobaan
+     * beserta seluruh jawabannya dan baris hasilnya — lalu menghitung ulang
+     * angka tracking yang diturunkan dari riwayat itu.
+     *
+     * Ini langkah pertama menghapus paket yang sudah pernah dikerjakan (S2):
+     * tanpanya `destroy` menolak karena paketnya masih dianggap dipakai, dan
+     * bila riwayatnya dipaksa hilang peserta akan tertinggal theta, level,
+     * jumlah tryout, dan peringkat atas data yang sudah tidak ada.
+     *
+     * @return bool `true` bila ada riwayat yang dihapus
+     */
+    public function resetRiwayatPaket(PaketTryout $paket): bool
+    {
+        return DB::transaction(function () use ($paket): bool {
+            $percobaan = Percobaan::query()
+                ->with('user')
+                ->where('paket_tryout_id', $paket->getKey())
+                ->lockForUpdate()
+                ->get();
+
+            $hasil = HasilTryout::query()
+                ->where('paket_tryout_id', $paket->getKey())
+                ->lockForUpdate()
+                ->get();
+
+            if ($percobaan->isEmpty() && $hasil->isEmpty()) {
+                return false;
+            }
+
+            // `riwayat_pengerjaan` mengikut `percobaan` lewat ON DELETE CASCADE,
+            // jadi menghapus baris percobaan sudah menghapus semua jawabannya.
+            HasilTryout::query()->whereKey($hasil->pluck('id'))->delete();
+            Percobaan::query()->whereKey($percobaan->pluck('id'))->delete();
+
+            foreach ($percobaan->groupBy('user_id') as $kumpulan) {
+                $user = $kumpulan->first()?->user;
+
+                if ($user === null) {
+                    continue;
+                }
+
+                $kelompok = $this->kelompokTersentuh($kumpulan);
+
+                $this->perbaruiTrackingKompetensi($user, $kelompok['soal']);
+                $this->perbaruiTrackingMapel($user, $kelompok['mapel']);
+            }
+
+            return true;
+        });
+    }
+
+    /**
+     * Soal dan mapel yang tercantum pada `daftar_soal` sekumpulan percobaan.
+     *
+     * Sumbernya `daftar_soal`, bukan jawaban yang tersisa, supaya cakupan
+     * perhitungan ulangnya persis seperti cakupan saat percobaan ditutup.
+     *
+     * @param  Collection<int, Percobaan>  $kumpulan
+     * @return array{soal: array<int, int>, mapel: array<int, int>}
+     */
+    private function kelompokTersentuh(Collection $kumpulan): array
+    {
+        $grup = $kumpulan->flatMap(fn (Percobaan $percobaan): array => $percobaan->daftar_soal ?? []);
+
+        return [
+            'soal' => $grup
+                ->flatMap(fn (array $baris): array => $baris['soal_ids'] ?? [])
+                ->map(fn ($soalId): int => (int) $soalId)
+                ->unique()
+                ->values()
+                ->all(),
+            'mapel' => $grup
+                ->map(fn (array $baris): int => (int) ($baris['mapel_id'] ?? 0))
+                ->unique()
+                ->values()
+                ->all(),
+        ];
     }
 
     /**

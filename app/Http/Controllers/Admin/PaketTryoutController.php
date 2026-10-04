@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Percobaan\PercobaanService;
 use App\Http\Controllers\Controller;
 use App\Models\HasilTryout;
 use App\Models\Mapel;
@@ -20,9 +21,12 @@ use Illuminate\View\View;
 
 class PaketTryoutController extends Controller
 {
+    public function __construct(private readonly PercobaanService $percobaan) {}
+
     public function index(): View
     {
         $paketTryouts = PaketTryout::with('daftarMapel.mapel')
+            ->withCount(['percobaan', 'hasilTryout', 'riwayatPengerjaan'])
             ->orderByDesc('id')
             ->get();
 
@@ -90,6 +94,25 @@ class PaketTryoutController extends Controller
 
         return redirect()->route('admin.paket-tryout.index')
             ->with('success', 'Paket tryout berhasil dihapus.');
+    }
+
+    /**
+     * Menghapus seluruh riwayat peserta atas paket ini sekaligus menghitung
+     * ulang angka tracking mereka.
+     *
+     * Ini langkah pertama menghapus paket yang sudah pernah dikerjakan (S2):
+     * `destroy` menolak selama riwayatnya masih ada, dan angka peserta tidak
+     * boleh ditinggal membawa theta, level, maupun jumlah tryout yang sudah
+     * tidak bisa dibuktikan.
+     */
+    public function resetRiwayat(PaketTryout $paketTryout): RedirectResponse
+    {
+        $adaRiwayat = $this->percobaan->resetRiwayatPaket($paketTryout);
+
+        return redirect()->route('admin.paket-tryout.index')
+            ->with('success', $adaRiwayat
+                ? 'Seluruh riwayat pengerjaan paket tryout berhasil dihapus.'
+                : 'Paket tryout tidak memiliki riwayat pengerjaan.');
     }
 
     /**
