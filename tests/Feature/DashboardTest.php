@@ -231,6 +231,27 @@ it('ketiga blok dashboard berbagi lebar yang sama dan grid latihan dua kolom', f
         ->toContain('max-w-3xl');
 });
 
+it('setiap kartu latihan tertaut ke mapelnya sendiri', function () {
+    $this->travelTo('2026-10-03 10:00:00');
+
+    $peserta = User::factory()->peserta()->create();
+
+    $peserta->mapelPilihan()->sync([
+        Mapel::query()->where('nama', 'Kimia')->sole()->getKey(),
+    ]);
+
+    $matematika = Mapel::query()->where('nama', 'Matematika')->sole();
+    $kimia = Mapel::query()->where('nama', 'Kimia')->sole();
+
+    $html = $this->actingAs($peserta)->get(route('dashboard'))->assertOk()->getContent();
+
+    // Sebelumnya ketiganya tertaut ke `latihan.index` tanpa apa pun, jadi
+    // mapel yang barusan ditekan tidak ikut terbawa ke form.
+    expect($html)
+        ->toContain(route('latihan.index', ['mapel' => $matematika->getKey()]))
+        ->toContain(route('latihan.index', ['mapel' => $kimia->getKey()]));
+});
+
 it('kartu latihan menampilkan ajakan dan tombol yang berbeda menurut level', function () {
     $this->travelTo('2026-10-03 10:00:00');
 

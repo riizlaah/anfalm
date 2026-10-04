@@ -30,7 +30,13 @@
         @csrf
 
         <div class="grid gap-5 sm:grid-cols-2">
+            {{-- `:value` diisi dari `?mapel=` yang dibawa tautan dashboard;
+                 `old()` tetap menang bila validasi `mulai()` gagal, sehingga
+                 pilihan peserta tidak hilang saat form dikirim ulang. JS di
+                 bawah memanggil `isiKd()` saat muat, jadi daftar kompetensi
+                 dasar ikut terisi untuk mapel yang sudah terpilih ini. --}}
             <x-select label="Mapel" name="mapel_id" empty-option="Pilih mapel…"
+                :value="$mapelTerpilih"
                 :options="$mapels->mapWithKeys(fn ($mapel): array => [$mapel->getKey() => $mapel->nama])" />
 
             <x-select label="Kompetensi dasar (opsional)" name="kompetensi_dasar_id"

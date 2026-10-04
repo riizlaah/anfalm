@@ -156,6 +156,33 @@ it('menampilkan form latihan berisi pilihan mapel dan timer', function () {
         ->assertSee('5');
 });
 
+it('parameter mapel pada URL memilih mapel itu di form', function () {
+    $peserta = User::factory()->peserta()->create();
+    ['mapel' => $mapel] = mapelLatihan();
+
+    $html = $this->actingAs($peserta)
+        ->get(route('latihan.index', ['mapel' => $mapel->getKey()]))
+        ->assertOk()
+        ->getContent();
+
+    // Tautan kartu latihan di dashboard menyertai peta mapelnya; tanpa param
+    // ini peserta mendarat di form dengan "Pilih mapel…" yang masih kosong dan
+    // harus memilih ulang apa yang barusan ia klik.
+    expect($html)->toMatch('/<option value="'.$mapel->getKey().'"\s+selected/');
+});
+
+it('parameter mapel yang tidak dikenal diabaikan tanpa galat', function () {
+    $peserta = User::factory()->peserta()->create();
+    mapelLatihan();
+
+    // Nilai query tidak boleh dipercaya apa adanya: id yang sudah dihapus atau
+    // bukan bagian dari daftar yang ditawarkan peserta hanya berarti "kosong".
+    $this->actingAs($peserta)
+        ->get(route('latihan.index', ['mapel' => 999999]))
+        ->assertOk()
+        ->assertSee('Pilih mapel');
+});
+
 it('membuat percobaan latihan sesuai pilihan peserta', function () {
     $peserta = User::factory()->peserta()->create();
     ['mapel' => $mapel] = mapelLatihan();

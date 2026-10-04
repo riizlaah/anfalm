@@ -171,7 +171,8 @@
 
                         <p class="mt-2 mb-4 text-sm text-slate-600">{{ $kartu['ajakan'] }}</p>
 
-                        <a href="{{ route('latihan.index') }}" class="btn btn-primary mt-auto w-full">
+                        <a href="{{ route('latihan.index', ['mapel' => $kartu['mapel']->getKey()]) }}"
+                            class="btn btn-primary mt-auto w-full">
                             {{ $kartu['tombol'] }}
                         </a>
                     </article>

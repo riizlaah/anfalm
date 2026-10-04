@@ -44,6 +44,17 @@ class LatihanController extends Controller
             ->orderBy('kode')
             ->get());
 
+        // Tautan kartu latihan di dashboard menyertai `?mapel=` (butir laporan):
+        // peserta baru saja menekan mapel itu, jadi form sudah terisi dan ia
+        // tidak perlu memilih ulang. Nilai query hanya dipakai bila benar-benar
+        // ada di dalam `$mapels` — id yang sudah dihapus, bukan angka, atau di
+        // luar pilihan peserta jatuh menjadi kosong, bukan opsi terpilih yang
+        // tidak akan lolos validasi `mulai()`.
+        $mapelDiminta = $request->query('mapel');
+        $mapelTerpilih = is_scalar($mapelDiminta)
+            ? $mapels->first(fn (Mapel $mapel): bool => (string) $mapel->getKey() === (string) $mapelDiminta)?->getKey()
+            : null;
+
         // Korelasi KD per mapel disertakan langsung supaya dropdown filter
         // bisa berganti tanpa endpoint tambahan.
         $kdPeta = $mapels->mapWithKeys(fn (Mapel $mapel): array => [
@@ -69,6 +80,7 @@ class LatihanController extends Controller
 
         return view('latihan.index', [
             'mapels' => $mapels,
+            'mapelTerpilih' => $mapelTerpilih,
             'kdPeta' => $kdPeta,
             'berjalan' => $berjalan,
             'jumlahPreset' => self::JUMLAH_PRESET,
