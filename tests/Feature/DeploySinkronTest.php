@@ -133,8 +133,56 @@ it('kata sandi hanya lewat berkas konfigurasi, bukan baris perintah', function (
     expect(preg_match('/--user\b/', skripSinkron()))->toBe(0);
 });
 
-it('memaksa TLS pada setiap sesi', function () {
-    expect(skripSinkron())->toContain('--ssl-reqd');
+it('memaksa TLS, IPv4, dan PASV pada setiap sesi', function () {
+    // Ketiganya ditulis ke berkas konfigurasi, bukan di baris perintah, supaya
+    // tidak mungkin ada satu pun pemanggilan curl yang lupa. Percobaan di
+    // server nyata membuktikan mengapa: alamat IPv6 milik ftpupload.net
+    // dijawab `500 Unknown command` atas EPSV, dan di jalur itu curl keluar
+    // dengan kode 8 tanpa sempat jatuh ke PASV — sementara di IPv4 ia jatuh ke
+    // PASV dengan sendirinya.
+    expect(skripSinkron())
+        ->toContain('ssl-reqd')
+        ->toContain('ipv4')
+        ->toContain('disable-epsv')
+        ->toContain('chmod 600');
+});
+
+it('mengecek koneksi sebelum merakit paket', function () {
+    // Bila koneksi mati, skrip harus berhenti sebelum `release.sh` membangun
+    // zip dan memindai seluruh vendor — biayanya nol berkas tersentuh.
+    $ftp = sys_get_temp_dir().'/ftp-mati-'.uniqid().'.ini';
+    file_put_contents($ftp, implode("\n", [
+        'HOST=127.0.0.1',
+        'PENGGUNA=uji',
+        'SANDI=rahasiaUjiTidakNyata',
+        'REMOTE=/htdocs',
+        'PORT=1',
+        '',
+    ]));
+
+    try {
+        $hasil = shell_exec(
+            'cd '.escapeshellarg(base_path())
+            .' && FTP_INI='.escapeshellarg($ftp).' bash deploy/sinkron.sh 2>&1; echo "KODE=$?"'
+        );
+    } finally {
+        @unlink($ftp);
+    }
+
+    expect($hasil)
+        ->toContain('KODE=1')
+        ->toContain('gagal menyambung')
+        ->not->toContain('Merakit paket rilis');
+});
+
+it('menyebut penyebab sebenarnya sesuai kode keluar curl', function () {
+    // Kode 8 (respons server tidak wajar pada koneksi data) pernah ikut
+    // dilaporkan sebagai "kredensial atau akses ditolak", yang mengarahkan
+    // penyelidikan ke arah yang salah justru saat kredensialnya benar.
+    expect(skripSinkron())
+        ->toContain('respons server tidak wajar')
+        ->toContain('kredensial ditolak server')
+        ->not->toContain('kredensial atau akses ditolak');
 });
 
 it('mode uji membuktikan TLS benar-benar dinegosiasikan', function () {

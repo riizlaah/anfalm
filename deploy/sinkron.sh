@@ -42,10 +42,18 @@ DAFTAR_GAGAL="$BUILD/GAGAL-unggah.txt"
 DAFTAR_GAGAL_HAPUS="$BUILD/GAGAL-hapus.txt"
 PATCH="$BUILD/patch"
 
-# Berkas konfigurasi curl berisi satu baris `user = "..."`. Ia dibuat
-# bertopeng 600 dan dibuang lewat trap pada setiap jalan keluar, termasuk saat
-# gagal di tengah jalan. Alasannya: `ps` memperlihatkan apa pun yang tertulis
-# di baris perintah, sedangkan berkas konfigurasi tidak.
+# Berkas konfigurasi curl berisi kredensial sekaligus seluruh invarian
+# transport: `ssl-reqd`, `ipv4`, `disable-epsv`. Ia dibuat bertopeng 600 dan
+# dibuang lewat trap pada setiap jalan keluar, termasuk saat gagal di tengah
+# jalan. Dua alasan: `ps` memperlihatkan apa pun yang tertulis di baris
+# perintah, sedangkan berkas konfigurasi tidak; dan menaruh invarian di sini
+# membuatnya mustahil terlewat oleh satu pun pemanggilan curl.
+#
+# Uji ke server nyata menentukan isinya. ftpupload.net ikut menjawab alamat
+# IPv6, dan di jalur itu server menolak `EPSV` dengan `500 Unknown command`
+# lalu curl keluar kode 8 tanpa sempat jatuh ke PASV. Di IPv4 ia jatuh ke PASV
+# dengan sendirinya, jadi memaksa IPv4 + PASV adalah satu-satunya kombinasi
+# yang terbukti membuka saluran data.
 CFG="$BUILD/.curl-kredensial-$$.conf"
 
 MODE="sinkron"
@@ -66,7 +74,8 @@ bantuan() {
 }
 
 bersihkan() {
-    rm -f "$CFG" "$BUILD/uji-sinkron.txt" "$BUILD/uji-sinkron-balik.txt" "$BUILD/uji-curl.txt"
+    rm -f "$CFG" "$BUILD/uji-sinkron.txt" "$BUILD/uji-sinkron-balik.txt" \
+        "$BUILD/uji-curl.txt" "$BUILD/preflight-curl.txt"
 }
 
 trap bersihkan EXIT
@@ -133,7 +142,12 @@ kutip_curl() {
 tulis_config() {
     (
         umask 077
-        printf 'user = "%s:%s"\n' "$(kutip_curl "$PENGGUNA")" "$(kutip_curl "$SANDI")" > "$CFG"
+        {
+            printf 'user = "%s:%s"\n' "$(kutip_curl "$PENGGUNA")" "$(kutip_curl "$SANDI")"
+            # Bendera boolean harus ditulis polos: `ipv4 = true` membuat curl
+            # menolak seluruh berkas dengan "had unsupported trailing garbage".
+            printf 'ssl-reqd\nipv4\ndisable-epsv\n'
+        } > "$CFG"
     )
     chmod 600 "$CFG"
 }
@@ -142,6 +156,40 @@ tulis_config
 
 export CFG BASE AKAR PATCH
 export DAFTAR_GAGAL DAFTAR_GAGAL_HAPUS
+
+# Kode keluar curl dibaca langsung supaya pesannya menyebut penyebab yang
+# sebenarnya. Tanpa pemetaan ini, kegagalan saluran data (kode 8) ikut
+# dilaporkan sebagai masalah kredensial dan mengarahkan penyelidikan ke arah
+# yang salah — justru ketika kredensialnya sendiri benar.
+salah_curl() {
+    case "$1" in
+        6) printf 'nama host %s tidak dapat diuraikan — periksa HOST di %s' "$HOST" "$KRED" ;;
+        7) printf 'gagal menyambung ke %s — periksa HOST dan PORT di %s' "$BASE" "$KRED" ;;
+        8) printf 'respons server tidak wajar pada koneksi data (kode curl 8) — jalur PASV/EPSV bermasalah, jalankan lagi' ;;
+        67) printf 'kredensial ditolak server (kode curl 67) — periksa PENGGUNA dan SANDI di %s' "$KRED" ;;
+        *) printf 'koneksi gagal (kode curl %s)' "$1" ;;
+    esac
+}
+
+# Satu pemeriksaan dipakai dua tempat: mode `--uji`, dan pembuka tiap
+# sinkronisasi. Ia membuktikan dua hal yang berbeda dan sama-sama wajib —
+# `AUTH TLS` yang dijawab `234` (kredensial tidak boleh terkirim polos), lalu
+# satu LIST yang membuka saluran data lewat jalur PASV yang persis dipakai
+# unggah. LIST dipilih karena bersifat baca-saja: kegagalan saluran data bisa
+# dibuktikan tanpa menulis apa pun ke server.
+periksa_koneksi() {
+    local verbose="$1" kode="$2"
+
+    if [ "$kode" -ne 0 ]; then
+        tail -n 20 "$verbose" >&2 || true
+        gagal "$(salah_curl "$kode")"
+    fi
+
+    grep -q 'AUTH TLS' "$verbose" ||
+        { tail -n 20 "$verbose" >&2; gagal "curl tidak pernah mengirim AUTH TLS"; }
+    grep -qE '< 234' "$verbose" ||
+        { tail -n 20 "$verbose" >&2; gagal "AUTH TLS tidak diterima server (bukan 234) — TLS gagal"; }
+}
 
 # ---------------------------------------------------------------------------
 # 2. Mode uji: bukti TLS, kredensial, lalu bolak-balik sebuah berkas
@@ -154,37 +202,28 @@ if [ "$MODE" = "uji" ]; then
 
     verbose="$BUILD/uji-curl.txt"
     set +e
-    curl -K "$CFG" --ssl-reqd --silent --show-error --verbose \
+    curl -K "$CFG" --silent --show-error --verbose \
         --list-only -o /dev/null "$BASE/" 2> "$verbose"
     kode="$?"
     set -e
 
-    # Koneksi yang berhasil saja tidak membuktikan apa-apa: klien bisa saja
-    # jatuh ke koneksi polos. Yang dibutuhkan adalah `AUTH TLS` yang dijawab
-    # `234` sebelum kredensial dipakai.
-    grep -q 'AUTH TLS' "$verbose" ||
-        { tail -n 20 "$verbose" >&2; gagal "curl tidak pernah mengirim AUTH TLS"; }
-    grep -qE '< 234' "$verbose" ||
-        { tail -n 20 "$verbose" >&2; gagal "AUTH TLS tidak diterima server (bukan 234) — TLS gagal"; }
+    periksa_koneksi "$verbose" "$kode"
     catat "TLS    : AUTH TLS dijawab 234"
-
-    [ "$kode" -eq 0 ] ||
-        { tail -n 20 "$verbose" >&2; gagal "kredensial atau akses ditolak (kode curl $kode)"; }
-    catat "akses  : daftar isi terbaca"
+    catat "akses  : daftar isi terbaca, saluran data terbuka"
 
     uji_lokal="$BUILD/uji-sinkron.txt"
     uji_balik="$BUILD/uji-sinkron-balik.txt"
     printf 'diunggah-pada=%s\n' "$(date -Is)" > "$uji_lokal"
 
-    curl -K "$CFG" --ssl-reqd --silent --show-error --ftp-create-dirs \
+    curl -K "$CFG" --silent --show-error --ftp-create-dirs \
         -T "$uji_lokal" "$BASE/.uji-sinkron.txt"
-    curl -K "$CFG" --ssl-reqd --silent --show-error -o "$uji_balik" \
+    curl -K "$CFG" --silent --show-error -o "$uji_balik" \
         "$BASE/.uji-sinkron.txt"
     cmp -s "$uji_lokal" "$uji_balik" ||
         gagal "isi berkas uji tidak sama setelah dibaca kembali — pindah data tidak utuh"
     catat "uji    : unggah + unduh cocok"
 
-    curl -K "$CFG" --ssl-reqd --silent --show-error \
+    curl -K "$CFG" --silent --show-error \
         --quote "DELE $AKAR/.uji-sinkron.txt" --list-only -o /dev/null "$BASE/"
     catat "uji    : berkas percobaan terhapus dari server"
 
@@ -200,11 +239,28 @@ fi
 # menolak masukan yang tidak terurut dengan keluaran kode 1, yang pada `set -e`
 # mematikan skrip di tengah jalan tanpa pesan yang bisa ditindaklanjuti.
 # Periksa di sini — sebelum merakit paket yang mahal — supaya kegagalannya jelas
-# dan langkah pemulihannya tertulis.
+# dan langkah pemulihannya tertulis. Pemeriksaan ini lokal dan gratis, jadi ia
+# didahulukan atas pemeriksaan koneksi yang harus menyeberang jaringan.
 if [ -f "$MANIFEST_LAMA" ]; then
     LC_ALL=C sort -c "$MANIFEST_LAMA" 2>/dev/null ||
         gagal "deploy/build/manifest-akhir.txt tidak terurut — kemungkinan rusak atau pernah diedit tangan. Hapus berkas itu lalu jalankan ulang; sinkron berikutnya akan mengunggah ulang seluruh isi paket sekali"
 fi
+
+# Koneksi diperiksa sebelum paket dirakit. Pemeriksaan ini memakan waktu kurang
+# dari dua detik, tetapi kalau TLS, kredensial, atau saluran data sedang
+# bermasalah skrip berhenti di sini — bukan setelah ribuan berkas terkirim
+# sebagian dan menyisakan isi server yang setengah baru. Yang diuji adalah LIST,
+# jalur PASV yang sama dengan yang dipakai unggah, jadi kegagalan EPSV ketahuan
+# sebelum menyentuh satu berkas pun.
+printf '\n== Pemeriksaan koneksi ==\n'
+catat "tujuan : $BASE"
+preflight="$BUILD/preflight-curl.txt"
+set +e
+curl -K "$CFG" --silent --show-error --verbose --list-only -o /dev/null "$BASE/" 2> "$preflight"
+kode="$?"
+set -e
+periksa_koneksi "$preflight" "$kode"
+catat "TLS + saluran data : siap"
 
 printf '\n== Merakit paket rilis ==\n'
 bash "$ROOT/deploy/release.sh"
@@ -309,7 +365,7 @@ if [ "$n_unggah" -gt 0 ]; then
     xargs -0 -P "$PARALEL" -n 1 bash -c '
         rel="$1"
         curl -K "$CFG" --silent --show-error --retry 2 --ftp-create-dirs \
-            --ssl-reqd -T "$PATCH/$rel" "$BASE/$rel" ||
+            -T "$PATCH/$rel" "$BASE/$rel" ||
             printf "%s\n" "$rel" >> "$DAFTAR_GAGAL"
     ' _ < "$DAFTAR_PATCH"
 fi
@@ -319,7 +375,7 @@ if [ "$BERSIH" = "ya" ] && [ "$n_hapus" -gt 0 ]; then
     tr '\n' '\0' < "$DAFTAR_HAPUS" |
         xargs -0 -P "$PARALEL" -n 1 bash -c '
             rel="$1"
-            curl -K "$CFG" --silent --show-error --ssl-reqd \
+            curl -K "$CFG" --silent --show-error \
                 --quote "DELE $AKAR/$rel" --list-only -o /dev/null "$BASE/" ||
                 printf "%s\n" "$rel" >> "$DAFTAR_GAGAL_HAPUS"
         ' _
