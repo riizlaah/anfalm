@@ -24,6 +24,7 @@
 _ide_helper.php
 /deploy/build/
 /deploy/produksi.sql
+/deploy/ftp.ini
 Homestead.json
 Homestead.yaml
 Thumbs.db
