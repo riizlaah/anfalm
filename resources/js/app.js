@@ -6,6 +6,29 @@ import { renderRumusDi } from './rumus'
 pasangProteksiKonten()
 
 document.addEventListener('click', (event) => {
+    // Toggle tampilan isi input sandi. Tombolnya sengaja berdiri di luar
+    // `<label>` input, sehingga klik di sini tidak ikut mengaktifkan label dan
+    // fokus tetap pada tombol — pengguna keyboard dapat menekannya berulang
+    // kali tanpa kehilangan tempat.
+    const toggleSandi = event.target.closest('[data-tombol-sandi]')
+    if (toggleSandi) {
+        event.preventDefault()
+
+        const input = toggleSandi.parentElement?.querySelector('input')
+        if (!input) {
+            return
+        }
+
+        const terlihat = input.type === 'text'
+        input.type = terlihat ? 'password' : 'text'
+        toggleSandi.setAttribute('aria-pressed', String(!terlihat))
+        toggleSandi.setAttribute('aria-label', terlihat ? 'Tampilkan sandi' : 'Sembunyikan sandi')
+        toggleSandi.querySelector('[data-sandi="lihat"]').hidden = !terlihat
+        toggleSandi.querySelector('[data-sandi="tutup"]').hidden = terlihat
+
+        return
+    }
+
     const opener = event.target.closest('[data-dialog-open]')
     if (opener) {
         event.preventDefault()

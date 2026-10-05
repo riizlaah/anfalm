@@ -1,13 +1,14 @@
 {{--
-    Ikon SVG inline untuk tab bar bawah.
+    Ikon SVG inline: tab bar bawah dan tombol toggle isi input sandi.
 
-    Sembilan ikon di bawah adalah seluruh kebutuhan ikon aplikasi, jadi memasang
+    Sebelas ikon di bawah adalah seluruh kebutuhan ikon aplikasi, jadi memasang
     paket ikon eksternal hanya untuk itu tidak sebanding dengan bobotnya.
     Goresannya memakai `currentColor`, sehingga ikon ikut berwarna emas pada tab
     aktif dan putih pucat pada tab yang tidak aktif tanpa aturan warna tambahan.
 
     `aria-hidden` wajib ada: label menu di sebelahnya sudah menjadi nama
-    aksesibel tautan, dan ikon hanya pelengkap visual.
+    aksesibel tautan, dan ikon hanya pelengkap visual. Pada tombol sandi,
+    nama aksesibelnya dipegang `aria-label` pada tombol itu sendiri.
 
     @param string $name    kunci ikon, mis. `dashboard`, `tryout`, `analisis`
     @param string $class   kelas ukuran; default 20px agar seimbang dengan label 12px
@@ -33,6 +34,12 @@
         // dengan Profil di sebelahnya — dua tab bertetangga dengan ikon identik
         // berhenti menjadi penanda apa pun.
         'pengguna' => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+        // Pasangan mata untuk toggle isi input sandi: satu saat sandi masih
+        // tertutup, satu saat sudah terlihat. Keduanya selalu dirender berdampingan
+        // dan hanya ditukar lewat atribut `hidden`, supaya tidak ada teks SVG yang
+        // harus diduplikasi di berkas JS.
+        'mata' => '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+        'mata-tertutup' => '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/>',
     ];
 @endphp
 
