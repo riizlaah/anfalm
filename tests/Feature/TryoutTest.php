@@ -3,10 +3,12 @@
 use App\Domain\Percobaan\PercobaanService;
 use App\Domain\Scoring\KompetensiLevel;
 use App\Http\Controllers\TryoutController;
+use App\Models\DetailPaketSoal;
 use App\Models\HasilTryout;
 use App\Models\Mapel;
 use App\Models\PaketSoal;
 use App\Models\PaketTryout;
+use App\Models\PaketTryoutMapel;
 use App\Models\Percobaan;
 use App\Models\RiwayatPengerjaan;
 use App\Models\Soal;
@@ -256,6 +258,70 @@ it('menghitung hasil pada mapel terakhir lalu menutup percobaan', function () {
         ->and($hasil->jumlah_benar)->toBe($aktif['soal']->count());
 });
 
+it('menyimpan hasil paket yang melewati jangkauan decimal lama', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+    $pilihan = duaMapelPilihan($paket);
+
+    // `skor_irt_total` adalah jumlah proporsi jawaban benar, jadi batas atasnya
+    // sama dengan jumlah soal terjawab. Paket produksi berisi 135 soal sementara
+    // kolom lama `decimal(5,3)` hanya muat sampai 99.999 — peserta yang
+    // mengerjakan paket besar menghadirkan PDOException 22003 dan Error 500
+    // persis setelah submit.
+    $grupPertama = app(PercobaanService::class)
+        ->susunDaftarSoal($paket, $pilihan)[0];
+
+    $paketSoal = PaketTryoutMapel::query()
+        ->where('paket_tryout_id', $paket->getKey())
+        ->where('mapel_id', $grupPertama['mapel_id'])
+        ->sole()
+        ->paketSoal;
+
+    $asal = $paketSoal->soal()
+        ->with('opsiJawaban')
+        ->where('tipe_soal', Soal::TIPE_PG)
+        ->orderBy('id')
+        ->firstOrFail();
+
+    foreach (range(count($grupPertama['soal_ids']) + 1, 100) as $nomor) {
+        $salinan = $asal->replicate();
+        $salinan->pertanyaan = 'Soal salinan nomor '.$nomor.'.';
+        $salinan->save();
+
+        foreach ($asal->opsiJawaban as $opsi) {
+            $salinan->opsiJawaban()->save($opsi->replicate());
+        }
+
+        DetailPaketSoal::create([
+            'paket_soal_id' => $paketSoal->getKey(),
+            'soal_id' => $salinan->getKey(),
+        ]);
+    }
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => $pilihan]);
+    $percobaan = Percobaan::sole();
+
+    $aktif = soalMapelAktif($percobaan);
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']));
+
+    // Pindah ke mapel terakhir tanpa menjawab yang di tengah, seperti tes
+    // penutupan percobaan, supaya hasilnya benar-benar ditulis.
+    $percobaan->update(['urutan_mapel' => count($percobaan->daftar_soal) - 1]);
+    $terakhir = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), payloadSemuaBenar($terakhir['soal']))
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    $hasil = HasilTryout::where('user_id', $peserta->id)->where('paket_tryout_id', $paket->id)->sole();
+    $jumlahTerjawab = $aktif['soal']->count() + $terakhir['soal']->count();
+
+    expect($jumlahTerjawab)->toBeGreaterThan(99)
+        ->and((float) $hasil->skor_irt_total)->toBeGreaterThan(99.999)
+        ->and((float) $hasil->skor_irt_total)->toEqualWithDelta($jumlahTerjawab, 0.001);
+});
+
 it('mengabaikan mapel yang tidak dijawab saat merata-ratakan theta', function () {
     $paket = PaketTryout::firstOrFail();
     $peserta = User::factory()->peserta()->create();
@@ -355,7 +421,7 @@ it('menyembunyikan kode KD dan statistik internal psikometrik dari halaman hasil
         ->not->toContain('Theta')
         ->not->toContain($kd->kode_kompetensi)
         ->toContain($kd->deskripsi)
-        ->toContain('Skor IRT total');
+        ->toContain('Soal benar setara');
 });
 
 it('menampilkan ringkasan kompetensi per KD sebagai kartu, bukan tabel', function () {

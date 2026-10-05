@@ -23,7 +23,7 @@
                 <dd class="text-lg font-semibold text-ink">{{ $hasil->total_soal }}/{{ $jumlahSoal }}</dd>
             </div>
             <div>
-                <dt class="text-xs text-slate-500">Skor IRT total</dt>
+                <dt class="text-xs text-slate-500">Soal benar setara</dt>
                 <dd class="text-lg font-semibold text-ink">{{ number_format((float) $hasil->skor_irt_total, 2) }}</dd>
             </div>
             <div>

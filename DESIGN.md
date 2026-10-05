@@ -580,7 +580,7 @@ CREATE TABLE hasil_tryout (
   paket_tryout_id bigint(20) unsigned NOT NULL,
   theta_final decimal(5,3) NOT NULL,
   standard_error decimal(5,3) DEFAULT NULL,
-  skor_irt_total decimal(5,3) NOT NULL,
+  skor_irt_total decimal(7,3) NOT NULL,
   skor_konversi int(11) DEFAULT NULL,
   jumlah_benar int(11) DEFAULT NULL,
   jumlah_salah int(11) DEFAULT NULL,
@@ -1034,8 +1034,9 @@ Aturan pembuatan soal:
 ### 7.3 Mengapa Parameter IRT untuk PG Kompleks & Kategori Dibedakan per Opsi/Pernyataan?
 Karena dalam soal PG Kompleks atau Kategori, setiap opsi/pernyataan memiliki tingkat kesulitan dan daya beda yang berbeda. Misal, dalam satu soal PG Kompleks, opsi A mungkin sangat mudah diidentifikasi sebagai salah, sementara opsi C sulit dibedakan. Dengan memberikan parameter IRT per opsi, penilaian menjadi lebih akurat.
 
-### 7.4 Bagaimana Cara Menghitung Skor IRT Total dari Banyak Mapel?
-Skor IRT total adalah **rata-rata theta dari seluruh mapel yang dikerjakan**, lalu dikonversi ke skala pelaporan. **Mapel yang tidak dijawab sama sekali diabaikan** dari perhitungan rata-rata theta.
+### 7.4 Bagaimana Cara Menghitung Skor Pelaporan dari Banyak Mapel?
+
+Skor yang dilihat peserta — kolom `skor_konversi`, tampil sebagai **Skor IRT** pada leaderboard dan analisis — berasal dari **rata-rata theta dari seluruh mapel yang dikerjakan**, lalu dikonversi ke skala pelaporan. **Mapel yang tidak dijawab sama sekali diabaikan** dari perhitungan rata-rata theta.
 
 **Rumus konversi (konsisten dengan §1.2):**
 - SD/SMP: `50 + 10 × θ` → clamp 0–100
@@ -1045,6 +1046,8 @@ Skor IRT total adalah **rata-rata theta dari seluruh mapel yang dikerjakan**, la
 - Theta per mapel: [1.2, 0.8, 0.5, 1.0, 0.3]
 - Rata-rata theta: 0.76
 - Skor: `500 + 100 × 0.76 = 576`
+
+**Ini bukan kolom `skor_irt_total`.** Kolom itu menyimpan **jumlah proporsi jawaban benar** — praktisnya jumlah soal yang terjawab benar — dan ditampilkan di halaman hasil sebagai *Soal benar setara* (jenisnya berbeda dari skor konversi). Label lamanya "Skor IRT total" berbenturan dengan definisi di atas karena angkanya memang tidak pernah dikonversi ke skala pelaporan.
 
 ### 7.5 Bagaimana Cara Menentukan KD yang "Perlu Bimbingan"?
 Berdasarkan tabel level kompetensi:
