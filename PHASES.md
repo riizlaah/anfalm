@@ -46,7 +46,7 @@ Aturan umum TDD di semua fase:
   - Estimasi MLE (Newton-Raphson) + fallback ekstrem (semua benar→θ=3.0, semua salah→θ=-3.0) — edge 6.3.
   - Estimasi dengan prior lemah N(0,1) untuk data sedikit / per-KD (hindari θ ekstrem palsu).
   - Standard error dari test information.
-  - Konversi θ→skala (0-100 untuk SD, 200-700 untuk SMA/SMK) berdasarkan **tingkat user**, dengan clamp — edge 6.8.
+  - Konversi θ→skala (0-100 untuk SD, 200-800 untuk SMA/SMK) berdasarkan **tingkat user**, dengan clamp — edge 6.8.
 - `ScoringService`:
   - **Kredit parsial per-item**: PG = 1 item; PG Kompleks = 1 item per opsi; PG Kategori = 1 item per pernyataan.
   - `jumlah_benar`/`jumlah_salah`/`total_soal` dihitung per-item.

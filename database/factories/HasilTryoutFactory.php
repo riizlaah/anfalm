@@ -23,7 +23,7 @@ class HasilTryoutFactory extends Factory
             'theta_final' => fake()->randomFloat(3, -3, 3),
             'standard_error' => fake()->randomFloat(3, 0.1, 1.0),
             'skor_irt_total' => fake()->randomFloat(3, -3, 3),
-            'skor_konversi' => fake()->numberBetween(200, 700),
+            'skor_konversi' => fake()->numberBetween(200, 800),
             'jumlah_benar' => 20,
             'jumlah_salah' => 10,
             'total_soal' => 30,

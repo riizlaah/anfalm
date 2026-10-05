@@ -141,28 +141,33 @@ it('konversi skala SMP memakai skala 0-100 yang sama dengan SD', function () {
         ->and($this->irt->convertToScale(-8.0, 'SMP'))->toBe(0);
 });
 
-it('konversi skala SMA/SMK: theta 0 menjadi 450', function () {
-    expect($this->irt->convertToScale(0.0, 'SMA'))->toBe(450)
-        ->and($this->irt->convertToScale(0.0, 'SMK'))->toBe(450);
+it('konversi skala SMA/SMK: theta 0 menjadi 500', function () {
+    expect($this->irt->convertToScale(0.0, 'SMA'))->toBe(500)
+        ->and($this->irt->convertToScale(0.0, 'SMK'))->toBe(500);
 });
 
-it('konversi skala SMA mengikuti rumus 450 + 100*theta', function () {
-    expect($this->irt->convertToScale(1.0, 'SMA'))->toBe(550)
-        ->and($this->irt->convertToScale(-1.0, 'SMA'))->toBe(350);
+it('konversi skala SMA mengikuti rumus 500 + 100*theta', function () {
+    expect($this->irt->convertToScale(1.0, 'SMA'))->toBe(600)
+        ->and($this->irt->convertToScale(-1.0, 'SMA'))->toBe(400);
 });
 
-it('konversi skala SMA/SMK di-clamp ke 200-700 (edge 6.8)', function () {
-    expect($this->irt->convertToScale(10.0, 'SMK'))->toBe(700)
+it('konversi skala SMA/SMK di-clamp ke 200-800 (edge 6.8)', function () {
+    expect($this->irt->convertToScale(10.0, 'SMK'))->toBe(800)
         ->and($this->irt->convertToScale(-10.0, 'SMK'))->toBe(200);
 });
 
-it('tingkat yang tidak dikenal diperlakukan sebagai skala 200-700', function () {
-    expect($this->irt->convertToScale(0.0, null))->toBe(450);
+it('ujung skala SMA/SMK tepat tercapai pada batas theta', function () {
+    expect($this->irt->convertToScale(IrtService::THETA_MAX, 'SMA'))->toBe(800)
+        ->and($this->irt->convertToScale(IrtService::THETA_MIN, 'SMA'))->toBe(200);
+});
+
+it('tingkat yang tidak dikenal diperlakukan sebagai skala 200-800', function () {
+    expect($this->irt->convertToScale(0.0, null))->toBe(500);
 });
 
 it('rentang skor berdiri pada batas konversi theta ekstrem', function () {
     expect($this->irt->rentangSkor('SD'))->toBe([20, 80])
         ->and($this->irt->rentangSkor('SMP'))->toBe([20, 80])
-        ->and($this->irt->rentangSkor('SMK'))->toBe([200, 700])
-        ->and($this->irt->rentangSkor(null))->toBe([200, 700]);
+        ->and($this->irt->rentangSkor('SMK'))->toBe([200, 800])
+        ->and($this->irt->rentangSkor(null))->toBe([200, 800]);
 });

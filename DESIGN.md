@@ -26,14 +26,16 @@ P(θ) = c + (1 - c) / (1 + e^(-a(θ - b)))
 
 **Skala Pelaporan (dihitung berdasarkan `tingkat` akun user):**
 - **SD/SMP/Sederajat:** 0 – 100
-- **SMA/SMK/Sederajat:** 200 – 700
+- **SMA/SMK/Sederajat:** 200 – 800
 
 **Rumus Konversi Theta ke Skala:**
 ```
 SD/SMP:   50 + 10 × θ   (di-clamp 0–100)
-SMA/SMK:  450 + 100 × θ (di-clamp 200–700)
+SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 ```
 > Rumus ini bersifat final dan konsisten di seluruh dokumen (§7.4 juga menggunakan rumus ini; ada inkonsistensi pada §7.4 versi lama yang telah dikoreksi di bawah).
+>
+> **Mengapa 500 dan bukan 450:** pada `450 + 100 × θ` nilai 700 sudah tercapai pada θ = 2.5, sehingga seperempat rentang theta teratas — termasuk seluruh siswa yang benar-benar menguasai materi — duduk di satu titik yang sama. Dengan `500 + 100 × θ` ujung skala 200 dan 800 justru tercapai tepat pada batas theta ±3, jadi tidak ada rentang yang terbuang percuma.
 
 ### 1.3 Target Pengguna
 - **Admin:** Guru/pembuat soal
@@ -722,7 +724,7 @@ tulis tanpa berarti pada skala ini.
   - Fallback: admin input manual (satu per satu) atau upload file.
 
 ### 6.8 Skor IRT di Luar Rentang Skala
-- **Kasus:** Theta > 3 atau < -3 menghasilkan skor konversi di luar rentang 0-100 atau 200-700.
+- **Kasus:** Theta > 3 atau < -3 menghasilkan skor konversi di luar rentang 0-100 atau 200-800.
 - **Penanganan:** Clamping (potong) ke batas minimum/maksimum skala.
 
 ### 6.9 Peserta Mengakses Leaderboard Sebelum Selesai
@@ -1037,12 +1039,12 @@ Skor IRT total adalah **rata-rata theta dari seluruh mapel yang dikerjakan**, la
 
 **Rumus konversi (konsisten dengan §1.2):**
 - SD/SMP: `50 + 10 × θ` → clamp 0–100
-- SMA/SMK: `450 + 100 × θ` → clamp 200–700
+- SMA/SMK: `500 + 100 × θ` → clamp 200–800
 
 **Contoh (SMA):**
 - Theta per mapel: [1.2, 0.8, 0.5, 1.0, 0.3]
 - Rata-rata theta: 0.76
-- Skor: `450 + 100 × 0.76 = 526`
+- Skor: `500 + 100 × 0.76 = 576`
 
 ### 7.5 Bagaimana Cara Menentukan KD yang "Perlu Bimbingan"?
 Berdasarkan tabel level kompetensi:

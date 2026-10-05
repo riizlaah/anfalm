@@ -113,7 +113,12 @@ class IrtService
 
     /**
      * Konversi theta ke skala pelaporan (dengan clamping, edge 6.8).
-     * SD/SMP: 0-100 dengan rumus 50 + 10θ. SMA/SMK: 200-700 dengan rumus 450 + 100θ.
+     * SD/SMP: 0-100 dengan rumus 50 + 10θ. SMA/SMK: 200-800 dengan rumus 500 + 100θ.
+     *
+     * Rumus SMA/SMK disusun agar ujung skala 200 dan 800 justru tercapai pada
+     * batas theta ±3, bukan sebelumnya. Pada 450 + 100θ nilai 700 sudah tercapai
+     * pada θ = 2.5, sehingga seperempat rentang theta teratas tampak datar di
+     * angka yang sama dan grafik kehilangan seluruh perbedaannya di sana.
      */
     public function convertToScale(float $theta, ?string $tingkat): int
     {
@@ -121,7 +126,7 @@ class IrtService
             return (int) round(max(0.0, min(100.0, 50.0 + 10.0 * $theta)));
         }
 
-        return (int) round(max(200.0, min(700.0, 450.0 + 100.0 * $theta)));
+        return (int) round(max(200.0, min(800.0, 500.0 + 100.0 * $theta)));
     }
 
     /**

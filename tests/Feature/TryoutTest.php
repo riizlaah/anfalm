@@ -251,7 +251,7 @@ it('menghitung hasil pada mapel terakhir lalu menutup percobaan', function () {
 
     expect($hasil->theta_final)->toBeGreaterThan(0)
         ->and($hasil->skor_konversi)->toBeGreaterThanOrEqual(200)
-        ->and($hasil->skor_konversi)->toBeLessThanOrEqual(700)
+        ->and($hasil->skor_konversi)->toBeLessThanOrEqual(800)
         ->and($hasil->total_soal)->toBe($hasil->jumlah_benar + $hasil->jumlah_salah)
         ->and($hasil->jumlah_benar)->toBe($aktif['soal']->count());
 });
@@ -281,7 +281,7 @@ it('mengabaikan mapel yang tidak dijawab saat merata-ratakan theta', function ()
     // juga seluruh benar, sehingga rata-rata dua mapel yang dikerjakan tetap 3.0 —
     // bukan ditarik turun oleh tiga mapel kosong.
     expect($hasil->theta_final)->toEqualWithDelta(3.0, 0.01)
-        ->and($hasil->skor_konversi)->toBe(700);
+        ->and($hasil->skor_konversi)->toBe(800);
 });
 
 it('menampilkan halaman hasil setelah percobaan ditutup', function () {
