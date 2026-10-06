@@ -109,6 +109,223 @@ it('memutuskan perubahan dari checksum lokal, bukan waktu ubah server', function
         ->toContain('manifest-akhir.txt');
 });
 
+/**
+ * Baris manifest berformat `sha256  ./path`. Hash-nya diturunkan dari isi
+ * baris, supaya hash lama dan hash baru bagi path yang sama terlihat berbeda —
+ * itulah satu-satunya hal yang membuat `comm` menganggap berkas berubah.
+ */
+function barisManifest(string $path, string $isi): string
+{
+    return hash('sha256', $isi).'  ./'.$path;
+}
+
+/**
+ * Menghapus `hash  ./` sehingga tersisa path murni — sama persis dengan
+ * `strip_hash()` di sinkron.sh yang dipakai untuk menghitung berkas usang.
+ */
+function pathManifest(string $baris): string
+{
+    return preg_replace('/^[0-9a-f]+  \.\//', '', $baris);
+}
+
+/**
+ * Menjalankan skrip penggabung sungguhan terhadap empat berkas buatan, lalu
+ * mengembalikan isi manifest hasilnya.
+ *
+ * @param  array<int, string>  $lama
+ * @param  array<int, string>  $baru
+ * @param  array<int, string>  $terkirim
+ * @param  array<int, string>  $terbuang
+ */
+function jalankanPenggabung(array $lama, array $baru, array $terkirim, array $terbuang, string $hapus): string
+{
+    $dir = sys_get_temp_dir().'/gabung-manifest-'.uniqid();
+    File::ensureDirectoryExists($dir);
+
+    $tulis = function (string $nama, array $baris) use ($dir): string {
+        File::put($dir.'/'.$nama, $baris === [] ? '' : implode("\n", $baris)."\n");
+
+        return $dir.'/'.$nama;
+    };
+
+    $keluaran = $dir.'/keluaran.txt';
+
+    $hasil = shell_exec(
+        'bash '.escapeshellarg(base_path('deploy/gabung-manifest.sh'))
+        .' '.escapeshellarg($tulis('lama.txt', $lama))
+        .' '.escapeshellarg($tulis('baru.txt', $baru))
+        .' '.escapeshellarg($tulis('terkirim.txt', $terkirim))
+        .' '.escapeshellarg($tulis('terbuang.txt', $terbuang))
+        .' '.escapeshellarg($hapus)
+        .' '.escapeshellarg($keluaran)
+        .' 2>&1; echo "KODE=$?"'
+    ) ?? '';
+
+    expect($hasil)->toContain('KODE=0');
+
+    $isi = File::get($keluaran);
+    File::deleteDirectory($dir);
+
+    return $isi;
+}
+
+/**
+ * Menirukan `comm -13 lama baru` di sinkron.sh: baris yang hanya ada pada
+ * manifest keinginan — berkas baru atau berubah, sehingga wajib diunggah.
+ *
+ * @return array<int, string>
+ */
+function daftarUnggahBerikutnya(string $hasil, string $baru): array
+{
+    return array_values(array_diff(
+        array_values(array_filter(explode("\n", trim($baru)))),
+        array_values(array_filter(explode("\n", trim($hasil)))),
+    ));
+}
+
+/**
+ * Menirukan `comm -23 strip(lama) strip(baru)`: path yang ada di jejak server
+ * tetapi tidak lagi ada di paket — berkas usang yang harus dibuang.
+ *
+ * @return array<int, string>
+ */
+function daftarHapusBerikutnya(string $hasil, string $baru): array
+{
+    $path = fn (string $manifest): array => array_values(array_filter(array_map(
+        'pathManifest',
+        explode("\n", trim($manifest)),
+    )));
+
+    return array_values(array_diff($path($hasil), $path($baru)));
+}
+
+it('mencatat keadaan server yang sesungguhnya walau ada berkas gagal diunggah', function () {
+    $hasil = jalankanPenggabung(
+        [barisManifest('a.php', 'isi lama'), barisManifest('b.php', 'isi lama')],
+        [barisManifest('a.php', 'isi baru'), barisManifest('b.php', 'isi baru')],
+        ['a.php'],       // hanya a.php yang berhasil
+        [],              // tidak ada yang dibuang
+        'tidak',
+    );
+
+    // Kalau manifest ditulis apa adanya seperti keinginan, b.php dianggap
+    // sudah ada di server dan tidak akan pernah diunggah ulang.
+    expect($hasil)
+        ->toContain(barisManifest('a.php', 'isi baru'))
+        ->toContain(barisManifest('b.php', 'isi lama'));
+});
+
+it('menyebut kembali hanya berkas yang gagal pada sinkron berikutnya', function () {
+    $baru = implode("\n", [barisManifest('a.php', 'isi baru'), barisManifest('b.php', 'isi baru')])."\n";
+
+    $hasil = jalankanPenggabung(
+        [barisManifest('a.php', 'isi lama'), barisManifest('b.php', 'isi lama')],
+        array_filter(explode("\n", trim($baru))),
+        ['a.php'],
+        [],
+        'tidak',
+    );
+
+    // Inilah yang selama ini mustahil: kegagalan dua berkas tidak pernah
+    // memaksa 6455 berkas diunggah ulang.
+    expect(daftarUnggahBerikutnya($hasil, $baru))
+        ->toBe([barisManifest('b.php', 'isi baru')])
+        ->and(daftarHapusBerikutnya($hasil, $baru))->toBe([]);
+});
+
+it('tidak mencatat berkas baru yang belum terkirim sama sekali', function () {
+    $baru = [barisManifest('ada.php', 'isi'), barisManifest('baru.php', 'isi')];
+
+    $hasil = jalankanPenggabung([], $baru, ['ada.php'], [], 'tidak');
+
+    // Mencatatnya akan menandai berkas yang tak pernah sampai ke server sebagai
+    // sudah ada, sehingga server kehilangan berkas itu selamanya.
+    expect($hasil)
+        ->toContain(barisManifest('ada.php', 'isi'))
+        ->not->toContain(barisManifest('baru.php', 'isi'));
+});
+
+it('menyusun ulang jejak run pertama yang gagal sebagian', function () {
+    $baru = [
+        barisManifest('satu.php', 'isi'),
+        barisManifest('dua.php', 'isi'),
+        barisManifest('tiga.php', 'isi'),
+    ];
+
+    // Belum pernah ada manifest lama: seluruh isi paket diunggah, dua gagal.
+    $hasil = jalankanPenggabung([], $baru, ['satu.php'], [], 'tidak');
+
+    expect(daftarUnggahBerikutnya($hasil, implode("\n", $baru)."\n"))
+        ->toHaveCount(2)
+        ->not->toContain(barisManifest('satu.php', 'isi'));
+});
+
+it('mempertahankan berkas usang yang gagal dibuang', function () {
+    $lama = [barisManifest('usang.php', 'isi lama')];
+    $baru = [barisManifest('baru.php', 'isi')];
+
+    $hasil = jalankanPenggabung($lama, $baru, ['baru.php'], [], 'ya');
+
+    expect(daftarHapusBerikutnya($hasil, implode("\n", $baru)."\n"))
+        ->toBe(['usang.php']);
+});
+
+it('mempertahankan berkas usang bila fase hapus tidak dijalankan sama sekali', function () {
+    // `--bersih` tidak dijalankan, sehingga berkas usang masih ada di server.
+    // Bila jejaknya tetap ditulis seperti keinginan, `--bersih` pada run
+    // berikutnya tak akan lagi menemukannya dan berkas itu abadi di server.
+    $lama = [barisManifest('usang.php', 'isi lama')];
+    $baru = [barisManifest('baru.php', 'isi')];
+
+    $hasil = jalankanPenggabung($lama, $baru, ['baru.php'], [], 'tidak');
+
+    expect(daftarHapusBerikutnya($hasil, implode("\n", $baru)."\n"))
+        ->toBe(['usang.php']);
+});
+
+it('menghapus berkas usang yang berhasil dibuang dari jejak', function () {
+    $lama = [barisManifest('usang.php', 'isi lama')];
+    $baru = [barisManifest('baru.php', 'isi')];
+
+    $hasil = jalankanPenggabung($lama, $baru, ['baru.php'], ['usang.php'], 'ya');
+
+    expect(daftarHapusBerikutnya($hasil, implode("\n", $baru)."\n"))->toBe([]);
+});
+
+it('menghasilkan keadaan yang diinginkan bila tidak ada kegagalan', function () {
+    $lama = [
+        barisManifest('tetap.php', 'sama'),
+        barisManifest('berubah.php', 'lama'),
+        barisManifest('usang.php', 'lama'),
+    ];
+    $baru = [
+        barisManifest('tetap.php', 'sama'),
+        barisManifest('berubah.php', 'baru'),
+        barisManifest('baru.php', 'baru'),
+    ];
+
+    $hasil = jalankanPenggabung($lama, $baru, ['berubah.php', 'baru.php'], ['usang.php'], 'ya');
+
+    // Perilaku lama tidak berubah sedikit pun kalau semuanya bersih.
+    expect(array_values(array_filter(explode("\n", trim($hasil)))))
+        ->toEqualCanonicalizing(array_values(array_filter(explode("\n", trim(implode("\n", $baru)."\n")))));
+});
+
+it('selalu mengeluarkan manifest yang terurut menurut kolasi C', function () {
+    // sinkron.sh memeriksa `LC_ALL=C sort -c` sebelum memakai jejaknya. Manifest
+    // yang diurut di bawah kolasi lain akan ditolak pemeriksaan itu, dan pesan
+    // pemulihannya meminta file dihapus — full unggah, kebalikan dari tujuannya.
+    $isi = File::get(base_path('deploy/gabung-manifest.sh'));
+
+    expect($isi)->toContain('LC_ALL=C');
+});
+
+it('sinkron.sh memanggil penggabung dan tidak lagi menyalin manifest keinginan', function () {
+    expect(skripSinkron())
+        ->toContain('gabung-manifest.sh')
+        ->not->toContain('cp "$MANIFEST_BARU" "$MANIFEST_LAMA"');
+});
+
 it('merakit zip cadangan lewat release.sh', function () {
     expect(skripSinkron())->toContain('deploy/release.sh');
 });

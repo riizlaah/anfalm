@@ -94,13 +94,48 @@ matikan_pengawas() {
     PENGAWAS=""
 }
 
+# Jejak keadaan server — deploy/build/manifest-akhir.txt. Ia ditulis dari satu
+# titik saja, di dalam trap EXIT, supaya ikut tercatat pada ketiga jalan keluar
+# yang memang mungkin terjadi: run sukses, run berhenti karena berkas gagal,
+# dan run dipotong di tengah jalan.
+#
+# Dulu jejak ditulis lewat salinan manifest keinginan, dan hanya pada jalur
+# sukses. Akibatnya satu berkas gagal membuat run berikutnya mengunggah ulang
+# seluruh isi paket, dan berkas usang yang pembuangannya gagal terlupakan
+# selamanya dari daftar buang. Manifest akhir kini menceritakan isi server,
+# bukan isi paket — bedanya itulah yang menentukan apa yang dikirim berikutnya.
+TRANSFER_JALAN="tidak"
+
+tulis_jejak() {
+    # Sebelum ada kiriman apa pun, isi server tidak berubah sama sekali:
+    # jejak lama sudah benar, dan menulisnya ulang hanya membuka peluang salah.
+    [ "$TRANSFER_JALAN" = "ya" ] || return 0
+
+    if ! bash "$ROOT/deploy/gabung-manifest.sh" \
+        "$MANIFEST_LAMA" "$MANIFEST_BARU" \
+        "$HITUNG_UNGGAH" "$HITUNG_BUANG" "$BERSIH" "$MANIFEST_LAMA"
+    then
+        # Tidak mengubah kode keluar: kegagalan menulis jejak bukan kegagalan
+        # sinkronisasi, dan jejak lamanya tetap utuh berkat penulisan atomik.
+        printf '\n[GAGAL] jejak keadaan server tidak jadi tertulis; %s dibiarkan apa adanya sehingga sinkron berikutnya tetap memakai keadaan yang sudah terbukti benar.\n' \
+            "$MANIFEST_LAMA" >&2
+    fi
+}
+
 bersihkan() {
     matikan_pengawas
+    tulis_jejak
     rm -f "$CFG" "$BUILD/uji-sinkron.txt" "$BUILD/uji-sinkron-balik.txt" \
         "$BUILD/uji-curl.txt" "$BUILD/preflight-curl.txt"
 }
 
 trap bersihkan EXIT
+# Ctrl-C dan SIGTERM diarahkan lewat `exit` biasa agar trap EXIT di atas pasti
+# berjalan. Tanpa keduanya shell bisa terputus tepat sebelum jejak keadaan
+# server sempat ditulis, dan jejak yang hilang itu memaksa unggah penuh pada
+# sinkron berikutnya.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Satu baris kemajuan yang diperbarui di tempat selama fase yang lama.
 #
@@ -427,13 +462,20 @@ catat "berkas usang   : $n_hapus"
 [ "$dilindungi" -eq 0 ] || catat "dilindungi dari hapus: $dilindungi"
 catat "paralelisme    : $PARALEL"
 
+# Dari titik ini isi server boleh berubah, sehingga jejak harus ikut ditulis
+# ulang walau skrip berhenti sebentar lagi. Keempat catatan dipotong bersama di
+# sini: dua yang pertama adalah bukti apa yang benar-benar terkirim dan terbuang
+# yang dibaca penggabung jejak, sedangkan catatan yang tersisa dari run
+# sebelumnya akan mengaku sesuatu yang tidak pernah terjadi pada run ini.
+TRANSFER_JALAN="ya"
+: > "$HITUNG_UNGGAH"
+: > "$HITUNG_BUANG"
 : > "$DAFTAR_GAGAL"
 : > "$DAFTAR_GAGAL_HAPUS"
 
 printf '\n== Mengunggah ==\n'
 
 if [ "$n_unggah" -gt 0 ]; then
-    : > "$HITUNG_UNGGAH"
     mulai_pengawas "$n_unggah" "$HITUNG_UNGGAH" "mengunggah"
 
     # `--ftp-create-dirs` membuat folder tujuan yang belum ada. Tiap berkas
@@ -477,7 +519,6 @@ if [ "$BERSIH" = "ya" ]; then
     printf '\n== Membuang berkas usang ==\n'
 
     if [ "$n_hapus" -gt 0 ]; then
-        : > "$HITUNG_BUANG"
         mulai_pengawas "$n_hapus" "$HITUNG_BUANG" "membuang"
 
         # Fase ini sama senyapnya dengan unggah — bisa ratusan DELE yang
@@ -512,8 +553,11 @@ if [ "$BERSIH" = "ya" ]; then
     fi
 fi
 
-# Kegagalan menahan penulisan manifest, supaya berkas yang belum terkirim tetap
-# dihitung berubah pada kali berikutnya dan tidak pernah dianggap selesai.
+# Kegagalan tidak lagi menahan penulisan jejak. Keduanya tetap keluar kode 1
+# supaya run ini terbaca gagal, tetapi jejaknya sudah jujur tanpa perlu
+# ditahan: penggabung mempertahankan hash lama bagi berkas yang gagal dan
+# tidak mencatat berkas baru yang belum terkirim, sehingga sinkron berikutnya
+# menyebut kembali berkas-berekas tersisa itu — bukan seluruh isi paket.
 if [ -s "$DAFTAR_GAGAL" ]; then
     printf '\n[GAGAL] %s berkas tidak terkirim:\n' "$(wc -l < "$DAFTAR_GAGAL" | tr -d ' ')" >&2
     head -n 20 "$DAFTAR_GAGAL" >&2
@@ -525,8 +569,6 @@ if [ -s "$DAFTAR_GAGAL_HAPUS" ]; then
     head -n 20 "$DAFTAR_GAGAL_HAPUS" >&2
     exit 1
 fi
-
-cp "$MANIFEST_BARU" "$MANIFEST_LAMA"
 
 # Ringkasan penutup. `Selesai.` semata tidak menjawab apa pun: ia tercetak
 # setelah dua fase yang sama-sama senyap, sehingga tidak terlihat apa yang
