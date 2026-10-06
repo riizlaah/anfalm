@@ -124,9 +124,18 @@ class TryoutController extends Controller
         // Waktu mapel habis: baris ini dianggap terkunci dengan jawaban yang
         // sudah ada, lalu peserta langsung dibawa ke mapel berikutnya.
         // Percobaan baru ditutup pada mapel terakhir.
+        // Peserta sedang beristirahat antar mapel. Soalnya tidak boleh
+        // terbuka lebih dulu: bila sampai terbuka, hitung mundur sudah berdetak
+        // sebelum halaman jeda sempat ia baca.
+        if ($percobaan->sedangJeda()) {
+            return redirect()->route('tryout.jeda', $paketTryout);
+        }
+
         if ($this->percobaan->kadaluarsa($percobaan)) {
             if ($this->percobaan->lanjut($percobaan)) {
-                return redirect()->route('tryout.kerja', $paketTryout);
+                // Mapel yang habis waktunya dikunci lalu peserta dibuka ke
+                // halaman jeda, sama seperti saat ia pindah mapel sendiri.
+                return redirect()->route('tryout.jeda', $paketTryout);
             }
 
             $this->percobaan->akhirkan($percobaan);
@@ -203,16 +212,83 @@ class TryoutController extends Controller
         $this->percobaan->simpanJawaban($percobaan, (array) $request->input('jawaban', []));
 
         // Jawaban yang masuk tetap tersimpan walau terlambat; mapel ini lalu
-        // dikunci dan peserta dibuka ke mapel berikutnya dengan hitung mundur
+        // dikunci dan peserta dibuka ke halaman jeda, bukan langsung ke soal
+        // berikutnya — di sanalah ia menekan Mulai untuk memulai hitung mundur
         // yang baru. Bila tidak ada lagi mapel, barulah percobaan ditutup dan
         // hasilnya dihitung dari jawaban yang sudah ada saja.
         if ($this->percobaan->lanjut($percobaan)) {
-            return redirect()->route('tryout.kerja', $paketTryout);
+            return redirect()->route('tryout.jeda', $paketTryout);
         }
 
         $this->percobaan->akhirkan($percobaan);
 
         return redirect()->route('tryout.hasil', $paketTryout);
+    }
+
+    /**
+     * Halaman jeda antar mapel.
+     *
+     * Pesertanya berada di sini setelah mengunci satu mapel dan sebelum
+     * membuka mapel berikutnya. Tidak ada hitung mundur yang berjalan —
+     * `batas_waktu_menit` sudah menunjuk mapel berikutnya, tetapi waktunya
+     * baru dihitung saat tombol Mulai ditekan (`mulaiMapelBerikutnya()`),
+     * sehingga istirahat tidak memakan jatah pengerjaan dan jeda tidak
+     * dibatasi waktunya.
+     *
+     * Isinya hanya yang perlu diketahui untuk melanjutkan: nama mapel,
+     * posisi, jumlah soal, dan durasinya. Skor sengaja tidak ditampilkan —
+     * hasil diletakkan di akhir percobaan (DESIGN §3.7 langkah 12), dan angka
+     * di tengah jalan bisa mengubah cara peserta mengerjakan mapel berikutnya.
+     */
+    public function jeda(Request $request, PaketTryout $paketTryout): View|RedirectResponse
+    {
+        $percobaan = $this->percobaan->cariAktif($paketTryout, $request->user());
+
+        if ($percobaan === null) {
+            return $this->alihkanSetelahTidakAktif($request, $paketTryout);
+        }
+
+        // Tautan jeda yang basi tidak boleh menyisakan peserta di halaman yang
+        // tidak melakukan apa-apa.
+        if (! $percobaan->sedangJeda()) {
+            return redirect()->route('tryout.kerja', $paketTryout);
+        }
+
+        $grupBerikut = $percobaan->daftar_soal[(int) $percobaan->urutan_mapel] ?? null;
+        $mapel = $grupBerikut === null
+            ? null
+            : Mapel::find($grupBerikut['mapel_id'] ?? 0);
+
+        if ($mapel === null) {
+            return redirect()->route('tryout.kerja', $paketTryout);
+        }
+
+        return view('tryout.jeda', [
+            'paketTryout' => $paketTryout,
+            'percobaan' => $percobaan,
+            'mapelBerikut' => $mapel,
+            'posisiBerikut' => (int) $percobaan->urutan_mapel + 1,
+            'totalMapel' => count($percobaan->daftar_soal ?? []),
+            'jumlahSoal' => count($grupBerikut['soal_ids'] ?? []),
+        ]);
+    }
+
+    /**
+     * Menghitung ulang hitung mundur mapel berikutnya lalu membukanya.
+     *
+     * Tautannya hanya berlaku selama jeda berlangsung; kiriman ulang dari
+     * halaman yang sudah dibuka lagi diabaikan supaya peserta tidak mendapat
+     * waktu tambahan.
+     */
+    public function mulaiMapelBerikutnya(Request $request, PaketTryout $paketTryout): RedirectResponse
+    {
+        $percobaan = $this->percobaan->cariAktif($paketTryout, $request->user());
+
+        if ($percobaan !== null) {
+            $this->percobaan->mulaiMapelBerikutnya($percobaan);
+        }
+
+        return redirect()->route('tryout.kerja', $paketTryout);
     }
 
     public function hasil(Request $request, PaketTryout $paketTryout): View|RedirectResponse

@@ -36,6 +36,7 @@ class Percobaan extends Model
         'urutan_mapel',
         'waktu_mulai',
         'mulai_mapel',
+        'jeda_mulai',
         'waktu_selesai',
         'durasi_detik',
     ];
@@ -51,8 +52,18 @@ class Percobaan extends Model
             'durasi_detik' => 'integer',
             'waktu_mulai' => 'datetime',
             'mulai_mapel' => 'datetime',
+            'jeda_mulai' => 'datetime',
             'waktu_selesai' => 'datetime',
         ];
+    }
+
+    /**
+     * Peserta sedang beristirahat di halaman jeda: mapel sebelumnya sudah
+     * terkunci dan hitung mundur mapel berikutnya belum dimulai.
+     */
+    public function sedangJeda(): bool
+    {
+        return $this->jeda_mulai !== null;
     }
 
     public function user(): BelongsTo

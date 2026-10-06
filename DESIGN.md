@@ -220,7 +220,11 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
    - **Status:** Soal yang sudah dijawab ditandai (misal: hijau = sudah, merah = belum).
    - **Konten Soal:** Pertanyaan, opsi jawaban, dan gambar dirender dengan WYSIWYG + KaTeX.
 5. Peserta menavigasi soal di dalam mapel (bisa bolak-balik antar soal, tidak wajib berurutan). Soal yang sudah dijawab ditandai (hijau), belum (merah).
-6. Setelah selesai semua soal di satu mapel → Lanjut ke mapel berikutnya. **Tidak bisa kembali** ke mapel sebelumnya.
+6. Setelah selesai semua soal di satu mapel → **Halaman jeda antar mapel**, lalu lanjut ke mapel berikutnya. **Tidak bisa kembali** ke mapel sebelumnya.
+   - **Isi halaman:** nama mapel berikutnya, posisi (`Mapel N dari M`), jumlah soal, dan durasinya. **Tanpa skor** — hasil hanya dilihat pada langkah 12, dan angka di tengah jalan dapat mengubah cara mengerjakan mapel berikutnya.
+   - **Waktu:** hitung mundur mapel berikutnya **mulai saat tombol "Mulai" ditekan**, bukan saat mapel sebelumnya dikunci, sehingga waktu istirahat tidak mengurangi waktu pengerjaan. Selama peserta berada di halaman jeda, percobaan **tidak dianggap kehabisan waktu**.
+   - **Jeda tidak dibatasi waktunya:** aplikasi tidak memiliki scheduler, jadi kedaluwarsa selalu dihitung dari request. Memaksakan jeda berakhir sendiri hanya akan mengejutkan peserta ketika ia kembali membuka halaman.
+   - Tautan halaman jeda berlaku selama jeda berlangsung; kiriman ulang diabaikan supaya peserta tidak memperoleh waktu tambahan.
 7. Saat mencapai mapel terakhir atau tombol "Selesai", sistem menghitung skor dan menyimpan ke `hasil_tryout`.
 8. Jika waktu pengerjaan habis (`batas_waktu_menit`), tryout **otomatis dikumpulkan** (auto-submit) — skor dihitung dari jawaban yang sudah ada; sisa soal tidak dijawab diabaikan dari estimasi.
 9. Sistem menghitung per-item:
@@ -233,6 +237,7 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 
 **Catatan:**
 - Peserta tidak bisa kembali ke mapel sebelumnya setelah selesai.
+- **Jeda antar mapel** bersifat terbuka: pindah mapel membuka halaman jeda, bukan langsung soal berikutnya. Pada **mapel terakhir** tidak ada jeda — percobaan langsung ditutup dan hasilnya dihitung. Latihan (§3.8) tetap tanpa jeda: ia hanya satu mapel.
 - Semua paket tryout memiliki batas waktu wajib; tryout yang kehabisan waktu dikumpulkan secara otomatis.
 - **Retake:** Percobaan ulang hanya dimungkinkan dengan reset oleh admin (§6.16).
 

@@ -201,7 +201,7 @@ it('menyimpan jawaban satu mapel lalu mengunci mapel itu', function () {
 
     $this->actingAs($peserta)
         ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']))
-        ->assertRedirect(route('tryout.kerja', $paket));
+        ->assertRedirect(route('tryout.jeda', $paket));
 
     $percobaan->refresh();
 
@@ -594,11 +594,176 @@ it('mengunci mapel yang sudah ditinggalkan', function () {
 
     $pertanyaanMapelKedua = soalMapelAktif($percobaan->refresh())['soal']->first()->pertanyaan;
 
+    // Mapel berikutnya baru boleh terbuka setelah peserta menekan Mulai di
+    // halaman jeda; sebelum itu ia masih beristirahat.
+    $this->actingAs($peserta)->post(route('tryout.mulai-mapel', $paket));
+
     $this->actingAs($peserta)
         ->get(route('tryout.kerja', $paket))
         ->assertOk()
         ->assertSee($pertanyaanMapelKedua)
         ->assertDontSee($pertanyaanMapelPertama);
+});
+
+it('membuka halaman jeda setelah satu mapel selesai, bukan langsung ke soal berikutnya', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']))
+        ->assertRedirect(route('tryout.jeda', $paket));
+
+    $percobaan->refresh();
+
+    // `jeda_mulai` berarti "mapel N terkunci, mapel N+1 belum dimulai". Tanpa
+    // penanda itu, `lanjut()` mereset `mulai_mapel` pada detik submit sehingga
+    // istirahat peserta langsung memakan jatah waktu mapel berikutnya.
+    expect($percobaan->urutan_mapel)->toBe(1)
+        ->and($percobaan->jeda_mulai)->not->toBeNull();
+
+    // Halaman kerja pun tidak membuka soal selama jeda berlangsung.
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertRedirect(route('tryout.jeda', $paket));
+});
+
+it('halaman jeda menyebut mapel berikutnya beserta jumlah soal dan durasinya', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']));
+
+    $grupBerikut = $percobaan->refresh()->daftar_soal[1];
+    $mapelBerikut = Mapel::findOrFail($grupBerikut['mapel_id']);
+    $menit = (int) $paket->daftarMapel()->where('mapel_id', $mapelBerikut->getKey())->value('menit');
+    $pertanyaanBerikut = Soal::findOrFail($grupBerikut['soal_ids'][0])->pertanyaan;
+
+    // Isinya sengaja hanya apa yang perlu diketahui untuk melanjutkan. Skor
+    // sengaja tidak ditampilkan: hasil diletakkan di akhir percobaan (DESIGN
+    // §3.7 langkah 12), dan angka di tengah jalan bisa mengubah cara mengerjakan
+    // mapel berikutnya.
+    $this->actingAs($peserta)
+        ->get(route('tryout.jeda', $paket))
+        ->assertOk()
+        ->assertSee('Mapel berikutnya')
+        ->assertSee($mapelBerikut->nama)
+        ->assertSee('Mapel 2 dari '.count($percobaan->daftar_soal))
+        ->assertSee(count($grupBerikut['soal_ids']).' soal')
+        ->assertSee($menit.' menit')
+        ->assertSee('Mulai Mapel Berikutnya')
+        ->assertDontSee($pertanyaanBerikut);
+});
+
+it('waktu mapel berikutnya tidak berjalan selama peserta berada di halaman jeda', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']));
+
+    // Waktu mapel berikutnya sudah lama terlampaui menurut server. Tanpa
+    // penjagaan pada `kadaluarsa()`, peserta yang berlama-lama di halaman jeda
+    // akan dianggap kehabisan waktu pada mapel yang belum pernah dibuka —
+    // mapel itu terlewat begitu saja atau percobaan justru ditutup.
+    $percobaan->update(['mulai_mapel' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
+
+    $this->actingAs($peserta)
+        ->get(route('tryout.kerja', $paket))
+        ->assertRedirect(route('tryout.jeda', $paket));
+
+    expect($percobaan->refresh()->urutan_mapel)->toBe(1)
+        ->and($percobaan->status)->toBe(Percobaan::STATUS_BERJALAN)
+        ->and($percobaan->jeda_mulai)->not->toBeNull();
+});
+
+it('menekan Mulai memulai hitung mundur mapel berikutnya', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']));
+
+    // Menandai bahwa peserta sudah duduk lama sebelum menekan Mulai; angka ini
+    // harus hilang, bukan dipakai sebagai awal hitung mundur.
+    $percobaan->update(['mulai_mapel' => now()->subMinutes(30)]);
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.mulai-mapel', $paket))
+        ->assertRedirect(route('tryout.kerja', $paket));
+
+    $percobaan->refresh();
+
+    expect($percobaan->jeda_mulai)->toBeNull()
+        ->and($percobaan->mulai_mapel->greaterThan(now()->subMinute()))->toBeTrue()
+        ->and($percobaan->urutan_mapel)->toBe(1);
+});
+
+it('halaman jeda kembali ke halaman kerja bila tidak sedang jeda', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+
+    // Tautan jeda yang sudah usang tidak boleh menyisakan peserta di halaman
+    // yang tidak melakukan apa-apa.
+    $this->actingAs($peserta)
+        ->get(route('tryout.jeda', $paket))
+        ->assertRedirect(route('tryout.kerja', $paket));
+});
+
+it('mapel terakhir langsung menuju hasil tanpa halaman jeda', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $percobaan->update(['urutan_mapel' => count($percobaan->daftar_soal) - 1]);
+    $aktif = soalMapelAktif($percobaan->refresh());
+
+    $this->actingAs($peserta)
+        ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']))
+        ->assertRedirect(route('tryout.hasil', $paket));
+
+    expect($percobaan->refresh()->jeda_mulai)->toBeNull()
+        ->and($percobaan->status)->toBe(Percobaan::STATUS_SELESAI);
+});
+
+it('percobaan ulang mengosongkan tanda jeda', function () {
+    $paket = PaketTryout::firstOrFail();
+    $peserta = User::factory()->peserta()->create();
+
+    $this->actingAs($peserta)->post(route('tryout.mulai', $paket), ['pilihan' => duaMapelPilihan($paket)]);
+    $percobaan = Percobaan::sole();
+    $aktif = soalMapelAktif($percobaan);
+
+    $this->actingAs($peserta)->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']));
+
+    expect($percobaan->refresh()->jeda_mulai)->not->toBeNull();
+
+    // Sisa jeda dari percobaan sebelumnya tidak boleh mengunci ulang mapel
+    // pertama yang baru saja diulang.
+    $this->actingAs($peserta)
+        ->post(route('tryout.ulang', $paket))
+        ->assertRedirect(route('tryout.kerja', $paket));
+
+    $percobaan->refresh();
+
+    expect($percobaan->jeda_mulai)->toBeNull()
+        ->and($percobaan->urutan_mapel)->toBe(0);
 });
 
 it('waktu habis mengunci mapel lalu lanjut ke mapel berikutnya, bukan menutup percobaan', function () {
@@ -609,9 +774,11 @@ it('waktu habis mengunci mapel lalu lanjut ke mapel berikutnya, bukan menutup pe
     $percobaan = Percobaan::sole();
     $percobaan->update(['mulai_mapel' => now()->subMinutes((int) $percobaan->batas_waktu_menit + 5)]);
 
+    // Waktu habis membuka halaman jeda, bukan langsung soal berikutnya:
+    // peserta yang barusan kehabisan waktu tetap berhak beristirahat dulu.
     $this->actingAs($peserta)
         ->get(route('tryout.kerja', $paket))
-        ->assertRedirect(route('tryout.kerja', $paket));
+        ->assertRedirect(route('tryout.jeda', $paket));
 
     $percobaan->refresh();
     $mapelBerikut = (int) $percobaan->daftar_soal[(int) $percobaan->urutan_mapel]['mapel_id'];
@@ -656,7 +823,7 @@ it('jawaban tetap tersimpan lalu mapel dikunci ketika batas waktunya lewat', fun
 
     $this->actingAs($peserta)
         ->post(route('tryout.jawab', $paket), payloadSemuaBenar($aktif['soal']))
-        ->assertRedirect(route('tryout.kerja', $paket));
+        ->assertRedirect(route('tryout.jeda', $paket));
 
     expect(RiwayatPengerjaan::count())->toBe($aktif['soal']->count())
         ->and($percobaan->refresh()->status)->toBe(Percobaan::STATUS_BERJALAN)
@@ -762,7 +929,7 @@ it('aksi selesai pada mapel pertama tetap membuka mapel berikutnya', function ()
     // karena batas waktunya kini menempel per mapel.
     $this->actingAs($peserta)
         ->post(route('tryout.jawab', $paket), [...payloadSemuaBenar($aktif['soal']), 'aksi' => 'selesai'])
-        ->assertRedirect(route('tryout.kerja', $paket));
+        ->assertRedirect(route('tryout.jeda', $paket));
 
     $percobaan->refresh();
 

@@ -177,6 +177,9 @@ class PercobaanService
             'posisi_soal' => 0,
             'waktu_mulai' => now(),
             'mulai_mapel' => now(),
+            // Sisa jeda dari percobaan sebelumnya tidak boleh mengunci ulang
+            // mapel pertama yang baru saja diulang.
+            'jeda_mulai' => null,
             'batas_waktu_menit' => $this->menitBaris(
                 (int) $paket->getKey(),
                 (int) ($percobaan->daftar_soal[0]['mapel_id'] ?? 0)
@@ -333,10 +336,16 @@ class PercobaanService
     }
 
     /**
-     * Maju ke mapel berikutnya.
+     * Maju ke mapel berikutnya lalu menandai diri sedang berjeda.
+     *
+     * Peserta tidak langsung menerima soal berikutnya: `jeda_mulai` ditandai
+     * supaya hitung mundur belum dianggap berjalan selama ia beristirahat, dan
+     * `mulai_mapel` baru disetel ulang oleh `mulaiMapelBerikutnya()` ketika ia
+     * menekan Mulai. Dengan itu, waktu istirahat tidak memotong pengerjaan.
      *
      * Mengembalikan `false` bila mapel yang baru saja dikerjakan adalah yang
-     * terakhir, supaya pemanggil tahu bahwa percobaan harus ditutup.
+     * terakhir, supaya pemanggil tahu bahwa percobaan harus ditutup — dan
+     * percobaan yang ditutup tidak melewati halaman jeda.
      */
     public function lanjut(Percobaan $percobaan): bool
     {
@@ -361,9 +370,37 @@ class PercobaanService
                 (int) $percobaan->paket_tryout_id,
                 (int) ($grupBerikut['mapel_id'] ?? 0)
             ),
+            // Penanda "mapel ini belum dimulai". Selama nilainya ada,
+            // `kadaluarsa()` menganggap percobaan tidak bisa kedaluwarsa.
+            'jeda_mulai' => now(),
         ]);
 
         return true;
+    }
+
+    /**
+     * Menghitung ulang hitung mundur mapel berikutnya dan membukanya.
+     *
+     * Dipanggil dari halaman jeda, bukan dari `lanjut()`, karena di situlah
+     * peserta menekan Mulai dan mulai saat itulah waktunya berjalan. Jeda tidak
+     * dibatasi waktunya: aplikasi tidak punya scheduler, jadi kedaluwarsa
+     * selalu dihitung dari request — memaksakan jeda berakhir sendiri hanya
+     * akan mengejutkan peserta ketika ia kembali membuka halaman.
+     *
+     * Bila `jeda_mulai` sudah kosong, permintaan ini diabaikan. Tanpa syarat
+     * itu, kiriman ulang dari tautan yang basi akan mengulang hitung mundur
+     * mapel yang sedang berjalan dan memberi peserta waktu tambahan.
+     */
+    public function mulaiMapelBerikutnya(Percobaan $percobaan): void
+    {
+        if (! $percobaan->isBerjalan() || ! $percobaan->sedangJeda()) {
+            return;
+        }
+
+        $percobaan->update([
+            'jeda_mulai' => null,
+            'mulai_mapel' => now(),
+        ]);
     }
 
     /**
@@ -380,6 +417,16 @@ class PercobaanService
      */
     public function kadaluarsa(Percobaan $percobaan): bool
     {
+        // Selama peserta di halaman jeda, `mulai_mapel` menandai saat mapel
+        // sebelumnya dikunci, bukan saat mapel berikutnya dibuka — jadi
+        // perhitungan di bawah tidak berlaku sama sekali. Tanpa syarat ini,
+        // berdiam lama di jeda membuat mapel berikutnya dianggap kehabisan
+        // waktu sebelum pernah terbuka, dan mapel itu terlewat begitu saja
+        // atau percobaan justru ditutup di tengah jalan.
+        if ($percobaan->sedangJeda()) {
+            return false;
+        }
+
         $mulai = $percobaan->mulai_mapel ?? $percobaan->waktu_mulai;
 
         if ($percobaan->batas_waktu_menit === null || $mulai === null) {
