@@ -42,6 +42,18 @@ DAFTAR_GAGAL="$BUILD/GAGAL-unggah.txt"
 DAFTAR_GAGAL_HAPUS="$BUILD/GAGAL-hapus.txt"
 PATCH="$BUILD/patch"
 
+# Berkas catatan kemajuan: tiap anak pencetak menambah satu baris setelah
+# berkasnya benar-benar terkirim atau terbuang. Isinya dua kegunaan sekaligus —
+# bahan penghitung untuk baris progres, dan jejak yang bisa dibaca ulang untuk
+# tahu berkas mana yang sedang dikerjakan saat skrip berhenti.
+HITUNG_UNGGAH="$BUILD/unggah.log"
+HITUNG_BUANG="$BUILD/buang.log"
+
+# PID pengawas kemajuan. Kosong selama fase tanpa pengawan supaya pembersihan
+# tidak pernah membunuh proses yang bukan miliknya.
+PENGAWAS=""
+MULAI_SKRIP="$(date +%s)"
+
 # Berkas konfigurasi curl berisi kredensial sekaligus seluruh invarian
 # transport: `ssl-reqd`, `ipv4`, `disable-epsv`. Ia dibuat bertopeng 600 dan
 # dibuang lewat trap pada setiap jalan keluar, termasuk saat gagal di tengah
@@ -73,12 +85,72 @@ bantuan() {
     sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^#\{1\} \{0,1\}//'
 }
 
+matikan_pengawas() {
+    if [ -z "$PENGAWAS" ]; then
+        return 0
+    fi
+    kill "$PENGAWAS" 2>/dev/null || true
+    wait "$PENGAWAS" 2>/dev/null || true
+    PENGAWAS=""
+}
+
 bersihkan() {
+    matikan_pengawas
     rm -f "$CFG" "$BUILD/uji-sinkron.txt" "$BUILD/uji-sinkron-balik.txt" \
         "$BUILD/uji-curl.txt" "$BUILD/preflight-curl.txt"
 }
 
 trap bersihkan EXIT
+
+# Satu baris kemajuan yang diperbarui di tempat selama fase yang lama.
+#
+# Fase unggah berjalan puluhan menit dengan `curl --silent` di dalamnya, jadi
+# layar berhenti berubah sama sekali setelah `== Mengunggah ==` dan skrip
+# terbaca seperti macet — itulah keluhan yang melahirkan fungsi ini. Pengawas
+# ini menghitung baris pada berkas catatan, yang ditambah tiap anak pencetak,
+# lalu memperbaruinya tiap detik.
+#
+# Di luar TTY, `\r` tidak mengulang baris apa pun dan hanya mengotori berkas
+# log, jadi di sana keluarannya berupa ringkasan tiap sepuluh detik.
+#
+# `total` selalu lebih besar dari nol — pengawas hanya dimulai bila memang ada
+# berkas yang dikerjakan, sehingga bagi hasilnya tidak pernah dibagi nol.
+pengawas_kemajuan() {
+    local total="$1" catatan="$2" label="$3"
+    local detik=0 n
+
+    while :; do
+        # `|| true` wajib: pipefail membuat kegagalan `wc` pada berkas yang
+        # belum ada ikut menggagalkan penugasan dan mematikan skrip lewat set -e.
+        n="$(wc -l < "$catatan" 2>/dev/null | tr -d ' ' || true)"
+        case "$n" in
+            '' | *[!0-9]*) n=0 ;;
+        esac
+
+        if [ -t 1 ]; then
+            printf '\r  %s: %s/%s (%s%%)   ' "$label" "$n" "$total" "$((n * 100 / total))"
+        elif [ $((detik % 10)) -eq 0 ]; then
+            printf '  %s: %s/%s (%s%%)\n' "$label" "$n" "$total" "$((n * 100 / total))"
+        fi
+
+        detik=$((detik + 1))
+        sleep 1
+    done
+}
+
+mulai_pengawas() {
+    pengawas_kemajuan "$1" "$2" "$3" &
+    PENGAWAS=$!
+}
+
+berhenti_pengawas() {
+    matikan_pengawas
+    # Baris `\r` belum ditutup baris baru. Tanpa ini pesan berikutnya menimpanya
+    # dan hanya sisa angkanya yang terbaca.
+    if [ -t 1 ]; then
+        printf '\n'
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # 1. Pemeriksaan argumen dan kredensial (semuanya sebelum ada kerja apa pun)
@@ -156,6 +228,7 @@ tulis_config
 
 export CFG BASE AKAR PATCH
 export DAFTAR_GAGAL DAFTAR_GAGAL_HAPUS
+export HITUNG_UNGGAH HITUNG_BUANG
 
 # Kode keluar curl dibaca langsung supaya pesannya menyebut penyebab yang
 # sebenarnya. Tanpa pemetaan ini, kegagalan saluran data (kode 8) ikut
@@ -357,28 +430,86 @@ catat "paralelisme    : $PARALEL"
 : > "$DAFTAR_GAGAL"
 : > "$DAFTAR_GAGAL_HAPUS"
 
+printf '\n== Mengunggah ==\n'
+
 if [ "$n_unggah" -gt 0 ]; then
-    printf '\n== Mengunggah ==\n'
+    : > "$HITUNG_UNGGAH"
+    mulai_pengawas "$n_unggah" "$HITUNG_UNGGAH" "mengunggah"
+
     # `--ftp-create-dirs` membuat folder tujuan yang belum ada. Tiap berkas
     # berdiri sendiri supaya kegagalannya bisa dicatat per nama, bukan membuat
     # satu unggahan raksasa gagal sekaligus.
+    #
+    # Penulisan ke catatan setelah curl sukses adalah penghitung kemajuan yang
+    # dibaca pengawas, sekaligus jejak berkas terakhir yang dikirim. Kegagalan
+    # dicetak ke layar juga, bukan hanya ke berkas — tanpa itu skrip bisa keluar
+    # dengan layar bersih padahal ada berkas yang tidak terkirim.
     xargs -0 -P "$PARALEL" -n 1 bash -c '
         rel="$1"
-        curl -K "$CFG" --silent --show-error --retry 2 --ftp-create-dirs \
-            -T "$PATCH/$rel" "$BASE/$rel" ||
+        if curl -K "$CFG" --silent --show-error --retry 2 --ftp-create-dirs \
+            -T "$PATCH/$rel" "$BASE/$rel"; then
+            printf "%s\n" "$rel" >> "$HITUNG_UNGGAH"
+        else
+            printf "  gagal: %s\n" "$rel" >&2
             printf "%s\n" "$rel" >> "$DAFTAR_GAGAL"
+        fi
     ' _ < "$DAFTAR_PATCH"
+
+    berhenti_pengawas
+
+    # Angkanya dihitung dari catatan, bukan dari jumlah yang diminta: bila ada
+    # berkas gagal, "Berhasil" tidak boleh tercetak lebih dulu baru disusul
+    # daftar kegagalan — dua pernyataan yang saling membantah di layar yang sama.
+    n_terkirim="$(wc -l < "$HITUNG_UNGGAH" | tr -d ' ')"
+    if [ "$n_terkirim" -eq "$n_unggah" ]; then
+        printf '  Berhasil mengunggah %s berkas.\n' "$n_unggah"
+    else
+        printf '  %s dari %s berkas terkirim — rincian kegagalannya di bawah.\n' \
+            "$n_terkirim" "$n_unggah"
+    fi
+else
+    printf '  Tidak ada berkas yang berubah — tidak ada yang diunggah.\n'
 fi
 
-if [ "$BERSIH" = "ya" ] && [ "$n_hapus" -gt 0 ]; then
+n_dibuang=0
+
+if [ "$BERSIH" = "ya" ]; then
     printf '\n== Membuang berkas usang ==\n'
-    tr '\n' '\0' < "$DAFTAR_HAPUS" |
-        xargs -0 -P "$PARALEL" -n 1 bash -c '
-            rel="$1"
-            curl -K "$CFG" --silent --show-error \
-                --quote "DELE $AKAR/$rel" --list-only -o /dev/null "$BASE/" ||
-                printf "%s\n" "$rel" >> "$DAFTAR_GAGAL_HAPUS"
-        ' _
+
+    if [ "$n_hapus" -gt 0 ]; then
+        : > "$HITUNG_BUANG"
+        mulai_pengawas "$n_hapus" "$HITUNG_BUANG" "membuang"
+
+        # Fase ini sama senyapnya dengan unggah — bisa ratusan DELE yang
+        # masing-masing menyeberang saluran data — jadi ia mendapat pengawas
+        # dan pesan keberhasilan yang sama.
+        tr '\n' '\0' < "$DAFTAR_HAPUS" |
+            xargs -0 -P "$PARALEL" -n 1 bash -c '
+                rel="$1"
+                if curl -K "$CFG" --silent --show-error \
+                    --quote "DELE $AKAR/$rel" --list-only -o /dev/null "$BASE/"; then
+                    printf "%s\n" "$rel" >> "$HITUNG_BUANG"
+                else
+                    printf "  gagal membuang: %s\n" "$rel" >&2
+                    printf "%s\n" "$rel" >> "$DAFTAR_GAGAL_HAPUS"
+                fi
+            ' _
+
+        berhenti_pengawas
+
+        # Sama seperti unggah: jumlah yang dipakai adalah yang benar-benar
+        # terbuang, sehingga ringkasan penutup tidak menghitung berkas yang
+        # gagal sebagai berhasil.
+        n_dibuang="$(wc -l < "$HITUNG_BUANG" | tr -d ' ')"
+        if [ "$n_dibuang" -eq "$n_hapus" ]; then
+            printf '  Berhasil membuang %s berkas usang.\n' "$n_dibuang"
+        else
+            printf '  %s dari %s berkas usang terbuang — rincian kegagalannya di bawah.\n' \
+                "$n_dibuang" "$n_hapus"
+        fi
+    else
+        printf '  Tidak ada berkas usang.\n'
+    fi
 fi
 
 # Kegagalan menahan penulisan manifest, supaya berkas yang belum terkirim tetap
@@ -397,4 +528,15 @@ fi
 
 cp "$MANIFEST_BARU" "$MANIFEST_LAMA"
 
-printf '\nSelesai.\n'
+# Ringkasan penutup. `Selesai.` semata tidak menjawab apa pun: ia tercetak
+# setelah dua fase yang sama-sama senyap, sehingga tidak terlihat apa yang
+# betul-betul dikerjakan atau berapa lama waktunya.
+durasi=$(($(date +%s) - MULAI_SKRIP))
+if [ "$durasi" -lt 60 ]; then
+    lama="${durasi} detik"
+else
+    lama="$((durasi / 60)) menit $((durasi % 60)) detik"
+fi
+
+printf '\nSelesai dalam %s — %s berkas diunggah, %s dibuang.\n' \
+    "$lama" "$n_unggah" "$n_dibuang"

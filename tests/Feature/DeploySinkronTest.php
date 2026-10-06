@@ -172,7 +172,12 @@ it('mengecek koneksi sebelum merakit paket', function () {
     expect($hasil)
         ->toContain('KODE=1')
         ->toContain('gagal menyambung')
-        ->not->toContain('Merakit paket rilis');
+        ->not->toContain('Merakit paket rilis')
+        // Fase unggah tidak pernah tercapai, jadi pesan suksesnya tidak boleh
+        // ikut tercetak — kalau tidak, "Berhasil mengunggah" bisa muncul pada
+        // run yang bermasalah dan dipercaya orang sebagai tanda tuntas.
+        ->not->toContain('Berhasil mengunggah')
+        ->not->toContain('Selesai dalam');
 });
 
 it('menyebut penyebab sebenarnya sesuai kode keluar curl', function () {
@@ -190,4 +195,55 @@ it('mode uji membuktikan TLS benar-benar dinegosiasikan', function () {
         ->toContain('--uji')
         ->toContain('AUTH TLS')
         ->toContain('234');
+});
+
+it('menampilkan satu baris kemajuan selama berkas diunggah', function () {
+    // Tanpa ini, sinkron penuh berjalan tanpa satu pun keluaran baru setelah
+    // `== Mengunggah ==` —6455 unggah lama kelar dan skrip terbaca seperti
+    // macet. Pengawasnya berjalan di latar dan harus ikut mati pada setiap
+    // jalan keluar, termasuk kegagalan di tengah jalan dan Ctrl-C.
+    expect(skripSinkron())
+        ->toContain('pengawas_kemajuan')
+        ->toContain('\r')
+        ->toContain('$PENGAWAS');
+});
+
+it('mencatat tiap berkas terkirim supaya kemajuan bisa ditelusuri', function () {
+    // Berkas hitung kemajuan sekaligus catatan: bila skrip berhenti di tengah
+    // jalan, baris terakhirnya menyebut berkas mana yang sedang dikirim.
+    expect(skripSinkron())
+        ->toContain('unggah.log')
+        ->toContain('buang.log');
+});
+
+it('menyebut keberhasilan tiap fase beserta jumlahnya', function () {
+    // `Selesai.` saja tidak menjawab apa pun: ia tercetak setelah kedua fase
+    // yang sama-sama senyap, sehingga peserta run tidak tahu apa yang betul-
+    // betul dikerjakan atau berapa banyak yang terkirim.
+    expect(skripSinkron())
+        ->toContain('Berhasil mengunggah')
+        ->toContain('Berhasil membuang')
+        ->toContain('Tidak ada berkas yang berubah')
+        ->toContain('Selesai dalam');
+});
+
+it('menyebut berhasil hanya bila seluruh berkas benar-benar terkirim', function () {
+    // Pembandingnya harus mendahului pesan sukses. Bila urutannya terbalik,
+    // `Berhasil mengunggah` tercetak lebih dulu lalu disusul daftar kegagalan —
+    // dua pernyataan yang saling membantah pada layar yang sama.
+    $pembandingUnggah = strpos(skripSinkron(), '[ "$n_terkirim" -eq "$n_unggah" ]');
+    $pembandingBuang = strpos(skripSinkron(), '[ "$n_dibuang" -eq "$n_hapus" ]');
+
+    expect($pembandingUnggah)->not->toBeFalse()
+        ->and($pembandingBuang)->not->toBeFalse()
+        ->and($pembandingUnggah)->toBeLessThan(strpos(skripSinkron(), 'Berhasil mengunggah'))
+        ->and($pembandingBuang)->toBeLessThan(strpos(skripSinkron(), 'Berhasil membuang'));
+});
+
+it('kegagalan unggah ikut terlihat di layar, bukan hanya di berkas', function () {
+    // Sebelumnya kegagalan hanya diam-diam masuk ke GAGAL-unggah.txt, jadi
+    // skrip bisa keluar dengan layar yang bersih dan run tetap gagal.
+    expect(skripSinkron())
+        ->toContain('gagal:')
+        ->toContain('DAFTAR_GAGAL');
 });
