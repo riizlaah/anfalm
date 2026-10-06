@@ -80,7 +80,7 @@ Aturan umum TDD di semua fase:
 **Deliverables:**
 - `Mapel` (3.1): kode unik, tingkat, jenis, `is_pkk`.
 - `KompetensiDasar` (3.2): unik per (mapel_id, kode_kompetensi); single source of truth.
-- `Soal` (3.3): tipe pg/pg_kompleks/pg_kategori, WYSIWYG konten, parameter IRT dengan default & peringatan (6.1), `daftar_kategori` untuk pg_kategori; opsi (min 5 / max 8) & pernyataan_kategori (min 3 / max 5).
+- `Soal` (3.3): tipe pg/pg_kompleks/pg_kategori, WYSIWYG konten (pertanyaan & pembahasan mode **penuh**; opsi & pernyataan mode **inline** — lihat Fase 8), parameter IRT dengan default & peringatan (6.1), `daftar_kategori` untuk pg_kategori; opsi (min 5 / max 8) & pernyataan_kategori (min 3 / max 5).
 - Soft delete + **blokir hapus permanen** bila data sudah dipakai (paket/tryout/riwayat); edit soal aman karena `is_benar` sudah snapshot di riwayat.
 
 **Kriteria Selesai:**
@@ -96,15 +96,14 @@ Aturan umum TDD di semua fase:
 **Deliverables:**
 - `PaketSoal` (3.5): kumpulan soal satu mapel, soal unik dalam paket.
 - `PaketTryout` (3.6):
-  - 3 mapel wajib + 2 pilihan; wajib tidak boleh sama dengan pilihan; pilihan_1 ≠ pilihan_2 (7.6).
-  - **Aturan SMK:** minimal satu dari pilihan_1/pilihan_2 berjenis `pilihan_kejuruan` ATAU `is_pkk=true`. Keduanya boleh kejuruan (jarang).
-  - `batas_waktu_menit` wajib (default 120).
-  - Minimal 1 soal per mapel (6.10).
+  - Isi paket disimpan **per-baris mapel** (`paket_tryout_mapel`: mapel + paket_soal + batas waktu `menit` per mapel — bawaan wajib 75 / pilihan 60), bukan lagi pasangan kolom slot tetap; jumlah mapel mengikuti katalog, tidak terpaku 3+2 (7.6).
+  - Mapel hanya tersedia sesuai tingkat paket (`tingkatMapelCocok`); paket soal wajib milik mapel yang sama dan minimal berisi 1 soal (6.10).
+  - **Aturan SMK:** dari semua mapel pilihan pada paket, minimal satu berjenis `pilihan_kejuruan` ATAU `is_pkk=true`.
   - Validasi berlaku saat create DAN edit.
 
 **Kriteria Selesai:**
 - Feature test mencakup seluruh kombinasi validasi SMK (kejuruan+umum, PKK+umum, kejuruan+kejuruan, ditolak bila tidak ada kejuruan/PKK).
-- Test duplikasi & minimal soal.
+- Test duplikasi & minimal soal; pilihan mapel oleh peserta diuji pada Fase 6.
 
 ---
 
@@ -117,7 +116,8 @@ Aturan umum TDD di semua fase:
 - Prompt builder (7.1) dengan distribusi merata antar KD yang dipilih.
 - Validator skema output (7.2) — termasuk daftar kategori `pg_kategori` yang bersifat **per-soal** (bukan per-paket).
 - `JsonRepairService`: parse JSON; ekstrak JSON dari teks; error ramah (6.14); log raw response.
-- Batas maks 30 soal/generate (6.11); retry/error handling (6.7); referensi PDF/teks via Gemini File API.
+- `MarkdownKeHtml`: konversi markdown dasar yang terselip dalam respons AI (tebal, miring, kode, daftar) menjadi HTML sebelum masuk kurasi.
+- Batas maks 30 soal/generate (6.11); retry/error handling (6.7); **rantai model & timeout** diatur lewat env (fallback saat satu model ditolak); referensi PDF/teks via Gemini File API.
 
 **Kriteria Selesai:**
 - Unit test: prompt builder, validator skema, JSON repair (valid, terpotong, salah struktur, mengandung teks).
@@ -131,7 +131,9 @@ Aturan umum TDD di semua fase:
 
 **Deliverables:**
 - `Percobaan` flow: mulai → kerjakan → progres tersimpan → **lanjutkan / mulai ulang** (6.4).
-- Tryout: soal diacak per percobaan, navigasi bebas, mapel dikunci saat "Lanjut ke Mapel Berikutnya" (modal konfirmasi), **global countdown + auto-submit** saat waktu habis, **satu percobaan** per user+paket, mapel tanpa jawaban diabaikan dari rata-rata theta (7.4).
+- Tryout: soal diacak per percobaan, navigasi bebas, mapel dikunci saat "Lanjut ke Mapel Berikutnya" (modal konfirmasi), **countdown per mapel + auto-submit** saat waktu habis (dihitung ulang setiap pindah mapel), **satu percobaan** per user+paket, mapel tanpa jawaban diabaikan dari rata-rata theta (7.4).
+- **Pilih mapel pilihan oleh peserta:** saat mulai tryout, peserta memilih **tepat dua** mapel pilihan dari seluruh yang ditawarkan paket (mapel wajib ikut otomatis; dikelompokkan per tingkat SMA/SMK).
+- **Halaman jeda antar mapel** (§3.7): hitung mundur mapel berikutnya mulai saat tombol "Mulai" ditekan (bukan saat mapel dikunci), jeda tidak dibatasi waktu, kiriman ulang diabaikan, tanpa jeda di mapel terakhir.
 - Latihan: pilih mapel/jumlah/KD filter, timer stopwatch atau countdown, auto-submit saat waktu habis.
 - Penyimpanan hasil → `riwayat_pengerjaan` + `hasil_tryout` + `percobaan` selesai.
 
@@ -161,11 +163,12 @@ Aturan umum TDD di semua fase:
 **Goal:** UI admin & peserta berbasis Livewire + Alpine dengan editor konten kaya.
 
 **Deliverables:**
-- Komponen form soal: **TipTap** (wrapper Alpine) + preview **KaTeX** (`\( ... \)`, `\[ ... \]`).
+- Komponen form soal: **TipTap** lewat `components/editor.blade.php` dengan dua mode — **penuh** (pertanyaan & pembahasan: daftar, kutipan, blok kode, heading, gambar) dan **inline** (baris opsi/pernyataan yang dirender di dalam `<label>` peserta: hanya teks format, kode inline, dan rumus; disimpan sebagai frasa tanpa `<p>`). Ekspresi **KaTeX** adalah node **atom** dengan dialog ƒ(x) (pratinjau di dialog, Simpan/Batal, mode blok hanya di mode penuh) — bukan panel preview terpisah; `\( ... \)` polos dan data lama dibungkus otomatis (idempoten).
 - Upload gambar: kompresi WebP client-side (Canvas, maks 500 KB) → local disk (siap S3).
 - **Sanitasi `symfony/html-sanitizer`** di sisi server, whitelist markup KaTeX; DOMPurify di client (6.12, 6.13 fallback teks mentah).
 - Halaman: dashboard admin/peserta, manager mapel/KD/soal/paket, kurasi AI, player tryout, latihan, analisis kompetensi (Chart.js), leaderboard.
 - Proteksi konten peserta: `user-select:none`, blok klik-kanan & shortcut copy — **hanya di view peserta**, bukan editor admin (7.10).
+- **Penyempurnaan UI admin:** tabel manajemen soal me-render isi pertanyaan (HTML bersih) lalu memotongnya dengan CSS; tombol toggle lihat/sembunyi sandi pada seluruh input password; gaya blok kode & kode inline yang seragam di dalam maupun luar editor.
 
 **Kriteria Selesai:**
 - Test: sanitasi server (XSS), upload validasi, proteksi tidak mengganggu editor.
@@ -202,3 +205,21 @@ Aturan umum TDD di semua fase:
 - Test navigasi mobile hijau: tab bar ada di seluruh halaman peserta, nav desktop utuh, tab bar absen di halaman pengerjaan.
 - Pengukuran browser 360×780: `scrollWidth === clientWidth` di seluruh halaman peserta; input 16px; `.btn`, tombol header, dan link tab bar 44px (rail-soal dan baris opsi 40px).
 - `php artisan test --compact` hijau; `vendor/bin/pint --dirty` bersih; `npm run build` dijalankan.
+
+---
+
+## Fase 11 — Rilis & Deploy
+
+**Goal:** Aplikasi bisa dirilis ke hosting produksi (InfinityFree) dan di-deploy ulang dengan jejak yang jelas — tanpa kredensial di dalam paket.
+
+**Deliverables:**
+- **Paket rilis** (`deploy/`): arsip zip siap unggah yang membuang berkas pengembangan dan **kredensial** (env/token), menyertakan template **env produksi**, paket **database** (SQL) terpisah, dan `htaccess` bila perlu.
+- **Sinkron FTPS** (`deploy/sinkron.sh`): cek koneksi (dipaksa IPv4/PASV) sebelum merakit paket; unggah via curl dengan tampilan **kemajuan** dan **pesan keberhasilan tiap fase** unggah/buang.
+- **Kebersihan paket:** berkas tak perlu dibuang dari paket dan folder `storage` runtime diisi supaya aplikasi langsung berjalan di server.
+- **Manifest akhir** (`deploy/build/manifest-akhir.txt`): ditulis dari **keadaan server** pada setiap run (ikut tercatat walau run gagal), sehingga run berikutnya bisa memprediksi **berkas berubah/usang**.
+- Catatan produksi: lingkungan tanpa SSH/cron/rute `migrate` — perubahan skema dilakukan manual via phpMyAdmin lalu disinkronkan lewat jalur ini.
+
+**Kriteria Selesai:**
+- Paket rilis teruji: tanpa kredensial, template env produksi tersedia, database terpisah.
+- `deploy/sinkron.sh` sukses dari lokal dengan ramalan jumlah berkas berubah/usang yang cocok dengan keadaan server; `public/build` ikut terunggah.
+- Gate penuh tetap hijau: `php artisan test --compact` lulus; `vendor/bin/pint --dirty` bersih; `npm run build` sukses.

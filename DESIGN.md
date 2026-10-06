@@ -39,7 +39,7 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 
 ### 1.3 Target Pengguna
 - **Admin:** Guru/pembuat soal
-- **Peserta:** Siswa (SMK/MAK, SMA/MA, SMP/MTs, SD/MI). Pendaftaran baru otomatis ber-role **peserta**; data profil (sekolah, tingkat, jurusan) dapat diisi/diubah dari halaman profil.
+- **Peserta:** Siswa SMA/MA dan SMK/MAK. Pendaftaran baru otomatis ber-role **peserta**; data profil (sekolah, tingkat, jurusan) dapat diisi/diubah dari halaman profil, termasuk **mengganti kata sandi secara mandiri**. Tingkat SD/SMP tidak lagi ditawarkan pada form (profil, paket tryout, dan mapel admin) — target baru dibatasi di bawah SMA/SMK dan label tingkat SMA/SMK disatukan (mis. "SMA/SMK").
 
 ---
 
@@ -111,18 +111,17 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 1. Admin → "Soal" → "Tambah Soal Baru".
 2. Pilih mapel → Pilih KD (dari matriks yang sudah ada).
 3. Pilih tipe soal: PG / PG Kompleks / PG Kategori.
-4. **Isi pertanyaan dengan WYSIWYG Editor:**
-   - Mendukung teks format (bold, italic, underline, list).
-   - Mendukung **embed gambar** (upload atau URL).
-   - Mendukung **ekspresi matematika** dengan KaTeX (contoh: `\frac{2}{3}`, `\sqrt{x^2 + y^2}`).
-   - Admin menuliskan kode KaTeX di dalam editor, dan akan dirender di preview.
+4. **Isi pertanyaan dengan WYSIWYG Editor mode penuh (§4.2):**
+   - Mendukung teks format (bold, italic, underline, coret, list, kutipan, blok kode, heading).
+   - Mendukung **embed gambar** (unggah berkas; §7.12).
+   - Mendukung **ekspresi matematika** dengan KaTeX (contoh: `\frac{2}{3}`, `\sqrt{x^2 + y^2}`) lewat dialog ƒ(x) — rumus tampil langsung sebagai node atom di dalam editor, bukan lewat panel preview terpisah (§4.3).
 5. **Upload gambar** (opsional): gambar pendukung untuk soal (diagram, grafik, ilustrasi).
    - Gambar akan dikompres otomatis ke WebP (maks 500 KB) di browser (Canvas API) dan disimpan di storage lokal aplikasi (`public` disk Laravel).
-6. **Isi opsi jawaban** (minimal 5, maksimal 8) dengan WYSIWYG Editor yang sama.
+6. **Isi opsi jawaban** (minimal 5, maksimal 8) dengan editor WYSIWYG **mode inline** — khusus frasa (tebal, miring, garis bawah, coret, kode inline, rumus), tanpa daftar/kutipan/blok kode/heading/gambar, karena baris opsi dirender **di dalam `<label>`** pada halaman peserta dan disimpan tanpa pembungkus `<p>` (§4.2).
    - Untuk **PG**: tentukan tepat **1** opsi `is_benar: true`.
    - Untuk **PG Kompleks**: tentukan **minimal 2** opsi `is_benar: true` (soal dengan jumlah benar ≤ 1 ditolak — lihat edge 6.15).
-   - Untuk **PG Kategori**: tidak menggunakan opsi jawaban, tetapi pernyataan-kategori (**minimal 3, maksimal 5**) dengan WYSIWYG Editor yang sama; admin mendefinisikan daftar kategori (`daftar_kategori` JSON) di tingkat soal, lalu per-pernyataan dikelompokkan ke salah satu kategori tersebut.
-7. **Isi pembahasan** dengan WYSIWYG Editor (support teks, gambar, KaTeX).
+   - Untuk **PG Kategori**: tidak menggunakan opsi jawaban, tetapi pernyataan-kategori (**minimal 3, maksimal 5**) dengan editor mode inline yang sama; admin mendefinisikan daftar kategori (`daftar_kategori` JSON) di tingkat soal, lalu per-pernyataan dikelompokkan ke salah satu kategori tersebut.
+7. **Isi pembahasan** dengan WYSIWYG Editor mode penuh (teks, gambar, KaTeX).
 8. **Isi parameter IRT (a, b, c):**
    - Admin bisa input manual (berdasarkan pengalaman).
    - Atau gunakan nilai default: `a=1.0, b=0.0, c=0.25`.
@@ -144,8 +143,8 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
    - Tingkat kesulitan yang diinginkan (mudah/sedang/sulit/campuran).
    - Referensi tambahan (upload PDF/gambar/teks) sebagai bahan acuan.
 5. Klik "Generate Paket".
-6. Sistem mengirimkan prompt ke **Google Gemini Flash** dengan struktur yang sudah ditentukan (lihat bagian 7.1 untuk detail prompt).
-7. AI mengembalikan data semua soal dalam satu paket dalam format JSON (lihat bagian 7.2 untuk skema JSON).
+6. Sistem mengirimkan prompt ke **model Gemini** — urutan model (`GEMINI_MODELS`) dan timeout (`GEMINI_TIMEOUT`) dapat diatur lewat env; bila satu model ditolak karena batas laju, sistem otomatis mencoba model berikutnya pada rantai (edge 6.7) — dengan struktur yang sudah ditentukan (lihat bagian 7.1 untuk detail prompt).
+7. AI mengembalikan data semua soal dalam satu paket dalam format JSON (lihat bagian 7.2 untuk skema JSON). Markdown dasar yang masih terselip dalam respons (tebal, miring, kode, daftar) dikonversi menjadi HTML oleh `MarkdownKeHtml` sebelum masuk ke tahap kurasi.
 8. **Admin wajib mengkurasi seluruh soal:**
    - Periksa setiap soal (pertanyaan, opsi, jawaban, pembahasan) yang sudah dirender dengan WYSIWYG + KaTeX.
    - Periksa dan sesuaikan parameter IRT (a,b,c) jika diperlukan.
@@ -183,26 +182,21 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 
 ### 3.6 Manajemen Paket Tryout (CRUD)
 
-**Deskripsi:** Admin membuat paket tryout yang terdiri dari **3 mapel wajib + 2 mapel pilihan** (khusus SMK).
+**Deskripsi:** Admin membuat paket tryout dari **kumpulan mapel** — sebagian wajib, sebagian pilihan — dengan menentukan paket soal dan batas waktu untuk setiap mapel. Jumlah mapel mengikuti katalog mapel (bisa bertambah), tidak terpaku 3+2; **pesertalah yang memilih** mapel pilihan mana yang akan ia kerjakan saat memulai (§3.7).
 
 **Alur:**
 1. Admin → "Paket Tryout" → "Buat Tryout Baru".
-2. Isi metadata: Nama paket, tingkat (`SMK|SMA|SMP|SD`), **batas waktu pengerjaan (menit)** — wajib diisi; default 120 menit jika dikosongkan.
-3. Pilih 3 mapel wajib (dari dropdown mapel yang berjenis `wajib`).
-4. Pilih 2 mapel pilihan:
-   - **Untuk SMK:** Minimal **salah satu** dari kedua mapel pilihan harus berjenis `pilihan_kejuruan` **atau** bertanda `is_pkk = true`. Keduanya boleh kejuruan sekaligus (jarang, tapi sah). Berlaku saat **create** maupun **edit**.
-   - **Untuk SMA/Sederajat:** Bebas memilih 2 mapel pilihan apa saja (tidak wajib kejuruan/PKK).
-5. Untuk setiap mapel:
-   - Pilih paket soal yang sudah ada (dari fitur 3.4 atau 3.5).
-   - Atau buat paket soal baru langsung dari halaman ini (manual atau generate AI).
-6. Klik "Simpan".
+2. Isi metadata: Nama paket, tingkat (SMA/SMK; nilai lama dipertahankan saat edit — tidak ada migrasi).
+3. Untuk setiap mapel yang ditawarkan pada tingkat tersebut (mapel ber-`tingkat = all` ikut ditawarkan; mapel SMA juga ditawarkan pada paket SMK):
+   - Pilih paket soal milik mapel yang sama (minimal berisi 1 soal) — atau biarkan kosong bila mapel tidak ikut dalam paket.
+   - Tentukan batas waktu `menit` (nilai bawaan migrasi: 75 untuk mapel wajib, 60 untuk pilihan).
+4. Klik "Simpan".
 
-**Validasi:**
-- `batas_waktu_menit` wajib diisi (positif, default 120 jika dikosongkan).
-- Mapel pilihan tidak boleh sama dengan mapel wajib, dan tidak boleh sama satu sama lain.
-- Minimal 1 soal per mapel.
-- **Untuk tingkat SMK:** minimal satu mapel pilihan ber-`jenis = pilihan_kejuruan` **atau** ber-`is_pkk = true`; keduanya tidak dipaksa berbeda (boleh sama-sama kejuruan).
-- **Retake:** Satu peserta hanya boleh **satu percobaan** per paket tryout (`UNIQUE(user_id, paket_tryout_id)` pada tabel `hasil_tryout`). Admin dapat mereset percobaan pada kasus khusus (edge 6.16).
+**Validasi (berlaku saat create maupun edit):**
+- Paket soal yang dipilih harus milik mapel yang sama dan minimal berisi 1 soal (edge 6.10); setiap baris yang tersimpan harus membawa `menit`.
+- Mapel hanya tersedia sesuai tingkat paket (`tingkatMapelCocok`: sama, `all`, atau mapel SMA untuk paket SMK).
+- **Untuk tingkat SMK:** dari seluruh mapel pilihan yang ditawarkan paket, minimal satu ber-`jenis = pilihan_kejuruan` **atau** ber-`is_pkk = true`.
+- **Retake:** Satu peserta hanya boleh **satu percobaan** per paket tryout (`UNIQUE(user_id, paket_tryout_id)` pada tabel `hasil_tryout`). Admin dapat mereset percobaan pada kasus khusus (edge 6.16) lewat tombol **Reset Riwayat** per paket, lalu menghapus paketnya.
 
 ---
 
@@ -213,8 +207,8 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 **Alur:**
 1. Peserta login → Dashboard Siswa.
 2. Pilih "Tryout" → Lihat daftar paket tryout yang tersedia.
-3. Pilih satu paket → Klik "Mulai Tryout".
-4. Sistem menampilkan 5 mapel (3 wajib + 2 pilihan) secara berurutan:
+3. Pilih satu paket → Klik "Mulai Tryout" → halaman **Pilih 2 Mapel Pilihan**: mapel wajib ikut otomatis, peserta menandai **tepat dua** mapel pilihan dari seluruh yang ditawarkan paket (dikelompokkan per tingkat SMA/SMK; siswa SMK dapat memilih mapel kejuruan/PKK).
+4. Sistem menyusun percobaan berisi mapel wajib + dua pilihan terpilih, lalu menampilkannya secara berurutan:
    - Untuk setiap mapel, peserta mengerjakan soal-soal di dalamnya.
    - **Navigasi:** Peserta bisa pindah ke soal sebelumnya/berikutnya menggunakan tombol navigasi.
    - **Status:** Soal yang sudah dijawab ditandai (misal: hijau = sudah, merah = belum).
@@ -226,7 +220,7 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
    - **Jeda tidak dibatasi waktunya:** aplikasi tidak memiliki scheduler, jadi kedaluwarsa selalu dihitung dari request. Memaksakan jeda berakhir sendiri hanya akan mengejutkan peserta ketika ia kembali membuka halaman.
    - Tautan halaman jeda berlaku selama jeda berlangsung; kiriman ulang diabaikan supaya peserta tidak memperoleh waktu tambahan.
 7. Saat mencapai mapel terakhir atau tombol "Selesai", sistem menghitung skor dan menyimpan ke `hasil_tryout`.
-8. Jika waktu pengerjaan habis (`batas_waktu_menit`), tryout **otomatis dikumpulkan** (auto-submit) — skor dihitung dari jawaban yang sudah ada; sisa soal tidak dijawab diabaikan dari estimasi.
+8. Batas waktu mengerjakan **per mapel** (`paket_tryout_mapel.menit` — bawaan: wajib 75, pilihan 60). Hitung mundur dimulai saat peserta mulai mengerjakan mapel itu dan **dihitung ulang setiap pindah mapel** (saat tombol "Mulai" pada halaman jeda ditekan); jika waktu habis, tryout **otomatis dikumpulkan** (auto-submit) — skor dihitung dari jawaban yang sudah ada; sisa soal tidak dijawab diabaikan dari estimasi.
 9. Sistem menghitung per-item:
    - **PG** → 1 item (opsi yang dipilih; `is_benar` dijadikan response 1/0).
    - **PG Kompleks** → 1 item per opsi; hanya opsi yang dipilih dihitung; opsi lain diabaikan (edge 6.2).
@@ -238,7 +232,7 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 **Catatan:**
 - Peserta tidak bisa kembali ke mapel sebelumnya setelah selesai.
 - **Jeda antar mapel** bersifat terbuka: pindah mapel membuka halaman jeda, bukan langsung soal berikutnya. Pada **mapel terakhir** tidak ada jeda — percobaan langsung ditutup dan hasilnya dihitung. Latihan (§3.8) tetap tanpa jeda: ia hanya satu mapel.
-- Semua paket tryout memiliki batas waktu wajib; tryout yang kehabisan waktu dikumpulkan secara otomatis.
+- Setiap mapel pada paket tryout memiliki batas waktu `menit`; mapel yang kehabisan waktu dikumpulkan otomatis.
 - **Retake:** Percobaan ulang hanya dimungkinkan dengan reset oleh admin (§6.16).
 
 ---
@@ -313,32 +307,29 @@ SMA/SMK:  500 + 100 × θ (di-clamp 200–800)
 
 ### 4.1 Deskripsi
 Untuk mendukung konten yang kaya (teks format, gambar, dan ekspresi matematika), sistem menggunakan:
-- **WYSIWYG Editor:** Untuk input konten (soal, opsi, pembahasan) oleh admin.
-- **KaTeX:** Untuk rendering ekspresi matematika di sisi peserta dan admin (preview).
+- **WYSIWYG Editor:** Untuk input konten (soal, opsi, pembahasan) oleh admin, dalam **dua mode** (§4.2).
+- **KaTeX:** Untuk rendering ekspresi matematika — di dalam editor admin dan di halaman peserta.
 
 ### 4.2 Editor yang Digunakan
-**TipTap** (ringan, berbasis ProseMirror) dengan extension:
-- Bold, Italic, Underline, Strike
-- Ordered/Unordered List
-- Blockquote
-- Code block
-- Image (upload dari lokal atau URL)
-- **KaTeX extension** untuk input dan render matematika
+**TipTap** (ringan, berbasis ProseMirror) lewat komponen bersama `resources/views/components/editor.blade.php` dengan prop `mode`:
+- **Mode penuh** (`mode="penuh"` — pertanyaan & pembahasan): Bold, Italic, Underline, Strike, Ordered/Unordered List, Blockquote, Code block, Heading (via input rule), **Image** (unggah berkas; §7.12), dan ekspresi KaTeX (termasuk mode blok).
+- **Mode inline** (`mode="inline"` — baris opsi jawaban & pernyataan PG Kategori): hanya Bold, Italic, Underline, Strike, **kode inline**, dan ekspresi KaTeX. Daftar, kutipan, blok kode, heading, dan gambar sengaja dimatikan: baris opsi/pernyataan dirender **di dalam `<label>`** pada halaman peserta, yang menurut spesifikasi HTML tidak boleh memuat konten blok, dan isinya disimpan sebagai **frasa** tanpa pembungkus `<p>` (`keFrasa()` di `resources/js/wysiwyg.js`).
+
+**Ekspresi KaTeX** memakai node kustom berbentuk **atom** (`resources/js/ekspresi.js`), bukan ekstensi KaTeX pihak ketiga.
 
 **Alternatif:** Quill.js atau TinyMCE, namun TipTap lebih ringan dan mudah dikustomisasi.
 
 ### 4.3 Cara Penggunaan KaTeX di Editor
-1. Admin mengetikkan ekspresi matematika di dalam editor dengan format:
-   - Inline: `\( ... \)` (contoh: `\( \frac{2}{3} \)`)
-   - Display: `\[ ... \]` (contoh: `\[ \int_0^1 x^2 dx \]`)
-2. Editor akan menampilkan **preview real-time** dari ekspresi tersebut.
-3. Saat disimpan, konten disimpan sebagai HTML dengan tag khusus untuk KaTeX.
-4. Saat ditampilkan ke peserta, sistem akan merender menggunakan KaTeX.
+1. Admin menulis ekspresi lewat dialog **ƒ(x)** pada toolbar: pilih **inline** (`\( ... \)`, contoh `\( \frac{2}{3} \)`) atau **blok** (`\[ ... \]`, contoh `\[ \int_0^1 x^2 dx \]` — opsi blok hanya ada di mode penuh). Pratinjau KaTeX tampil **langsung di dalam dialog**; tombol Simpan/Batal menentukan node masuk atau tidak. Mengklik node yang sudah ada membuka dialog kembali untuk menyunting.
+2. Mengetik `\( ... \)` polos di badan editor juga otomatis diubah menjadi node (`bungkusRumus()`, idempoten — simpanan lama ikut dibungkus ulang saat dimuat).
+3. Saat disimpan, ekspresi disimpan sebagai HTML dengan tag khusus: `<span class="katex-inline">\( ... \)</span>` untuk inline atau `<span class="katex-display">\[ ... \]</span>` untuk blok — sumber LaTeX ikut tersimpan sehingga data lama tetap terbaca.
+4. Saat ditampilkan (admin & peserta), sistem me-render ulang span tersebut dengan KaTeX. Ekspresi berbentuk **atom**: berubah sebagai satu kesatuan lewat dialog, tidak bisa diedit per karakter di dalam teks (untuk galat sintaks, lihat §6.13).
 
 ### 4.4 Validasi Konten
-- Setiap input dari WYSIWYG editor **disanitasi** untuk mencegah XSS (Cross-Site Scripting).
-- Hanya tag HTML yang diizinkan (dari TipTap) yang akan dipertahankan.
-- Ekspresi KaTeX divalidasi agar tidak mengandung kode berbahaya.
+- **Browser:** DOMPurify menyaring HTML sebelum dikirim (`draf()` di `resources/js/wysiwyg.js`).
+- **Server:** `KontenSanitizer` (`app/Domain/Konten/KontenSanitizer.php`, memakai `symfony/html-sanitizer` dengan daftar putih tag & atribut) menyaring konten sebelum disimpan dan **menyaringnya lagi sebelum ditampilkan**. Teks biasa tanpa satu pun tag HTML diteruskan apa adanya supaya rumus matematika (`2 + 2`, `A @ B`) tidak ter-encode menjadi entitas (§6.12).
+- **Baris opsi & pernyataan:** nilai ditolak bila hanya berisi tag kosong (`adaIsi()` di `SoalController` dan `GeneratePaketController`); editor mode inline mengirim frasa tanpa `<p>`, sehingga `<p></p>` tidak pernah sampai ke server.
+- Ekspresi KaTeX yang salah sintaks tetap disimpan sebagai teks mentah dan ditandai saat render (§6.13).
 
 ---
 
@@ -485,44 +476,31 @@ CREATE TABLE paket_tryout (
   nama_paket varchar(255) NOT NULL,
   deskripsi text DEFAULT NULL,
   tingkat enum('SD','SMP','SMA','SMK') NOT NULL DEFAULT 'SMK',
-  batas_waktu_menit int(11) NOT NULL,
-  mapel_wajib_1 bigint(20) unsigned DEFAULT NULL,
-  mapel_wajib_2 bigint(20) unsigned DEFAULT NULL,
-  mapel_wajib_3 bigint(20) unsigned DEFAULT NULL,
-  mapel_pilihan_1 bigint(20) unsigned DEFAULT NULL,
-  mapel_pilihan_2 bigint(20) unsigned DEFAULT NULL,
-  paket_soal_wajib_1_id bigint(20) unsigned DEFAULT NULL,
-  paket_soal_wajib_2_id bigint(20) unsigned DEFAULT NULL,
-  paket_soal_wajib_3_id bigint(20) unsigned DEFAULT NULL,
-  paket_soal_pilihan_1_id bigint(20) unsigned DEFAULT NULL,
-  paket_soal_pilihan_2_id bigint(20) unsigned DEFAULT NULL,
   created_by bigint(20) unsigned DEFAULT NULL,
   created_at timestamp NULL DEFAULT NULL,
   updated_at timestamp NULL DEFAULT NULL,
   deleted_at timestamp NULL DEFAULT NULL,
   PRIMARY KEY (id),
-  KEY paket_tryout_mapel_wajib_1_foreign (mapel_wajib_1),
-  KEY paket_tryout_mapel_wajib_2_foreign (mapel_wajib_2),
-  KEY paket_tryout_mapel_wajib_3_foreign (mapel_wajib_3),
-  KEY paket_tryout_mapel_pilihan_1_foreign (mapel_pilihan_1),
-  KEY paket_tryout_mapel_pilihan_2_foreign (mapel_pilihan_2),
-  KEY paket_tryout_paket_soal_wajib_1_id_foreign (paket_soal_wajib_1_id),
-  KEY paket_tryout_paket_soal_wajib_2_id_foreign (paket_soal_wajib_2_id),
-  KEY paket_tryout_paket_soal_wajib_3_id_foreign (paket_soal_wajib_3_id),
-  KEY paket_tryout_paket_soal_pilihan_1_id_foreign (paket_soal_pilihan_1_id),
-  KEY paket_tryout_paket_soal_pilihan_2_id_foreign (paket_soal_pilihan_2_id),
   KEY paket_tryout_created_by_foreign (created_by),
-  CONSTRAINT paket_tryout_created_by_foreign FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_mapel_pilihan_1_foreign FOREIGN KEY (mapel_pilihan_1) REFERENCES mapel (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_mapel_pilihan_2_foreign FOREIGN KEY (mapel_pilihan_2) REFERENCES mapel (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_mapel_wajib_1_foreign FOREIGN KEY (mapel_wajib_1) REFERENCES mapel (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_mapel_wajib_2_foreign FOREIGN KEY (mapel_wajib_2) REFERENCES mapel (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_mapel_wajib_3_foreign FOREIGN KEY (mapel_wajib_3) REFERENCES mapel (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_paket_soal_pilihan_1_id_foreign FOREIGN KEY (paket_soal_pilihan_1_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_paket_soal_pilihan_2_id_foreign FOREIGN KEY (paket_soal_pilihan_2_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_paket_soal_wajib_1_id_foreign FOREIGN KEY (paket_soal_wajib_1_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_paket_soal_wajib_2_id_foreign FOREIGN KEY (paket_soal_wajib_2_id) REFERENCES paket_soal (id) ON DELETE SET NULL,
-  CONSTRAINT paket_tryout_paket_soal_wajib_3_id_foreign FOREIGN KEY (paket_soal_wajib_3_id) REFERENCES paket_soal (id) ON DELETE SET NULL
+  CONSTRAINT paket_tryout_created_by_foreign FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE paket_tryout_mapel (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  paket_tryout_id bigint(20) unsigned NOT NULL,
+  mapel_id bigint(20) unsigned NOT NULL,
+  paket_soal_id bigint(20) unsigned NOT NULL,
+  menit smallint(5) unsigned NOT NULL DEFAULT 60,
+  created_at timestamp NULL DEFAULT NULL,
+  updated_at timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY paket_tryout_mapel_paket_tryout_id_mapel_id_unique (paket_tryout_id,mapel_id),
+  KEY paket_tryout_mapel_mapel_id_foreign (mapel_id),
+  KEY paket_tryout_mapel_paket_soal_id_foreign (paket_soal_id),
+  KEY paket_tryout_mapel_paket_tryout_id_foreign (paket_tryout_id),
+  CONSTRAINT paket_tryout_mapel_mapel_id_foreign FOREIGN KEY (mapel_id) REFERENCES mapel (id),
+  CONSTRAINT paket_tryout_mapel_paket_soal_id_foreign FOREIGN KEY (paket_soal_id) REFERENCES paket_soal (id),
+  CONSTRAINT paket_tryout_mapel_paket_tryout_id_foreign FOREIGN KEY (paket_tryout_id) REFERENCES paket_tryout (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE percobaan (
@@ -538,6 +516,8 @@ CREATE TABLE percobaan (
   posisi_soal int(11) NOT NULL DEFAULT 0,
   urutan_mapel int(11) NOT NULL DEFAULT 0,
   waktu_mulai timestamp NULL DEFAULT NULL,
+  mulai_mapel timestamp NULL DEFAULT NULL,
+  jeda_mulai timestamp NULL DEFAULT NULL,
   waktu_selesai timestamp NULL DEFAULT NULL,
   durasi_detik int(11) DEFAULT NULL,
   created_at timestamp NULL DEFAULT NULL,
@@ -645,12 +625,13 @@ Implementasi aktual menggunakan **Laravel 13 + MySQL/MariaDB** dengan pendekatan
 - **Mapel:** Menambahkan kolom `is_pkk` (boolean, default `false`) untuk identifikasi Proyek Kreatif & Kewirausahaan (digunakan dalam validasi aturan SMK §3.6).
 - **Soal:** Kolom `daftar_kategori` (JSON) menyimpan daftar kategori yang tersedia untuk tipe `pg_kategori` di tingkat soal (bukan per-paket).
 - **Parameter IRT per-opsi/pernyataan:** Kolom `a_diskriminasi`, `b_kesulitan`, `c_tebakan` pada `opsi_jawaban` dan `pernyataan_kategori` bersifat **nullable** — jika NULL, fallback ke parameter default (a=1.0, b=0.0, c=0.25) di tingkat soal (edge 6.1).
-- **Paket Tryout:** Menambahkan `batas_waktu_menit` (wajib, default 120) dan `created_by` (admin yang membuat).
+- **Paket Tryout:** Isi paket disimpan **per baris mapel** di `paket_tryout_mapel` (mapel + paket_soal + batas waktu `menit` masing-masing: bawaan 75 menit untuk mapel wajib, 60 untuk pilihan), bukan lagi pasangan kolom slot tetap; `created_by` mencatat admin pembuat.
 - **Sesi Pengerjaan:** Tabel `percobaan` mencatat status (berjalan/selesai/dibatalkan), posisi soal, dan urutan mapel untuk mendukung fitur resume (§6.4).
 - **Riwayat Pengerjaan:** `jawaban_user` (JSON) menyimpan jawaban mentah; `is_benar` (boolean) menyimpan snapshot hasil skoring per-soal saat pengerjaan selesai — edit soal tidak mempengaruhi riwayat yang sudah ada.
 - **Hasil Tryout:** `UNIQUE(user_id, paket_tryout_id)` menjamin **satu percobaan per user per paket tryout**; reset percobaan oleh admin = menghapus baris hasil lama (+ riwayat/percobaan terkait).
 - **Tracking Kompetensi & Mapel:** Kolom `theta_estimasi` bersifat **nullable** — `NULL` berarti "belum teridentifikasi" (§7.5), bukan 0.
 - **Session:** Menggunakan `SESSION_DRIVER=database` (tabel `sessions`); satu-sesi-per-akun diimplementasikan via kolom `users.session_token` + middleware kustom.
+- **Zona Waktu:** Aplikasi memakai `timezone` **Asia/Jakarta (WIB)**.
 
 > Seluruh migrasi Laravel tersedia di `database/migrations/`. Jalankan `php artisan migrate:fresh` untuk membangun ulang skema dari awal.
 
@@ -722,11 +703,12 @@ tulis tanpa berarti pada skala ini.
   - Jika masih gagal, tampilkan pesan error dan minta upload ulang.
 
 ### 6.7 AI Generate Paket Soal Gagal (API Error/Timeout)
-- **Kasus:** Google Gemini API down atau timeout saat generate paket soal.
+- **Kasus:** API Gemini down, timeout, atau menolak (batas laju) saat generate paket soal.
 - **Penanganan:**
   - Tampilkan pesan error ke admin.
   - Simpan prompt yang sudah dibuat → admin bisa coba lagi nanti.
   - Fallback: admin input manual (satu per satu) atau upload file.
+  - **Rantai model:** urutan model (`GEMINI_MODELS`) dan timeout (`GEMINI_TIMEOUT`) diatur lewat env; bila satu model ditolak karena batas laju, sistem otomatis mencoba model berikutnya pada rantai sebelum menyerah.
 
 ### 6.8 Skor IRT di Luar Rentang Skala
 - **Kasus:** Theta > 3 atau < -3 menghasilkan skor konversi di luar rentang 0-100 atau 200-800.
@@ -748,13 +730,13 @@ tulis tanpa berarti pada skala ini.
 
 ### 6.12 Konten HTML Berbahaya dari WYSIWYG Editor (XSS)
 - **Kasus:** Admin (atau peretas) memasukkan script berbahaya melalui WYSIWYG editor.
-- **Penanganan:** Semua input dari WYSIWYG editor **disanitasi** di sisi server (misal menggunakan HTML Purifier atau DOMPurify via headless browser) sebelum disimpan. Hanya tag HTML yang diizinkan yang dipertahankan.
+- **Penanganan:** Dua lapis. **Server:** `KontenSanitizer` (`app/Domain/Konten/KontenSanitizer.php`) memakai `symfony/html-sanitizer` dengan daftar putih tag (p, br, strong/b, em/i, u, s, sub, sup, ul/ol/li, blockquote, pre, `code` (class), h1–h3, hr, a, img, `span` (class)) — konten disaring sebelum disimpan **dan disaring lagi sebelum ditampilkan**. **Browser:** DOMPurify menyaring HTML sebelum dikirim (`resources/js/wysiwyg.js`). Teks biasa tanpa satu pun tag HTML tidak disentuh (§4.4) agar rumus matematika (`2 + 2`, `A @ B`) tidak ter-encode menjadi entitas. Hanya tag yang diizinkan yang dipertahankan.
 
 ### 6.13 KaTeX Expression Gagal Dirender
 - **Kasus:** Admin mengetikkan ekspresi KaTeX yang salah sintaks.
 - **Penanganan:** 
-  - Saat preview, jika KaTeX gagal dirender, tampilkan pesan error di editor.
-  - Saat tampil ke peserta, jika gagal dirender, tampilkan teks mentah ekspresi tersebut sebagai fallback.
+  - Di editor, ekspresi yang gagal dirender tampil sebagai teks LaTeX mentah dengan penanda galat (`.rumus-galat`); dialog ƒ(x) menandai pratinjau yang gagal sehingga admin bisa membetulkannya sebelum menyimpan.
+  - Saat tampil ke peserta, jika gagal dirender, tampilkan teks mentah ekspresi tersebut sebagai fallback (§7.11).
 
 ### 6.14 AI Mengembalikan JSON Tidak Valid
 - **Kasus:** Respons dari Google Gemini API bukan JSON yang valid (misal: mengandung teks tambahan, JSON terpotong, atau struktur tidak sesuai skema).
@@ -1088,12 +1070,10 @@ Sistem menerapkan proteksi dasar:
 - **Catatan:** Proteksi ini bersifat client-side (dasar) dan sesuai dengan batasan budget. Untuk proteksi lebih tinggi dapat dikembangkan di masa depan.
 
 ### 7.11 Bagaimana WYSIWYG Editor Menangani Konten Matematika?
-1. Admin mengetikkan ekspresi matematika dengan format LaTeX:
-   - Inline: `\( ... \)` → `\( \frac{2}{3} \)`
-   - Display: `\[ ... \]` → `\[ \int_0^1 x^2 dx \]`
-2. Editor menampilkan preview real-time menggunakan KaTeX.
-3. Saat disimpan, konten disimpan sebagai HTML dengan tag khusus (contoh: `<span class="katex-inline">...</span>`).
-4. Saat ditampilkan ke peserta, sistem merender ulang menggunakan KaTeX.
+1. Admin menulis ekspresi lewat tombol **ƒ(x)** pada toolbar: pilih **inline** (`\( ... \)`, contoh `\( \frac{2}{3} \)`) atau **blok** (`\[ ... \]`, contoh `\[ \int_0^1 x^2 dx \]` — pilihan blok hanya ada di mode penuh). Pratinjau KaTeX tampil langsung di dalam dialog; tombol Simpan/Batal menentukan node masuk atau tidak, dan mengklik node yang sudah ada membuka dialog kembali untuk menyunting.
+2. Mengetik `\( ... \)` polos di badan editor juga diubah otomatis menjadi node (`bungkusRumus()`, idempoten — simpanan lama ikut dibungkus ulang saat dimuat).
+3. Saat disimpan, ekspresi disimpan sebagai HTML dengan tag khusus: `<span class="katex-inline">\( ... \)</span>` untuk inline atau `<span class="katex-display">\[ ... \]</span>` untuk blok — sumber LaTeX ikut tersimpan sehingga data lama tetap terbaca.
+4. Saat ditampilkan (admin & peserta), sistem me-render ulang span tersebut dengan KaTeX. Ekspresi berbentuk **atom**: berubah sebagai satu kesatuan lewat dialog, bukan diedit karakter per karakter di dalam teks (lihat juga §6.13 untuk galat sintaks).
 
 ### 7.12 Bagaimana Cara Upload Gambar di WYSIWYG Editor?
 1. Admin mengklik tombol "Sisipkan gambar" di bawah toolbar editor lalu memilih file.
@@ -1103,4 +1083,6 @@ Sistem menerapkan proteksi dasar:
 5. Saat disimpan, gambar direferensikan melalui URL di konten HTML.
 
 > Opsi **masukkan URL** tanpa unggah (langkah 2 pada rancangan awal) belum
-> diimplementasikan; jalur unggah berkaslah yang berlaku sekarang.
+> diimplementasikan; jalur unggah berkaslah yang berlaku sekarang. Tombol
+> gambar hanya ada pada editor mode **penuh** (pertanyaan & pembahasan) —
+> baris opsi/pernyataan mode inline tidak memuat gambar (§4.2).
