@@ -150,10 +150,16 @@ export function pasangDialogEkspresi(wadah, editor) {
     const tombolSimpan = wadah.querySelector('[data-rumus-simpan]')
     const tombolBatal = wadah.querySelector('[data-rumus-batal]')
 
-    if (!dialog || !input || !pratinjau || !modeBlok || !tombolSimpan) return null
+    if (!dialog || !input || !pratinjau || !tombolSimpan) return null
 
     /** Posisi node yang sedang diedit, atau `null` saat mode menyisipkan. */
     let posisiPerbarui = null
+
+    // Checkbox mode blok hanya ada pada dialog editor mode penuh; editor
+    // inline (butir 165) sengaja tanpa satu pun opsi konten blok, dan
+    // ekspresinya selalu menempel — mode asal node tetap dipertahankan.
+    let displayAsal = false
+    const modeTampil = () => (modeBlok ? modeBlok.checked : displayAsal)
 
     function lukisPratinjau() {
         const sumber = input.value.trim()
@@ -168,7 +174,7 @@ export function pasangDialogEkspresi(wadah, editor) {
         }
 
         try {
-            katex.render(sumber, pratinjau, { displayMode: modeBlok.checked, throwOnError: true })
+            katex.render(sumber, pratinjau, { displayMode: modeTampil(), throwOnError: true })
         } catch (galat) {
             pratinjau.classList.add('rumus-galat')
             pratinjau.textContent = galat.message
@@ -193,7 +199,7 @@ export function pasangDialogEkspresi(wadah, editor) {
         const sumber = input.value.trim()
         if (sumber === '') return
 
-        const attrs = { sumber, display: modeBlok.checked }
+        const attrs = { sumber, display: modeTampil() }
         const tujuan = posisiPerbarui
 
         if (tujuan === null) {
@@ -224,7 +230,8 @@ export function pasangDialogEkspresi(wadah, editor) {
     function buka(opsi = {}) {
         posisiPerbarui = opsi.posisi ?? null
         input.value = opsi.sumber ?? ''
-        modeBlok.checked = opsi.display ?? false
+        displayAsal = opsi.display ?? false
+        if (modeBlok) modeBlok.checked = displayAsal
         lukisPratinjau()
 
         if (typeof dialog.showModal === 'function') {
@@ -238,7 +245,7 @@ export function pasangDialogEkspresi(wadah, editor) {
     }
 
     input.addEventListener('input', lukisPratinjau)
-    modeBlok.addEventListener('change', lukisPratinjau)
+    modeBlok?.addEventListener('change', lukisPratinjau)
     tombolSimpan.addEventListener('click', simpan)
     tombolBatal?.addEventListener('click', tutup)
     // Klik pada tirainya (bukan pada dialognya) menutup popup. Posisi node

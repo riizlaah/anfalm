@@ -269,8 +269,9 @@
                                     <div class="opsi-row">
                                         <input type="hidden" name="daftar_soal[{{ $i }}][opsi_jawaban][{{ $oIdx }}][urutan]" value="{{ $opsi['urutan'] ?? $oIdx + 1 }}">
 
-                                        <input type="text" name="daftar_soal[{{ $i }}][opsi_jawaban][{{ $oIdx }}][teks_opsi]"
-                                            placeholder="Teks opsi" value="{{ $opsi['teks_opsi'] ?? '' }}" class="input" required>
+                                        <x-editor mode="inline"
+                                            nama="daftar_soal[{{ $i }}][opsi_jawaban][{{ $oIdx }}][teks_opsi]"
+                                            :nilai="$opsi['teks_opsi'] ?? ''" placeholder="Teks opsi" />
 
                                         <input type="hidden" name="daftar_soal[{{ $i }}][opsi_jawaban][{{ $oIdx }}][is_benar]"
                                             value="{{ ! empty($opsi['is_benar']) ? '1' : '0' }}" class="is-benar-hidden">
@@ -334,8 +335,9 @@
                                     <div class="pernyataan-row">
                                         <input type="hidden" name="daftar_soal[{{ $i }}][pernyataan_kategori][{{ $pIdx }}][urutan]" value="{{ $pernyataan['urutan'] ?? $pIdx + 1 }}">
 
-                                        <input type="text" name="daftar_soal[{{ $i }}][pernyataan_kategori][{{ $pIdx }}][teks_pernyataan]"
-                                            placeholder="Teks pernyataan" value="{{ $pernyataan['teks_pernyataan'] ?? '' }}" class="input" required>
+                                        <x-editor mode="inline"
+                                            nama="daftar_soal[{{ $i }}][pernyataan_kategori][{{ $pIdx }}][teks_pernyataan]"
+                                            :nilai="$pernyataan['teks_pernyataan'] ?? ''" placeholder="Teks pernyataan" />
 
                                         <select name="daftar_soal[{{ $i }}][pernyataan_kategori][{{ $pIdx }}][kategori_benar]" class="select kurasi-kategori-select" required>
                                             <option value="">— pilih —</option>
@@ -381,6 +383,15 @@
             </div>
         </div>
     </form>
+
+    {{-- Baris "+ Tambah" diklon dari template ini supaya markupnya identik dengan
+         baris server; `htmlEditorBaris()` di script hanya mengganti nama field. --}}
+    <template id="template-editor-opsi">
+        <x-editor mode="inline" nama="" placeholder="Teks opsi" />
+    </template>
+    <template id="template-editor-pernyataan">
+        <x-editor mode="inline" nama="" placeholder="Teks pernyataan" />
+    </template>
 
     <script type="application/json" id="kurasi-kd-peta">@json($kdPeta)</script>
 
@@ -574,6 +585,10 @@
                         const prefix = 'daftar_soal[' + cardIndex + '][' + field + ']';
                         row.querySelectorAll('[name]').forEach(function (el) {
                             el.name = el.name.replace(pola, prefix + '[' + pos + ']');
+                            // Nama editor ikut dirapikan supaya label aksesibilitas
+                            // tidak menunjuk indeks baris lama.
+                            const wadah = el.closest('[data-wysiwyg]');
+                            if (wadah) wadah.dataset.wysiwygNama = el.name;
                         });
                         const urutan = row.querySelector('input[name$="[urutan]"]');
                         if (urutan) urutan.value = String(pos + 1);
@@ -595,12 +610,21 @@
                 }).join('');
             }
 
+            // Editor baris diklon dari template agar markupnya identik dengan baris
+            // server; yang diganti hanya nama field pada input tersembunyinya (butir 165).
+            function htmlEditorBaris(templateId, nama) {
+                const wadah = document.getElementById(templateId).content.firstElementChild.cloneNode(true);
+                wadah.dataset.wysiwygNama = nama;
+                wadah.querySelector('[data-wysiwyg-input]').name = nama;
+                return wadah.outerHTML;
+            }
+
             function htmlOpsiRow(cardIndex, oIdx) {
                 const name = 'daftar_soal[' + cardIndex + '][opsi_jawaban][' + oIdx + ']';
                 return [
                     '<div class="opsi-row">',
                         '<input type="hidden" name="' + name + '[urutan]" value="' + (oIdx + 1) + '">',
-                        '<input type="text" name="' + name + '[teks_opsi]" placeholder="Teks opsi" class="input" required>',
+                        htmlEditorBaris('template-editor-opsi', name + '[teks_opsi]'),
                         '<input type="hidden" class="is-benar-hidden" name="' + name + '[is_benar]" value="0">',
                         '<label class="check benar-control" data-opsi-for="pg">',
                             '<input type="radio" class="benar-radio" name="benar_pilih_' + cardIndex + '" value="' + oIdx + '"> Benar',
@@ -624,7 +648,7 @@
                 return [
                     '<div class="pernyataan-row">',
                         '<input type="hidden" name="' + name + '[urutan]" value="' + (pIdx + 1) + '">',
-                        '<input type="text" name="' + name + '[teks_pernyataan]" placeholder="Teks pernyataan" class="input" required>',
+                        htmlEditorBaris('template-editor-pernyataan', name + '[teks_pernyataan]'),
                         '<select name="' + name + '[kategori_benar]" class="select kurasi-kategori-select" required>' + optionsHtml + '</select>',
                         '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-pernyataan-row">Hapus</button>',
                     '</div>',

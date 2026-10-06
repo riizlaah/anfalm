@@ -559,10 +559,16 @@ it('editor kurasi memakai bentuk yang sama dengan form soal manual', function ()
         ->and($html)->toContain('list="kurasi-kd-list-0"')
         ->and($html)->toContain('id="kurasi-kd-list-1"');
 
-    // Opsi memakai baris teks satu baris seperti form manual…
+    // Opsi memakai editor inline seperti form manual, bukan input teks…
     expect($html)
-        ->toContain('type="text" name="daftar_soal[0][opsi_jawaban][0][teks_opsi]"')
-        ->toContain('type="text" name="daftar_soal[1][opsi_jawaban][4][teks_opsi]"');
+        ->toContain('data-wysiwyg-nama="daftar_soal[0][opsi_jawaban][0][teks_opsi]"')
+        ->toContain('data-wysiwyg-nama="daftar_soal[1][opsi_jawaban][4][teks_opsi]"')
+        ->not->toContain('type="text" name="daftar_soal[0][opsi_jawaban][0][teks_opsi]"');
+
+    // …dan baris dinamisnya diklon dari template yang sama.
+    expect($html)
+        ->toContain('<template id="template-editor-opsi"')
+        ->toContain('<template id="template-editor-pernyataan"');
 
     // …sementara parameter IRT per opsi, khusus kurasi, tetap tersimpan.
     expect($html)
@@ -716,6 +722,24 @@ it('simpan kurasi menolak opsi yang kehilangan teks_opsi', function () {
 
     $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
         ->assertSessionHasErrors('daftar_soal.0.opsi_jawaban.2.teks_opsi');
+});
+
+it('simpan kurasi menolak opsi dan pernyataan yang hanya memuat paragraf kosong', function () {
+    $admin = User::factory()->admin()->create();
+    [$mapel, $kd31, $kd32] = setupKurasiMapel();
+    $payload = kurasiPayloadValid($mapel, $kd31, $kd32);
+    seedAiDraft($mapel);
+
+    // Editor inline mengirim `<p></p>` saat kolom dikosongkan; string itu tetap
+    // lolos `required` dan `string`, jadi penilaiannya diserahkan ke `adaIsi()`.
+    $payload['daftar_soal'][0]['opsi_jawaban'][2]['teks_opsi'] = '<p></p>';
+    $payload['daftar_soal'][2]['pernyataan_kategori'][1]['teks_pernyataan'] = '<p></p>';
+
+    $this->actingAs($admin)->post('/admin/paket-soal/simpan', $payload)
+        ->assertSessionHasErrors([
+            'daftar_soal.0.opsi_jawaban.2.teks_opsi',
+            'daftar_soal.2.pernyataan_kategori.1.teks_pernyataan',
+        ]);
 });
 
 it('simpan kurasi menolak pernyataan yang kehilangan kategori_benar', function () {

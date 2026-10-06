@@ -116,8 +116,8 @@
             @foreach ($opsiRows as $idx => $opsi)
                 <div class="opsi-row">
                     <input type="hidden" name="opsi_jawaban[{{ $idx }}][urutan]" value="{{ $opsi['urutan'] ?? ($idx + 1) }}">
-                    <input type="text" name="opsi_jawaban[{{ $idx }}][teks_opsi]" placeholder="Teks opsi"
-                        value="{{ $opsi['teks_opsi'] ?? '' }}" class="input" required>
+                    <x-editor mode="inline" nama="opsi_jawaban[{{ $idx }}][teks_opsi]"
+                        :nilai="$opsi['teks_opsi'] ?? ''" placeholder="Teks opsi" />
                     <input type="hidden" name="opsi_jawaban[{{ $idx }}][is_benar]"
                         value="{{ ! empty($opsi['is_benar']) ? '1' : '0' }}" class="is-benar-hidden">
 
@@ -156,8 +156,8 @@
             @foreach ($pernyataanRows as $idx => $pernyataan)
                 <div class="pernyataan-row">
                     <input type="hidden" name="pernyataan_kategori[{{ $idx }}][urutan]" value="{{ $pernyataan['urutan'] ?? ($idx + 1) }}">
-                    <input type="text" name="pernyataan_kategori[{{ $idx }}][teks_pernyataan]" placeholder="Teks pernyataan"
-                        value="{{ $pernyataan['teks_pernyataan'] ?? '' }}" class="input" required>
+                    <x-editor mode="inline" nama="pernyataan_kategori[{{ $idx }}][teks_pernyataan]"
+                        :nilai="$pernyataan['teks_pernyataan'] ?? ''" placeholder="Teks pernyataan" />
                     <select name="pernyataan_kategori[{{ $idx }}][kategori_benar]" class="select" required>
                         <option value="">— pilih —</option>
                         @foreach ($daftarKategori as $kategori)
@@ -171,6 +171,15 @@
         <button type="button" class="btn btn-ghost" id="add-pernyataan">+ Tambah Pernyataan</button>
         <p class="hint">Minimal 3 pernyataan (tombol Hapus muncul setelah jumlah melewati 3); kategori benar dipilih dari daftar kategori di atas.</p>
     </section>
+
+    {{-- Baris "+ Tambah" diklon dari template ini supaya markupnya identik dengan
+         baris server; `htmlEditorBaris()` di bawah hanya mengganti nama field. --}}
+    <template id="template-editor-opsi">
+        <x-editor mode="inline" nama="" placeholder="Teks opsi" />
+    </template>
+    <template id="template-editor-pernyataan">
+        <x-editor mode="inline" nama="" placeholder="Teks pernyataan" />
+    </template>
 </div>
 
 <script>
@@ -303,6 +312,10 @@
                 document.querySelectorAll(konfig[0]).forEach(function (row, pos) {
                     row.querySelectorAll('[name]').forEach(function (el) {
                         el.name = el.name.replace(pola, konfig[1] + '[' + pos + ']');
+                        // Nama editor ikut dirapikan supaya label aksesibilitas
+                        // tidak menunjuk indeks baris lama.
+                        const wadah = el.closest('[data-wysiwyg]');
+                        if (wadah) wadah.dataset.wysiwygNama = el.name;
                     });
                     const urutan = row.querySelector('input[name$="[urutan]"]');
                     if (urutan) urutan.value = String(pos + 1);
@@ -329,11 +342,20 @@
                     '<input type="checkbox" class="benar-check"> Benar</label>';
         }
 
+        // Editor baris diklon dari template agar markupnya identik dengan baris
+        // server; yang diganti hanya nama field pada input tersembunyinya (butir 165).
+        function htmlEditorBaris(templateId, nama) {
+            var wadah = document.getElementById(templateId).content.firstElementChild.cloneNode(true);
+            wadah.dataset.wysiwygNama = nama;
+            wadah.querySelector('[data-wysiwyg-input]').name = nama;
+            return wadah.outerHTML;
+        }
+
         document.getElementById('add-opsi').addEventListener('click', function () {
             addRow('opsi', document.getElementById('opsi-list'), 'opsi_jawaban', function (name, index) {
-                return '<input type="hidden" name="' + name + '][urutan]">' +
-                    '<input type="text" name="' + name + '][teks_opsi]" placeholder="Teks opsi" class="input" required>' +
-                    '<input type="hidden" name="' + name + '][is_benar]" value="0" class="is-benar-hidden">' +
+                return '<input type="hidden" name="' + name + '[urutan]">' +
+                    htmlEditorBaris('template-editor-opsi', name + '[teks_opsi]') +
+                    '<input type="hidden" name="' + name + '[is_benar]" value="0" class="is-benar-hidden">' +
                     buildBenarControls(index) +
                     '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>';
             });
@@ -354,8 +376,8 @@
         document.getElementById('add-pernyataan').addEventListener('click', function () {
             var daftar = getDaftarKategori();
             addRow('pernyataan', document.getElementById('pernyataan-list'), 'pernyataan_kategori', function (name) {
-                return '<input type="hidden" name="' + name + '][urutan]">' +
-                    '<input type="text" name="' + name + '][teks_pernyataan]" placeholder="Teks pernyataan" class="input" required>' +
+                return '<input type="hidden" name="' + name + '[urutan]">' +
+                    htmlEditorBaris('template-editor-pernyataan', name + '[teks_pernyataan]') +
                     buildKategoriSelect(name + '[kategori_benar]', daftar) +
                     '<button type="button" class="btn btn-danger px-2.5 py-1 text-xs remove-row">Hapus</button>';
             });

@@ -243,11 +243,29 @@ class SoalController extends Controller
             'daftar_kategori' => ['nullable', 'array', 'min:1'],
             'daftar_kategori.*' => ['required', 'string', 'max:50'],
             'opsi_jawaban' => ['nullable', 'array', 'min:5', 'max:8'],
-            'opsi_jawaban.*.teks_opsi' => ['required_with:opsi_jawaban', 'string'],
+            'opsi_jawaban.*.teks_opsi' => [
+                'required_with:opsi_jawaban',
+                'string',
+                // Editor inline mengirim `<p></p>` yang tetap lolos `required`.
+                function (string $attribute, mixed $nilai, \Closure $gagal): void {
+                    if (is_string($nilai) && ! $this->konten->adaIsi($nilai)) {
+                        $gagal('Opsi jawaban wajib diisi.');
+                    }
+                },
+            ],
             'opsi_jawaban.*.is_benar' => ['required_with:opsi_jawaban', 'boolean'],
             'opsi_jawaban.*.urutan' => ['nullable', 'integer'],
             'pernyataan_kategori' => ['nullable', 'array', 'min:3', 'max:5'],
-            'pernyataan_kategori.*.teks_pernyataan' => ['required_with:pernyataan_kategori', 'string'],
+            'pernyataan_kategori.*.teks_pernyataan' => [
+                'required_with:pernyataan_kategori',
+                'string',
+                // Editor inline mengirim `<p></p>` yang tetap lolos `required`.
+                function (string $attribute, mixed $nilai, \Closure $gagal): void {
+                    if (is_string($nilai) && ! $this->konten->adaIsi($nilai)) {
+                        $gagal('Pernyataan wajib diisi.');
+                    }
+                },
+            ],
             'pernyataan_kategori.*.kategori_benar' => ['required_with:pernyataan_kategori', 'string', Rule::in($daftarKategori)],
             'pernyataan_kategori.*.urutan' => ['nullable', 'integer'],
         ]);

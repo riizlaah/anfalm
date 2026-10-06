@@ -196,6 +196,39 @@
     .wysiwyg-kolom-wadah .ekspresi-wadah.ProseMirror-selectednode {
         @apply ring-2 ring-ink/30;
     }
+
+    /* Editor baris opsi/pernyataan (butir 165): mode inline yang tumbuh
+       mengikuti isi, token panjang membungkus sendiri, toolbar lebih ringkas,
+       dan palang tulis dari `data-placeholder` hanya menyala selama kolomnya
+       masih kosong (keadaan dilacak lewat `.is-kosong` di wysiwyg.js). */
+    .opsi-row > [data-wysiwyg],
+    .pernyataan-row > [data-wysiwyg] {
+        @apply min-w-0;
+    }
+    .opsi-row > [data-wysiwyg] {
+        @apply flex-1;
+    }
+    [data-wysiwyg-mode='inline'] .wysiwyg-toolbar {
+        @apply py-0.5;
+    }
+    [data-wysiwyg-mode='inline'] .wysiwyg-toolbar button {
+        @apply h-6 min-w-6 text-xs;
+    }
+    [data-wysiwyg-mode='inline'] .wysiwyg-kolom-wadah {
+        @apply min-h-9;
+    }
+    [data-wysiwyg-mode='inline'] .wysiwyg-kolom-wadah .tiptap {
+        @apply min-h-0;
+        /* `overflow-wrap` sengaja TIDAK ditulis di sini: lihat penimpa tanpa
+           @layer di akhir berkas. */
+    }
+    [data-wysiwyg-editor].is-kosong .tiptap {
+        @apply relative;
+    }
+    [data-wysiwyg-editor].is-kosong .tiptap::before {
+        content: attr(data-placeholder);
+        @apply pointer-events-none absolute top-0 left-0 text-sm text-slate-400;
+    }
     /* Ekspresi KaTeX yang sintaksnya salah: teks mentah tetap tampil (§6.13). */
     .rumus-galat {
         @apply rounded bg-rose-50 px-1 font-mono text-rose-700;
@@ -216,4 +249,16 @@
         user-select: text;
         -webkit-user-select: text;
     }
+}
+
+/* Penimpa tanpa @layer (butir 165): TipTap menyuntik gaya `.ProseMirror`
+   lewat <style> sendiri tanpa layer, dan aturan tanpa layer selalu mengalahkan
+   aturan berlayer mana pun — berapa pun spesifisitasnya. Itulah sebabnya
+   `overflow-wrap` untuk kolom baris opsi/pernyataan harus ditaruh di sini,
+   bukan di `@layer components` bersama aturan editor yang lain: token panjang
+   (tautan, kode KaTeX) harus membungkus sendiri agar baris tak meledak ke
+   samping, dan `anywhere` — bukan `break-word` — juga menekan lebar minimum
+   token agar sel/gid di sekitarnya ikut menyusut. */
+[data-wysiwyg-mode='inline'] .wysiwyg-kolom-wadah .tiptap {
+    overflow-wrap: anywhere;
 }

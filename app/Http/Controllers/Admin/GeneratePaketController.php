@@ -482,14 +482,32 @@ class GeneratePaketController extends Controller
                 "{$prefix}.daftar_kategori" => ['nullable', 'array', 'min:1'],
                 "{$prefix}.daftar_kategori.*" => ['required', 'string', 'max:50'],
                 "{$prefix}.opsi_jawaban" => ['nullable', 'array', 'min:5', 'max:8'],
-                "{$prefix}.opsi_jawaban.*.teks_opsi" => ["required_with:{$prefix}.opsi_jawaban", 'string'],
+                "{$prefix}.opsi_jawaban.*.teks_opsi" => [
+                    "required_with:{$prefix}.opsi_jawaban",
+                    'string',
+                    // Editor inline mengirim `<p></p>` yang tetap lolos `required`.
+                    function (string $attribute, mixed $nilai, \Closure $gagal): void {
+                        if (is_string($nilai) && ! $this->konten->adaIsi($nilai)) {
+                            $gagal('Opsi jawaban wajib diisi.');
+                        }
+                    },
+                ],
                 "{$prefix}.opsi_jawaban.*.is_benar" => ["required_with:{$prefix}.opsi_jawaban", 'boolean'],
                 "{$prefix}.opsi_jawaban.*.urutan" => ['nullable', 'integer'],
                 "{$prefix}.opsi_jawaban.*.a_diskriminasi" => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],
                 "{$prefix}.opsi_jawaban.*.b_kesulitan" => ['nullable', 'numeric', 'min:-3', 'max:3'],
                 "{$prefix}.opsi_jawaban.*.c_tebakan" => ['nullable', 'numeric', 'min:0', 'max:0.35'],
                 "{$prefix}.pernyataan_kategori" => ['nullable', 'array', 'min:3', 'max:5'],
-                "{$prefix}.pernyataan_kategori.*.teks_pernyataan" => ["required_with:{$prefix}.pernyataan_kategori", 'string'],
+                "{$prefix}.pernyataan_kategori.*.teks_pernyataan" => [
+                    "required_with:{$prefix}.pernyataan_kategori",
+                    'string',
+                    // Editor inline mengirim `<p></p>` yang tetap lolos `required`.
+                    function (string $attribute, mixed $nilai, \Closure $gagal): void {
+                        if (is_string($nilai) && ! $this->konten->adaIsi($nilai)) {
+                            $gagal('Pernyataan wajib diisi.');
+                        }
+                    },
+                ],
                 "{$prefix}.pernyataan_kategori.*.kategori_benar" => ["required_with:{$prefix}.pernyataan_kategori", 'string', Rule::in($spesifikasi['daftar_kategori'] ?? [])],
                 "{$prefix}.pernyataan_kategori.*.urutan" => ['nullable', 'integer'],
                 "{$prefix}.pernyataan_kategori.*.a_diskriminasi" => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],

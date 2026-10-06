@@ -456,6 +456,73 @@ it('form tambah soal sudah menampilkan jumlah baris minimum', function () {
     expect(substr_count($html, 'name="daftar_kategori[]" placeholder="Nama kategori (mis. Benar)"'))->toBe(2);
 });
 
+it('opsi dan pernyataan memakai editor inline, bukan input teks', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $html = $this->actingAs($admin)->get(route('admin.mapel.soal.create', $mapel))
+        ->assertOk()
+        ->getContent();
+
+    // Keduanya dirender di dalam <label> pada halaman peserta, jadi editornya
+    // harus mode inline: konten frasa saja, tanpa blok (butir 165).
+    expect($html)
+        ->toContain('data-wysiwyg-mode="inline"')
+        ->toContain('data-wysiwyg-nama="opsi_jawaban[0][teks_opsi]"')
+        ->toContain('data-wysiwyg-nama="pernyataan_kategori[0][teks_pernyataan]"')
+        ->not->toContain('type="text" name="opsi_jawaban[0][teks_opsi]"')
+        ->not->toContain('type="text" name="pernyataan_kategori[0][teks_pernyataan]"');
+
+    // Baris dinamis ("+ Tambah") diklon dari template yang sama.
+    expect($html)
+        ->toContain('<template id="template-editor-opsi"')
+        ->toContain('<template id="template-editor-pernyataan"');
+});
+
+it('nama field baris opsi/pernyataan dinamis tidak bersilang kurung siku', function () {
+    $src = file_get_contents(resource_path('views/components/admin/soal-form.blade.php'));
+
+    // Pola `+ '][kunci]'` menghasilkan `opsi_jawaban[0]][kunci]`; PHP meluruhkan
+    // seluruh baris jadi satu string sehingga data baris "+ Tambah" lenyap saat
+    // submit. Pembangun baris wajib menempel `[kunci]` setelah indeks tertutup.
+    expect($src)->not->toContain("+ '][");
+});
+
+it('opsi yang hanya memuat paragraf kosong ditolak', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $payload = payloadSoal(['kompetensi_dasar_id' => $kd->id]);
+    $payload['opsi_jawaban'][2]['teks_opsi'] = '<p></p>';
+
+    $this->actingAs($admin)->post(route('admin.mapel.soal.store', $mapel), $payload)
+        ->assertSessionHasErrors('opsi_jawaban.2.teks_opsi');
+
+    $this->assertDatabaseCount('soal', 0);
+});
+
+it('pernyataan yang hanya memuat paragraf kosong ditolak', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]);
+
+    $payload = [
+        'kompetensi_dasar_id' => $kd->id,
+        'tipe_soal' => Soal::TIPE_PG_KATEGORI,
+        'pertanyaan' => 'Tentukan benar atau salah.',
+        'daftar_kategori' => ['Benar', 'Salah'],
+        'pernyataan_kategori' => payloadPernyataan(3),
+    ];
+    $payload['pernyataan_kategori'][1]['teks_pernyataan'] = '<p></p>';
+
+    $this->actingAs($admin)->post(route('admin.mapel.soal.store', $mapel), $payload)
+        ->assertSessionHasErrors('pernyataan_kategori.1.teks_pernyataan');
+
+    $this->assertDatabaseCount('soal', 0);
+});
+
 it('form tambah soal hanya menawarkan KD milik mapel terpilih', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create();
