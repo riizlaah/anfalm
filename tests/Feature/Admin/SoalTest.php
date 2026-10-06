@@ -96,6 +96,52 @@ it('index soal menampilkan jumlah soal sesuai filter', function () {
         ->assertSee('Menampilkan 3 soal.');
 });
 
+it('index soal merender isi pertanyaan berformat HTML alih-alih meng-escapenya', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    Soal::factory()->create([
+        'kompetensi_dasar_id' => KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]),
+        'pertanyaan' => '<p>Jawab dengan <strong>kunci</strong> ini.</p>',
+    ]);
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.index', $mapel))
+        ->assertOk()
+        ->assertSee('<strong>kunci</strong>', false);
+});
+
+it('index soal memuat pertanyaan utuh lalu memotongnya lewat CSS, bukan lewat potongan teks', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    // Lebih panjang dari batas 50 karakter yang dipakai pemotongan lama, sehingga
+    // kalimat terakhir hanya bisa muncul bila seluruh isi ikut dirender.
+    $pertanyaan = '<p>'.str_repeat('Konten pertanyaan yang panjang sekali. ', 5).'penutup-unik.</p>';
+
+    Soal::factory()->create([
+        'kompetensi_dasar_id' => KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]),
+        'pertanyaan' => $pertanyaan,
+    ]);
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.index', $mapel))
+        ->assertOk()
+        ->assertSee('penutup-unik.', false)
+        ->assertSee('line-clamp-3', false)
+        ->assertSee('data-rumus', false);
+});
+
+it('index soal tidak melepas atribut berbahaya dari isi pertanyaan', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create();
+    Soal::factory()->create([
+        'kompetensi_dasar_id' => KompetensiDasar::factory()->create(['mapel_id' => $mapel->id]),
+        'pertanyaan' => '<p>Aman <img src="x" onerror="alert(1)"> ya.</p>',
+    ]);
+
+    $this->actingAs($admin)->get(route('admin.mapel.soal.index', $mapel))
+        ->assertOk()
+        ->assertSee('Aman', false)
+        ->assertDontSee('onerror');
+});
+
 it('halaman index soal menampilkan jumlah soal per mapel dari menu mapel', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create(['kode' => 'MTKX']);

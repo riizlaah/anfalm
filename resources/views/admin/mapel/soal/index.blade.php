@@ -64,7 +64,14 @@
                                 {{ $kd->kode_kompetensi }}
                             </abbr>
                         </td>
-                        <td class="px-4 py-3">{{ \Illuminate\Support\Str::limit(htmlspecialchars_decode(strip_tags($soal->pertanyaan)), 50) }}</td>
+                        {{-- Isi dirender apa adanya (sudah disaring `KontenSanitizer`),
+                             pemotongannya diserahkan ke CSS supaya tag tidak terputus
+                             di tengah jalan dan ekspresi KaTeX tetap sempat dirender. --}}
+                        <td class="px-4 py-3">
+                            <div class="line-clamp-3" data-rumus>
+                                <x-konten :isi="$soal->pertanyaan" />
+                            </div>
+                        </td>
                         <td class="px-4 py-3">
                             @switch($soal->tipe_soal)
                                 @case('pg')
