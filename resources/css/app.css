@@ -18,6 +18,32 @@
         @apply bg-paper text-slate-800 antialiased;
         font-feature-settings: 'calt' 1;
     }
+    /* Blok kode dari konten soal (butir 164): `<pre>` dan `<code>` juga muncul di tabel
+       manajemen soal dan di halaman peserta, bukan cuma di dalam editor — makanya
+       gayanya ditaruh di sini, bukan dibungkus `.wysiwyg-kolom-wadah .tiptap`.
+       `overflow-wrap: anywhere` adalah bagian yang paling penting: tanpa spasi di
+       sebuah token panjang, `white-space: pre-wrap` saja tetap menghitung token itu
+       sebagai tak terputus sehingga sel tabel ikut melebar sampai 2000px lebih.
+       `overflow-x` sengaja dibiarkan `visible`. Dulu ia `auto`, dan scroll container
+       itu memutus `-webkit-line-clamp` milik preview tabel sehingga soal berblok kode
+       tidak lagi terpotong tiga baris; sekarang gulirnya memang tak diperlukan lagi
+       karena setiap baris sudah membungkus diri. */
+    pre {
+        @apply my-2 rounded bg-slate-900 px-3 py-2 text-sm font-mono text-slate-100 whitespace-pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    code {
+        @apply rounded bg-slate-100 px-1 font-mono whitespace-pre-wrap;
+        font-size: 0.9em;
+        overflow-wrap: anywhere;
+    }
+    /* Di dalam blok kode, `code` harus mengikuti aturan `pre`: putihnya dipakai `pre`,
+       bukan strip terang; spasi dan jaraknya juga ikut supaya tidak ada dua lapis. */
+    pre code {
+        background-color: transparent;
+        padding: 0;
+        white-space: inherit;
+    }
 }
 
 @layer components {
@@ -145,9 +171,8 @@
     .wysiwyg-kolom-wadah .tiptap {
         @apply min-h-24 focus:outline-none;
     }
-    .wysiwyg-kolom-wadah .tiptap pre {
-        @apply overflow-x-auto rounded bg-slate-900 px-3 py-2 text-sm text-slate-100;
-    }
+    /* Blok kode tidak lagi punya aturan khusus di sini: sejak butir 164 gayanya
+       diseragamkan lewat `pre` global di `@layer base`. */
     .wysiwyg-kolom-wadah .tiptap blockquote {
         @apply border-l-4 border-slate-300 pl-3 text-slate-600 italic;
     }
