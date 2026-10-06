@@ -38,36 +38,9 @@ printf '\n== 1/5 Aset frontend ==\n'
 npm run build
 
 printf '\n== 2/5 Menyalin berkas ke staging ==\n'
-rm -rf "$STAGE"
-mkdir -p "$STAGE"
-# Folder yang tidak dibutuhkan server dibuang supaya hemat inode (batas ±30.000
-# berkas). Pola /* dipakai agar folder dan .gitignore-nya tetap ikut.
-rsync -a \
-    --exclude='.git/' \
-    --exclude='node_modules/' \
-    --exclude='tests/' \
-    --exclude='deploy/' \
-    --exclude='.ai/' \
-    --exclude='.agents/' \
-    --exclude='.claude/' \
-    --exclude='.opencode/' \
-    --exclude='.playwright-mcp/' \
-    --exclude='.spec.ts' \
-    --exclude='specs/' \
-    --exclude='smoke/' \
-    --exclude='seed.spec.ts' \
-    --exclude='contoh-pg-kategori.png' \
-    --exclude='public/storage' \
-    --exclude='.env' \
-    --exclude='.env.production' \
-    --exclude='.env.backup' \
-    --exclude='auth.json' \
-    --exclude='storage/logs/*' \
-    --exclude='storage/framework/cache/*' \
-    --exclude='storage/framework/sessions/*' \
-    --exclude='storage/framework/views/*' \
-    --exclude='bootstrap/cache/*.php' \
-    "$ROOT/" "$STAGE/"
+# Pengecualian berada di staging.sh: satu berkas, satu sumber kebenaran, dan
+# aturannya bisa diuji terhadap pohon uji kecil tanpa npm maupun composer.
+bash "$ROOT/deploy/staging.sh" "$ROOT" "$STAGE"
 
 # InfinityFree tidak mendukung symlink, jadi pengganti public/storage ini
 # diletakkan langsung di root paket. Template .env produksi menggantikan
@@ -88,6 +61,16 @@ symlink="$(find "$STAGE" -type l)"
 
 [ ! -d "$STAGE/tests" ] || gagal "folder tests ikut terbawa"
 [ ! -e "$STAGE/.env" ] || gagal ".env lokal ikut terbawa — berisi kredensial"
+
+# Direktori runtime wajib berisi paling tidak satu berkas. Direktori kosong di
+# zip sering dilewati File Manager saat ekstraksi, dan begitu foldernya hilang
+# Laravel menolak menulis compiled view, sesi, dan cache — cacat yang pernah
+# terbawa pada paket sebelumnya.
+for dir in storage/logs storage/framework/cache storage/framework/sessions storage/framework/views; do
+    isi="$(ls -A "$STAGE/$dir" 2>/dev/null || true)"
+    [ -n "$isi" ] ||
+        gagal "folder $dir tidak berisi apa pun di paket — ekstraksi akan melewatkan direktori kosong itu"
+done
 
 while IFS= read -r -d '' berkas; do
     ukuran="$(stat -c%s "$berkas")"
