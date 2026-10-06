@@ -6,6 +6,7 @@ use App\Domain\Ai\AiProvider;
 use App\Domain\Ai\AiProviderException;
 use App\Domain\Ai\JsonOutputException;
 use App\Domain\Ai\JsonRepairService;
+use App\Domain\Ai\MarkdownKeHtml;
 use App\Domain\Ai\PenjadwalKd;
 use App\Domain\Ai\PromptBuilder;
 use App\Domain\Ai\SoalSkemaException;
@@ -36,7 +37,11 @@ class GeneratePaketController extends Controller
 
     public const TINGKAT_OPTIONS = ['mudah', 'sedang', 'sulit', 'campuran'];
 
-    public function __construct(private AiProvider $aiProvider, private KontenSanitizer $konten) {}
+    public function __construct(
+        private AiProvider $aiProvider,
+        private KontenSanitizer $konten,
+        private MarkdownKeHtml $markdown,
+    ) {}
 
     public function create(): View
     {
@@ -143,6 +148,7 @@ class GeneratePaketController extends Controller
 
             $decoded = (new JsonRepairService)->parse($rawOutput);
             $bagian = (new SoalSkemaValidator)->validate($decoded);
+            $bagian['daftar_soal'] = $this->konversiMarkdownHasilAi($bagian['daftar_soal']);
         } catch (AiProviderException|JsonOutputException|SoalSkemaException $exception) {
             Log::channel('ai')->warning(
                 'AI generate part paket soal gagal.',
@@ -416,6 +422,37 @@ class GeneratePaketController extends Controller
     /**
      * @return array<string, mixed>
      */
+    /**
+     * Prompt hanya melarang code block pada pembungkus JSON; isi soalnya sendiri tidak
+     * diatur, jadi tulisan markdown yang AI keluarkan diubah di sini — satu titik, sebelum
+     * masuk sesi kurasi. Teks yang sama sekali tidak memuat tanda markdown diteruskan utuh.
+     *
+     * @param  array<int, array<string, mixed>>  $daftarSoal
+     * @return array<int, array<string, mixed>>
+     */
+    private function konversiMarkdownHasilAi(array $daftarSoal): array
+    {
+        foreach ($daftarSoal as $index => $soal) {
+            foreach (['pertanyaan', 'pembahasan'] as $kunci) {
+                if (is_string($soal[$kunci] ?? null)) {
+                    $daftarSoal[$index][$kunci] = $this->markdown->konversiBlok($soal[$kunci]);
+                }
+            }
+
+            // Opsi dan pernyataan dirender di dalam <label>, sehingga hasilnya harus tetap
+            // konten frasa: blok kode jadi <code>, bukan <pre>.
+            foreach (['opsi_jawaban' => 'teks_opsi', 'pernyataan_kategori' => 'teks_pernyataan'] as $grup => $kunci) {
+                foreach ((array) ($soal[$grup] ?? []) as $posisi => $baris) {
+                    if (is_array($baris) && is_string($baris[$kunci] ?? null)) {
+                        $daftarSoal[$index][$grup][$posisi][$kunci] = $this->markdown->konversiInline($baris[$kunci]);
+                    }
+                }
+            }
+        }
+
+        return $daftarSoal;
+    }
+
     private function validateKurasi(Request $request, int $mapelId): array
     {
         $daftar = $request->input('daftar_soal', []);

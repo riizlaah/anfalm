@@ -191,6 +191,37 @@ it('meminta 12 soal per permintaan sehingga kuota AI lebih hemat', function () {
     expect($penangkap->prompt)->toContain('Buatkan 12 soal');
 });
 
+it('markdown dasar hasil AI diubah menjadi HTML sebelum masuk sesi kurasi', function () {
+    $admin = User::factory()->admin()->create();
+    $mapel = Mapel::factory()->create(['nama' => 'Matematika']);
+    $kd = KompetensiDasar::factory()->create(['mapel_id' => $mapel->id, 'kode_kompetensi' => '3.1']);
+
+    $payload = AiFake::fixture();
+    $payload['daftar_soal'][0]['pertanyaan'] = "Perhatikan potongan berikut:\n\n```js\nconsole.log(\"halo\")\n```";
+    $payload['daftar_soal'][0]['pembahasan'] = "Langkahnya:\n\n- siapkan alat\n- ukur panjang";
+    $payload['daftar_soal'][0]['opsi_jawaban'][0]['teks'] = 'Jawaban **benar** sekali';
+
+    $this->app->instance(AiProvider::class, new AiFake($payload));
+
+    $this->actingAs($admin)->postJson('/admin/paket-soal/generate', [
+        'mapel_id' => $mapel->id,
+        'kompetensi_dasar_ids' => [$kd->id],
+        'jumlah_soal' => 12,
+        'tingkat_kesulitan' => 'campuran',
+        'part' => 1,
+        'run' => 'run-1',
+    ])->assertOk();
+
+    $soal = session('ai_parts.daftar_soal.0');
+
+    expect($soal['pertanyaan'])
+        ->toContain('<pre><code>console.log(&quot;halo&quot;)</code></pre>')
+        ->not->toContain('```');
+    expect($soal['pembahasan'])->toContain('<ul><li>siapkan alat</li><li>ukur panjang</li></ul>');
+    // Opsi hanya boleh berisi konten frasa karena dirender di dalam <label>.
+    expect($soal['opsi_jawaban'][0]['teks_opsi'])->toBe('Jawaban <strong>benar</strong> sekali');
+});
+
 it('generate bertahap mengakumulasi soal antar part', function () {
     $admin = User::factory()->admin()->create();
     $mapel = Mapel::factory()->create(['nama' => 'Matematika']);
