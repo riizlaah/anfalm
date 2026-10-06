@@ -4,8 +4,9 @@
  * Prinsip penyimpanannya: yang diserahkan ke form adalah input tersembunyi
  * berisi HTML hasil `getHTML()`, sudah dibersihkan DOMPurify lalu dibungkus
  * tag khusus KaTeX. Sumber LaTeX tidak pernah disentuh editor sehingga yang
- * tampil di kolom teks selalu kode aslinya; hasil render KaTeX hanya muncul
- * di panel preview (DESIGN §3.3).
+ * tampil di kolom teks selalu kode aslinya; ekspresi matematikanya dirender
+ * langsung oleh node `ekspresi` — tidak ada panel pratinjau terpisah, karena
+ * apa yang diketik di kolom memang itulah yang akan tersimpan (butir 163).
  */
 
 import { Editor } from '@tiptap/core'
@@ -13,7 +14,8 @@ import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import DOMPurify from 'dompurify'
 import { pasangKompresiGambar } from './gambar'
-import { bungkusRumus, renderRumusDi } from './rumus'
+import { bungkusRumus } from './rumus'
+import { Ekspresi, pasangDialogEkspresi } from './ekspresi'
 
 const TUGAS_FORMAT = {
     bold: (e) => e.chain().focus().toggleBold().run(),
@@ -46,28 +48,47 @@ let editorTerakhir = null
 export function inisialisasiWysiwyg(wadah) {
     const input = wadah.querySelector('[data-wysiwyg-input]')
     const area = wadah.querySelector('[data-wysiwyg-editor]')
-    const preview = wadah.querySelector('[data-wysiwyg-preview]')
     const pesanGalat = wadah.querySelector('[data-wysiwyg-galat]')
     const berkas = wadah.querySelector('input[type="file"]')
 
     if (!input || !area) return
 
-    let tampilPreview = false
+    // Popup ekspresi menuntut `editor` saat dipasang, sedangkan editor-nya
+    // sendiri butuh popup untuk menangani klik node — keduanya bertemu lewat
+    // variabel yang dibaca saat acara terjadi, bukan saat inisialisasi.
+    let dialogEkspresi = null
 
     const editor = new Editor({
         element: area,
-        extensions: [StarterKit, Image.configure({ inline: false })],
-        content: input.value || '',
+        extensions: [StarterKit, Image.configure({ inline: false }), Ekspresi],
+        // Simpanan lama boleh masih berupa teks mentah `\( ... \)` yang belum
+        // pernah lewat `bungkusRumus()`; bungkuskan dulu agar ikut terbaca
+        // sebagai node dan ikut ter-render (idempoten, lihat rumus.js).
+        content: bungkusRumus(input.value || ''),
         editorProps: {
             attributes: {
                 class: 'wysiwyg-kolom',
                 'aria-label': wadah.dataset.wysiwygNama || 'Isi konten',
             },
+            // Klik langsung pada ekspresi membukakan popup penyuntingnya,
+            // lengkap dengan kode sumber yang sekarang dipakainya.
+            handleClickOn: (view, pos, node, nodePos, acara, langsung) => {
+                if (!langsung || node.type.name !== 'ekspresi') return false
+                dialogEkspresi?.buka({ ...node.attrs, posisi: nodePos })
+                return true
+            },
+            // Penyunting lewat papan ketik: sorot ekspresi lalu tekan Enter.
+            handleKeyDown: (view, acara) => {
+                if (acara.key !== 'Enter' && acara.key !== ' ') return false
+
+                const simpul = view.state.selection.node
+                if (simpul?.type?.name !== 'ekspresi') return false
+
+                dialogEkspresi?.buka({ ...simpul.attrs, posisi: view.state.selection.from })
+                return true
+            },
         },
-        onUpdate: () => {
-            sinkron()
-            if (tampilPreview) lukisPreview()
-        },
+        onUpdate: () => sinkron(),
         onFocus: () => {
             editorTerakhir = editor
         },
@@ -75,6 +96,7 @@ export function inisialisasiWysiwyg(wadah) {
 
     wadah.__wysiwyg = editor
     editorTerakhir = editor
+    dialogEkspresi = pasangDialogEkspresi(wadah, editor)
 
     if (berkas instanceof HTMLInputElement) {
         pasangKompresiGambar(wadah, berkas)
@@ -88,13 +110,6 @@ export function inisialisasiWysiwyg(wadah) {
         input.value = draf()
     }
 
-    function lukisPreview() {
-        preview.innerHTML = DOMPurify.sanitize(editor.getHTML())
-        // Kedua galat dipakai bersama: pesan ditampilkan, teks mentah tetap ada
-        // sebagai fallback (DESIGN §6.13).
-        renderRumusDi(preview, true)
-    }
-
     // Isi awal sudah berupa HTML tersimpan; serahkan apa adanya ke form.
     sinkron()
 
@@ -104,20 +119,8 @@ export function inisialisasiWysiwyg(wadah) {
         tombol.addEventListener('click', (acara) => {
             acara.preventDefault()
 
-            if (tugas === 'preview') {
-                tampilPreview = !tampilPreview
-                preview.classList.toggle('hidden', !tampilPreview)
-                tombol.setAttribute('aria-pressed', String(tampilPreview))
-                if (tampilPreview) lukisPreview()
-                return
-            }
-
             if (tugas === 'rumus') {
-                // Admin menulis sendiri kodenya (DESIGN §3.3); tombol ini hanya
-                // menyisipkan kerangka `\(  \)` lalu menaruh kursor di antaranya.
-                const posisi = editor.state.selection.from
-                editor.chain().focus().insertContent('\\(  \\)').run()
-                editor.commands.setTextSelection(posisi + 3)
+                dialogEkspresi?.buka()
                 return
             }
 

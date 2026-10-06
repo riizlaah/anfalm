@@ -179,8 +179,22 @@
     .wysiwyg-kolom-wadah .tiptap img {
         @apply my-2 max-h-64 rounded border border-slate-200;
     }
-    .wysiwyg-preview {
-        @apply mt-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800;
+    /* Pratinjau KaTeX di dalam popup sisipkan ekspresi (butir 163). */
+    .wysiwyg-rumus-pratinjau {
+        @apply max-h-40 min-h-10 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800;
+    }
+    .wysiwyg-rumus-pratinjau:empty::before {
+        content: '—';
+        @apply text-slate-400;
+    }
+    /* Node atom ekspresi tampil persis seperti hasil akhirnya; satu-satunya
+       tambahan adalah cincin halus saat disorot, supaya terlihat bisa diklik. */
+    .ekspresi-wadah {
+        @apply cursor-pointer rounded;
+    }
+    .wysiwyg-kolom-wadah .ekspresi-wadah:hover,
+    .wysiwyg-kolom-wadah .ekspresi-wadah.ProseMirror-selectednode {
+        @apply ring-2 ring-ink/30;
     }
     /* Ekspresi KaTeX yang sintaksnya salah: teks mentah tetap tampil (§6.13). */
     .rumus-galat {

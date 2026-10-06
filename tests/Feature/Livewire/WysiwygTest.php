@@ -10,6 +10,33 @@ it('renders successfully', function () {
         ->assertStatus(200);
 });
 
+it('membuang tombol pratinjau dan panelnya karena tampilan sudah sama dengan yang disimpan', function () {
+    $editor = Livewire::test(Wysiwyg::class, ['nama' => 'pertanyaan'])
+        ->assertStatus(200);
+
+    $editor->assertDontSee('data-tugas="preview"', false)
+        ->assertDontSee('data-wysiwyg-preview', false);
+
+    // Lukis pratinjau di skrip ikut dibuang; yang tersisa hanya sinkronisasi
+    // input tersembunyi, karena editor memang sudah menampilkan isi finalnya.
+    expect(file_get_contents(resource_path('js/wysiwyg.js')))
+        ->not->toContain('lukisPreview');
+});
+
+it('menyediakan popup sisipkan ekspresi matematika berisi input, pratinjau, dan pilihan mode', function () {
+    Livewire::test(Wysiwyg::class, ['nama' => 'pertanyaan'])
+        ->assertSee('data-tugas="rumus"', false)
+        ->assertSee('data-rumus-dialog', false)
+        ->assertSee('data-rumus-input', false)
+        ->assertSee('data-rumus-pratinjau', false)
+        ->assertSee('data-rumus-mode-blok', false);
+});
+
+it('memuat modul node ekspresi sehingga ekspresi di editor ikut ter-render dan bisa diklik', function () {
+    expect(file_get_contents(resource_path('js/wysiwyg.js')))
+        ->toContain("from './ekspresi'");
+});
+
 it('memasang input tersembunyi dengan nama field dan isi awal yang diberikan', function () {
     Livewire::test(Wysiwyg::class, ['nama' => 'pertanyaan', 'nilai' => '<p>Isi awal</p>'])
         ->assertSee('name="pertanyaan"', false)
